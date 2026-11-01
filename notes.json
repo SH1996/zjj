@@ -1,5 +1,19 @@
 {
-  "notes": [],
+  "notes": [
+    {
+      "id": "mvxvusntcmh90x",
+      "text": "• 国家层面：富强、民主、文明、和谐\n• 社会层面：自由、平等、公正、法治\n• 公民个人层面：爱国、敬业、诚信、友善",
+      "createdAt": "2026-11-01T13:45:51.257Z",
+      "updatedAt": "2026-11-01T13:45:51.257Z",
+      "status": "active",
+      "remindAt": null,
+      "repeat": "none",
+      "reminded": false,
+      "doneAt": null,
+      "deletedAt": null,
+      "tags": []
+    }
+  ],
   "tombstones": [
     {
       "id": "mvxndkql8k6gpx",
