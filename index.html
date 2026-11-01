@@ -308,6 +308,7 @@
   .chip.ring{color:var(--danger);border-color:rgba(168,101,82,.4); background:var(--danger-bg);animation:ringPulse 2s ease-in-out infinite;}
   @keyframes ringPulse{0%,100%{box-shadow:0 0 0 0 rgba(168,101,82,.3);}50%{box-shadow:0 0 0 5px rgba(168,101,82,0);}}
   .chip.green{color:var(--g600);border-color:var(--g200);background:var(--g100);}
+  .chip.tagc{color:var(--gold);border-color:rgba(168,135,61,.35);background:transparent;cursor:default;}
 
   .empty{text-align:center;padding:62px 10px 40px;color:var(--ink-faint);
     font-size:14.5px;line-height:2.3;letter-spacing:.1em;}
@@ -574,7 +575,7 @@
   </div>
 
   <section class="composer" id="composerBox">
-    <textarea id="input" rows="1" placeholder="此刻，想记下点什么… (支持语音输入)"></textarea>
+    <textarea id="input" rows="1" placeholder="此刻，想记下点什么… （支持语音，#标签，说明时间会自动设提醒）"></textarea>
     
     <div class="remind-row" id="remindRow">
       <input type="datetime-local" id="remindInput">
@@ -886,6 +887,164 @@ window.onerror = function (msg, url, line) {
     return toLocalInput(d.toISOString());
   }
 
+  /* ===== 语音默契层：中文时间 & #标签 解析 ===== */
+
+  function cnNum(s) {
+    if (s == null) return null;
+    s = String(s).trim();
+    if (/^\d+$/.test(s)) return parseInt(s, 10);
+    var D = { '零': 0, '一': 1, '二': 2, '两': 2, '三': 3, '四': 4, '五': 5, '六': 6, '七': 7, '八': 8, '九': 9, '十': 10 };
+    if (D[s] !== undefined) return D[s];
+    if (s === '二十') return 20;
+    if (s === '三十') return 30;
+    if (s === '四十') return 40;
+    if (s === '五十') return 50;
+    if (s.length === 2 && s.charAt(0) === '十') return 10 + (D[s.charAt(1)] || 0);
+    if (s.length === 2 && s.charAt(1) === '十') return (D[s.charAt(0)] || 1) * 10;
+    if (s.length === 3 && s.charAt(1) === '十') return (D[s.charAt(0)] || 1) * 10 + (D[s.charAt(2)] || 0);
+    return null;
+  }
+
+  var WEEK_CN = { '一': 1, '1': 1, '二': 2, '2': 2, '两': 2, '三': 3, '3': 3, '四': 4, '4': 4, '五': 5, '5': 5, '六': 6, '6': 6, '日': 0, '天': 0, '末': 0 };
+
+  // 从口语中解析提醒指令：日期 + 时段 + 点钟 → remindAt（本地输入格式）
+  // 返回 { matched, remindAt, repeat, cleanText }
+  function parseVoiceTime(raw) {
+    var text = String(raw || '');
+    if (!text.trim()) return { matched: false, remindAt: null, repeat: 'none', cleanText: text };
+
+    var repeat = 'none';
+    var forcedWeekday = null; // "每周X" 指定的星期
+
+    // 循环词：每周X / 每天 / 每月（每周X 中的 X 属于星期，不能拆开）
+    var mw = text.match(/每\s*(?:个)?\s*(?:周|星期|礼拜)\s*([一二两三四五六日天末1-6])?/);
+    if (mw) {
+      repeat = 'weekly';
+      if (mw[1]) forcedWeekday = WEEK_CN[mw[1]];
+      text = text.replace(mw[0], ' ');
+    } else {
+      var mdly = text.match(/每\s*(?:个)?\s*(天|日)/);
+      if (mdly) { repeat = 'daily'; text = text.replace(mdly[0], ' '); }
+      else {
+        var mmly = text.match(/每\s*(?:个)?\s*月/);
+        if (mmly) { repeat = 'monthly'; text = text.replace(mmly[0], ' '); }
+      }
+    }
+
+    var now = new Date();
+    var d = new Date(now.getFullYear(), now.getMonth(), now.getDate());
+    var hasDate = false;
+
+    if (forcedWeekday != null) {
+      var cur = d.getDay();
+      var delta = (forcedWeekday - cur + 7) % 7;
+      if (delta === 0) delta = 7;
+      d.setDate(d.getDate() + delta);
+      hasDate = true;
+    } else {
+      // 相对日期（今晚/明晚 转为时段词，避免丢失"晚上"语义）
+      var md = text.match(/(大后天|后天|明天|今天|今晚|明早|明晚)/);
+      if (md) {
+        var off = { '今天': 0, '今晚': 0, '明天': 1, '明早': 1, '明晚': 1, '后天': 2, '大后天': 3 }[md[1]];
+        d.setDate(d.getDate() + off);
+        hasDate = true;
+        var toSeg = { '今晚': '晚上', '明晚': '晚上', '明早': '早上' }[md[1]];
+        text = toSeg ? text.replace(md[0], toSeg) : text.replace(md[0], ' ');
+      } else {
+        // 下周X / 周X
+        var wd = text.match(/(?:下\s*)?(?:周|星期|礼拜)\s*([一二两三四五六日天末1-6])/);
+        if (wd) {
+          var W = WEEK_CN[wd[1]];
+          var c2 = d.getDay();
+          var dl = (W - c2 + 7) % 7;
+          if (dl === 0) dl = 7;
+          d.setDate(d.getDate() + dl);
+          hasDate = true;
+          text = text.replace(wd[0], ' ');
+        }
+      }
+    }
+
+    // 时段 + 点钟（含 半 / 一刻 / X点Y分 / X:Y）
+    var tt = text.match(/(凌晨|清早|早上|早晨|上午|中午|午后|下午|傍晚|晚上|夜里)?\s*(\d{1,2}|[一二两三四五六七八九十]{1,3})\s*(?:点|:|：)\s*(半|一刻|(\d{1,2}|[一二三四五六七八九十]{1,2})\s*分?)?/);
+    var hour = null, minute = 0;
+    var hasSeg = false;
+    if (tt) {
+      hour = cnNum(tt[2]);
+      if (hour != null) {
+        if (tt[3] === '半') minute = 30;
+        else if (tt[3] === '一刻') minute = 15;
+        else if (tt[4] != null) {
+          var mm = cnNum(tt[4]);
+          if (mm == null || mm < 0 || mm > 59) { hour = null; }
+          else minute = mm;
+        }
+        if (hour != null) {
+          var seg = tt[1] || '';
+          hasSeg = !!seg;
+          if (seg === '中午' || seg === '午后') { if (hour < 11) hour += 12; }
+          else if (seg === '下午' || seg === '傍晚' || seg === '晚上' || seg === '夜里') { if (hour === 12) hour = 0; else if (hour < 12) hour += 12; }
+          else if (seg === '凌晨' || seg === '清早' || seg === '早上' || seg === '早晨' || seg === '上午') { /* 保持 */ }
+          else if (hour < 7) { hour += 12; } // 无时段，"三点"默认下午
+          if (hour == null || hour > 23) hour = null;
+        }
+      }
+      if (hour != null) text = text.replace(tt[0], ' ');
+    }
+
+    // 防误伤：无时段、无日期、无循环、也没提"提醒"的裸钟点（如"三点意见"）不解析
+    if (hour != null && !hasSeg && !hasDate && repeat === 'none' && !/提醒/.test(raw)) {
+      hour = null;
+      text = String(raw);
+    }
+
+    if (hour == null) {
+      // 只有日期没有钟点：循环支持（如"每天打卡"），否则不算匹配
+      if (hasDate && repeat !== 'none') {
+        return { matched: true, remindAt: toLocalInput(d.toISOString()), repeat: repeat, cleanText: cleanSpoken(text) };
+      }
+      return { matched: false, remindAt: null, repeat: 'none', cleanText: raw };
+    }
+
+    d.setHours(hour, minute, 0, 0);
+    if (!hasDate && d.getTime() <= now.getTime()) d.setDate(d.getDate() + 1); // 已过则顺延到明天
+
+    return { matched: true, remindAt: toLocalInput(d.toISOString()), repeat: repeat, cleanText: cleanSpoken(text) };
+  }
+
+  function cleanSpoken(t) {
+    return String(t)
+      .replace(/提醒我|提醒一下|提醒/g, ' ')
+      .replace(/^[，,。、；;！!？?\s]+/, '')
+      .replace(/[，,、；;]{2,}/g, '，')
+      .replace(/\s{2,}/g, ' ')
+      .trim();
+  }
+
+  // #标签 提取：文本中的 #工作 #重要 → tags
+  function extractTags(raw) {
+    var text = String(raw || '');
+    var tags = [];
+    var re = /#([^\s#,，。；;、！!？?"'`·…（）()【】\[\]{}<>]+)/g;
+    text = text.replace(re, function (m, t) {
+      if (tags.length < 3 && t) tags.push(t.slice(0, 12));
+      return ' ';
+    });
+    text = text.replace(/^[，,。、；;！!？?\s]+/, '').replace(/\s{2,}/g, ' ').trim();
+    return { tags: tags, text: text };
+  }
+
+  // 把解析结果应用到输入区（提醒开关 + 时间 + 循环 + 清理正文）
+  function applyVoiceParse(parsed) {
+    if (!parsed || !parsed.matched || !parsed.remindAt) return false;
+    setRemindMode(true);
+    els.remindInput.value = parsed.remindAt;
+    els.repeatInput.value = parsed.repeat || 'none';
+    els.input.value = parsed.cleanText || '';
+    autoGrow(els.input);
+    return true;
+  }
+
   var toastTimer = null;
   function toast(msg) {
     if (!els.toast) return;
@@ -903,6 +1062,17 @@ window.onerror = function (msg, url, line) {
     }
   }
 
+  function cleanTags(arr) {
+    var out = [];
+    if (Array.isArray(arr)) {
+      for (var i = 0; i < arr.length && out.length < 3; i++) {
+        var t = String(arr[i] || '').trim();
+        if (t) out.push(t.slice(0, 12));
+      }
+    }
+    return out;
+  }
+
   function cleanNote(n) {
     if (!n || typeof n !== 'object') return null;
     var s = n.status;
@@ -917,7 +1087,8 @@ window.onerror = function (msg, url, line) {
       reminded: !!n.reminded,
       repeat: n.repeat || 'none',
       doneAt: n.doneAt || null,
-      deletedAt: n.deletedAt || null
+      deletedAt: n.deletedAt || null,
+      tags: cleanTags(n.tags)
     };
   }
   function cleanNotes(arr) {
@@ -1061,7 +1232,8 @@ window.onerror = function (msg, url, line) {
         if (state.view === VIEW.DONE && n.status !== VIEW.DONE) continue;
         if (state.view === VIEW.TRASH && n.status !== VIEW.TRASH) continue;
 
-        if (kw && n.text.toLowerCase().indexOf(kw) === -1) continue;
+        if (kw && n.text.toLowerCase().indexOf(kw) === -1
+            && (n.tags || []).join(' ').toLowerCase().indexOf(kw) === -1) continue;
 
         list.push(n);
       }
@@ -1107,6 +1279,10 @@ window.onerror = function (msg, url, line) {
     if (alertNow) cls += ' is-alert';
 
     var meta = '<div class="note-meta"><span>' + escapeHTML(fmtDate(n.createdAt)) + '</span>';
+    var tg = n.tags || [];
+    for (var ti = 0; ti < tg.length; ti++) {
+      meta += '<span class="chip tagc">#' + escapeHTML(tg[ti]) + '</span>';
+    }
     if (isDone) {
       meta += '<span class="chip green">' + ICON.done + '已完成</span>';
     } else if (isTrash) {
@@ -1198,16 +1374,35 @@ window.onerror = function (msg, url, line) {
     if (state.remindOn) {
       remindAt = fromLocalInput(els.remindInput.value);
       repeat = els.repeatInput.value;
-      if (remindAt && 'Notification' in window && Notification.permission === 'default') {
-        try { Notification.requestPermission(); } catch (e) {}
+    } else {
+      // 未开提醒时，尝试从文本解析时间指令（语音/手动输入通用）
+      var parsed = parseVoiceTime(text);
+      if (parsed.matched) {
+        if (!parsed.cleanText) {
+          // 整句都是时间指令：把时间填到提醒栏，等用户补充内容
+          applyVoiceParse(parsed);
+          toast('已设提醒时间，补充内容后再发送');
+          els.input.focus();
+          return;
+        }
+        remindAt = fromLocalInput(parsed.remindAt);
+        repeat = parsed.repeat;
+        text = parsed.cleanText;
       }
     }
+    if (remindAt && 'Notification' in window && Notification.permission === 'default') {
+      try { Notification.requestPermission(); } catch (e) {}
+    }
+
+    // #标签 提取
+    var tagRes = extractTags(text);
+    if (tagRes.text) text = tagRes.text;
 
     var now = new Date().toISOString();
     state.notes.unshift({
       id: uid(), text: text, createdAt: now, updatedAt: now,
       status: VIEW.ACTIVE, remindAt: remindAt, repeat: repeat, reminded: false,
-      doneAt: null, deletedAt: null
+      doneAt: null, deletedAt: null, tags: tagRes.tags
     });
 
     els.input.value = '';
@@ -1391,6 +1586,14 @@ window.onerror = function (msg, url, line) {
       stopRecording();
       if (els.input.value.trim()) {
         els.aiBtn.style.display = 'inline-flex';
+        // 语音默契层：说完自动识别时间指令，联动提醒开关
+        if (!state.remindOn) {
+          var parsed = parseVoiceTime(els.input.value);
+          if (parsed.matched && applyVoiceParse(parsed)) {
+            var hhmm = parsed.remindAt.split('T');
+            toast('已识别提醒 ' + (hhmm[1] ? hhmm[1] : '') + (parsed.repeat !== 'none' ? ' · 循环' : '') + '，可直接发送');
+          }
+        }
       }
     };
   }
@@ -1425,7 +1628,21 @@ window.onerror = function (msg, url, line) {
     els.aiBtn.classList.add('loading');
     els.aiBtn.innerHTML = '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 12a9 9 0 11-6.219-8.56"/></svg><span>整理中...</span>';
 
-    var prompt = "你是一个极简风格的笔记助手。请将以下一段用户语音识别出的口语化文本，提炼成清晰、简洁、高效的笔记。要求：1.如果有明确的待办事项，请提取为Markdown的无序列表；2.去除口语废话；3.直接输出整理后的正文，不要任何解释和客套话。\n\n用户的语音文本：\n" + text;
+    var now = new Date();
+    var weekCN = ['日', '一', '二', '三', '四', '五', '六'][now.getDay()];
+    var nowStr = now.getFullYear() + '年' + (now.getMonth() + 1) + '月' + now.getDate() + '日 ' +
+                 pad2(now.getHours()) + ':' + pad2(now.getMinutes()) + ' 星期' + weekCN;
+
+    var prompt =
+      '你是一个细致的笔记整理助手。当前时间：' + nowStr + '。\n' +
+      '请把下面这段口语化的语音/文字整理成结构化笔记，严格按 JSON 输出，不要输出 JSON 以外的任何内容：\n' +
+      '{\n' +
+      '  "text": "整理后的笔记正文（Markdown）。要求：多个待办用 - 开头的无序列表分条；保留关键信息（时间、地点、人物、数字）；去除口语废话与重复；忠于原意，不要编造内容；若内容本身就是一句话，直接润色即可，不要强行列点；正文中不要再重复提醒时间（它已在 remindAt 里）",\n' +
+      '  "remindAt": "若原文含提醒/日程时间，按当前时间换算成具体时间，格式 YYYY-MM-DDTHH:mm（24小时制）；没有则为 null",\n' +
+      '  "repeat": "循环提醒：每天=daily，每周=weekly，每月=monthly，无=none",\n' +
+      '  "tags": ["从内容提炼 1-3 个简短分类标签（如 工作/生活/学习/健康/灵感），若用户提到\"标签\"或\"#\"开头的词必须收录；没有合适则 []"]\n' +
+      '}\n\n' +
+      '用户的原文：\n' + text;
 
     fetch(cfg.aiUrl, {
       method: 'POST',
@@ -1436,7 +1653,7 @@ window.onerror = function (msg, url, line) {
       body: JSON.stringify({
         model: cfg.aiModel,
         messages: [{ role: "user", content: prompt }],
-        temperature: 0.3
+        temperature: 0.2
       })
     })
     .then(res => {
@@ -1445,9 +1662,23 @@ window.onerror = function (msg, url, line) {
     })
     .then(data => {
       if (data.choices && data.choices[0] && data.choices[0].message) {
-        els.input.value = data.choices[0].message.content.trim();
-        autoGrow(els.input);
-        toast('AI 提炼完成');
+        var content = String(data.choices[0].message.content || '').trim();
+        var parsed = null;
+        try {
+          var jm = content.match(/\{[\s\S]*\}/);
+          if (jm) parsed = JSON.parse(jm[0]);
+        } catch (e) { parsed = null; }
+
+        if (parsed && typeof parsed.text === 'string') {
+          applyAIParsed(parsed);
+        } else {
+          // 兼容：模型没按 JSON 输出时，降级为纯文本整理
+          els.input.value = content;
+          autoGrow(els.input);
+          var lp = parseVoiceTime(content);
+          if (!state.remindOn && lp.matched) applyVoiceParse(lp);
+          toast('AI 整理完成');
+        }
         els.aiBtn.style.display = 'none';
       } else {
         throw new Error('返回格式不正确');
@@ -1460,6 +1691,43 @@ window.onerror = function (msg, url, line) {
       els.aiBtn.classList.remove('loading');
       els.aiBtn.innerHTML = '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><path d="M12 2v4M12 18v4M4.93 4.93l2.83 2.83M16.24 16.24l2.83 2.83M2 12h4M18 12h4M4.93 19.07l2.83-2.83M16.24 7.76l2.83-2.83"/></svg><span>AI 提炼</span>';
     });
+  }
+
+  // 应用 AI 结构化结果：正文 + 提醒 + 循环 + 标签 一并联动
+  function applyAIParsed(p) {
+    var text = String(p.text || '').trim();
+    var tags = cleanTags(p.tags);
+    if (tags.length) {
+      // 标签以 #形式追加在正文后，发送前可见可删
+      text = (text ? text + '\n' : '') + tags.map(function (t) { return '#' + t; }).join(' ');
+    }
+    if (text) {
+      els.input.value = text;
+      autoGrow(els.input);
+    }
+
+    var remindLocal = null;
+    if (p.remindAt && typeof p.remindAt === 'string') {
+      if (/^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}/.test(p.remindAt)) {
+        remindLocal = p.remindAt.slice(0, 16);
+      } else {
+        var d = new Date(p.remindAt);
+        if (!isNaN(d.getTime())) remindLocal = toLocalInput(d.toISOString());
+      }
+    }
+    if (remindLocal) {
+      setRemindMode(true);
+      els.remindInput.value = remindLocal;
+      if (p.repeat === 'daily' || p.repeat === 'weekly' || p.repeat === 'monthly') {
+        els.repeatInput.value = p.repeat;
+      } else if (els.repeatInput) {
+        els.repeatInput.value = 'none';
+      }
+      toast('AI 整理完成 · 提醒 ' + remindLocal.replace('T', ' ') +
+            (p.repeat && p.repeat !== 'none' ? ' · ' + ({daily:'每天',weekly:'每周',monthly:'每月'})[p.repeat] : ''));
+    } else {
+      toast('AI 整理完成');
+    }
   }
 
   /* ========================================= */
@@ -1956,7 +2224,9 @@ window.onerror = function (msg, url, line) {
       if (n) {
         var text = els.editInput.value.trim();
         if (text) {
-          n.text = text;
+          var et = extractTags(text);
+          n.text = et.text || text;
+          n.tags = et.tags.length ? et.tags : [];
           n.updatedAt = new Date().toISOString();
           saveLocal(); render();
           toast('已保存修改');
