@@ -1,6 +1,22 @@
 {
   "notes": [
     {
+      "id": "mvxqrwc4ms0o0h",
+      "text": "不知该说什么，处于很无语的状态，记录一下刺客。",
+      "createdAt": "2026-11-01T11:23:37.972Z",
+      "updatedAt": "2026-11-01T11:23:37.972Z",
+      "status": "active",
+      "remindAt": null,
+      "repeat": "none",
+      "reminded": false,
+      "doneAt": null,
+      "deletedAt": null,
+      "tags": [
+        "情绪",
+        "记录"
+      ]
+    },
+    {
       "id": "mvxpnhdwh5wooj",
       "text": "去菜场买菜。",
       "createdAt": "2026-11-01T10:52:12.356Z",
