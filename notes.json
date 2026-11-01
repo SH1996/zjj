@@ -1,21 +1,5 @@
 {
-  "notes": [
-    {
-      "id": "mvxuak81pt1si0",
-      "text": "哈哈",
-      "createdAt": "2026-11-01T13:02:07.584Z",
-      "updatedAt": "2026-11-01T13:39:57.950Z",
-      "status": "trash",
-      "remindAt": null,
-      "reminded": false,
-      "repeat": "none",
-      "doneAt": null,
-      "deletedAt": "2026-11-01T13:39:57.950Z",
-      "tags": [
-        "abd"
-      ]
-    }
-  ],
+  "notes": [],
   "tombstones": [
     {
       "id": "mvxndkql8k6gpx",
@@ -36,6 +20,10 @@
     {
       "id": "mvxpnhdwh5wooj",
       "at": "2026-11-01T12:34:25.409Z"
+    },
+    {
+      "id": "mvxuak81pt1si0",
+      "at": "2026-11-01T13:40:00.446Z"
     }
   ]
 }
