@@ -1,26 +1,14 @@
 {
   "notes": [
     {
-      "id": "mvxpaqprgtkq5z",
-      "text": "#就喜欢\n那是你不懂",
-      "createdAt": "2026-11-01T10:42:17.919Z",
-      "updatedAt": "2026-11-01T10:42:24.044Z",
-      "status": "trash",
-      "remindAt": null,
-      "repeat": "none",
-      "reminded": false,
-      "doneAt": null,
-      "deletedAt": "2026-11-01T10:42:24.044Z"
-    },
-    {
       "id": "mvxpagcgw1o8sq",
       "text": "哈哈哈哈哈哈哈哈#叫爸爸叫爸爸",
       "createdAt": "2026-11-01T10:42:04.480Z",
       "updatedAt": "2026-11-01T10:42:04.480Z",
       "status": "active",
       "remindAt": null,
-      "repeat": "none",
       "reminded": false,
+      "repeat": "none",
       "doneAt": null,
       "deletedAt": null
     }
@@ -29,6 +17,10 @@
     {
       "id": "mvxndkql8k6gpx",
       "at": "2026-11-01T10:39:00.163Z"
+    },
+    {
+      "id": "mvxpaqprgtkq5z",
+      "at": "2026-11-01T10:42:32.585Z"
     }
   ]
 }
