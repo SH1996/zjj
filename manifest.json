@@ -1,0 +1,16 @@
+{
+  "name": "竹间记 · 慢慢来",
+  "short_name": "竹间记",
+  "description": "不急，想起什么就写一句。带提醒、标签与云端同步的私人笔记。",
+  "start_url": "./",
+  "scope": "./",
+  "display": "standalone",
+  "orientation": "portrait",
+  "background_color": "#f4faef",
+  "theme_color": "#5f8f57",
+  "icons": [
+    { "src": "icons/icon-192.png", "sizes": "192x192", "type": "image/png" },
+    { "src": "icons/icon-512.png", "sizes": "512x512", "type": "image/png" },
+    { "src": "icons/icon-maskable.png", "sizes": "512x512", "type": "image/png", "purpose": "maskable" }
+  ]
+}

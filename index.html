@@ -5,6 +5,10 @@
 <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover">
 <meta name="apple-mobile-web-app-capable" content="yes">
 <meta name="apple-mobile-web-app-status-bar-style" content="default">
+<meta name="theme-color" content="#5f8f57">
+<link rel="manifest" href="manifest.json">
+<link rel="apple-touch-icon" href="icons/apple-touch-icon.png">
+<link rel="icon" type="image/png" sizes="192x192" href="icons/icon-192.png">
 <title>竹间记 · 慢慢来</title>
 
 <script>
@@ -502,6 +506,70 @@
     max-width:86vw;text-align:center;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;}
   .toast.show{opacity:1;transform:translate(-50%,0);}
 
+  /* ===== 竹语（首页心灵师） ===== */
+  .soul{margin:16px 0 4px;padding:15px 18px 13px;border:1px solid var(--line);border-radius:20px;
+    background:var(--card);position:relative;overflow:hidden;}
+  .soul::before{content:'「';position:absolute;top:6px;left:8px;font-size:26px;color:var(--g300);
+    font-family:Georgia,serif;opacity:.7;}
+  .soul-head{display:flex;align-items:center;gap:8px;}
+  .soul-name{font-size:11px;letter-spacing:.34em;color:var(--ink-faint);}
+  .soul-refresh{margin-left:auto;border:none;background:none;color:var(--ink-faint);cursor:pointer;
+    font:inherit;font-size:11px;text-decoration:underline dotted;text-underline-offset:3px;
+    -webkit-tap-highlight-color:transparent;}
+  .soul-refresh:active{color:var(--g600);}
+  .soul-x{border:none;background:none;color:var(--ink-faint);cursor:pointer;font-size:15px;line-height:1;
+    padding:2px 4px;-webkit-tap-highlight-color:transparent;}
+  .soul-text{margin-top:9px;font-size:15px;line-height:1.95;color:var(--ink-soft);letter-spacing:.02em;
+    animation:soulIn .8s ease;}
+  @keyframes soulIn{from{opacity:0;transform:translateY(6px);}to{opacity:1;transform:none;}}
+  .soul-foot{display:flex;justify-content:space-between;align-items:center;margin-top:9px;}
+  .soul-meta{font-size:10.5px;color:var(--ink-faint);letter-spacing:.08em;}
+  .soul-ask{border:none;background:none;color:var(--g600);cursor:pointer;font:inherit;font-size:12px;
+    letter-spacing:.06em;-webkit-tap-highlight-color:transparent;}
+
+  /* ===== 问过去的自己 ===== */
+  .ask-answer{margin-top:14px;padding:13px 15px;border:1px solid var(--line);border-radius:14px;
+    background:var(--card-hover);font-size:14px;line-height:1.95;max-height:38vh;overflow:auto;}
+  .ask-answer.md-render>*:first-child{margin-top:0;}
+  .ask-answer.md-render>*:last-child{margin-bottom:0;}
+  .ask-refs{display:flex;flex-wrap:wrap;gap:6px;margin-top:10px;}
+  .ask-refs:empty{display:none;}
+  .ask-refs .chip{cursor:pointer;}
+  .ask-refs-title{width:100%;font-size:11px;color:var(--ink-faint);letter-spacing:.1em;}
+
+  /* ===== 时光机 ===== */
+  .time-list{max-height:44vh;overflow:auto;margin:-4px 0 8px;}
+  .time-item{padding:11px 2px;border-bottom:1px dashed var(--line);}
+  .time-item:last-child{border-bottom:none;}
+  .t-date{font-size:11.5px;color:var(--ink-faint);letter-spacing:.05em;}
+  .t-msg{font-size:13.5px;margin:3px 0 6px;color:var(--ink-soft);}
+  .t-view{border:none;background:none;color:var(--g600);cursor:pointer;font:inherit;font-size:12px;
+    padding:0;text-decoration:underline dotted;text-underline-offset:3px;
+    -webkit-tap-highlight-color:transparent;}
+  .time-preview{font-size:12.5px;color:var(--ink-soft);background:var(--card-hover);border-radius:10px;
+    padding:10px 12px;margin-top:8px;line-height:1.8;}
+  .t-restore{margin-top:8px;width:100%;padding:9px;border:1px solid var(--g400);border-radius:12px;
+    background:var(--g100);color:var(--g700);font:inherit;font-size:12.5px;cursor:pointer;
+    -webkit-tap-highlight-color:transparent;}
+  .t-restore:active{opacity:.8;}
+
+  /* ===== 周报 ===== */
+  #reportArea{min-height:180px;}
+
+  /* ===== 稍后再响 ===== */
+  .snooze-row{display:none;gap:8px;margin-top:12px;}
+  .snooze-row.show{display:flex;}
+  .snooze-btn{flex:1;padding:10px 4px;border:1px dashed var(--line);border-radius:12px;background:none;
+    color:var(--ink-soft);font:inherit;font-size:12.5px;cursor:pointer;
+    -webkit-tap-highlight-color:transparent;}
+  .snooze-btn:active{border-color:var(--g400);color:var(--g600);}
+
+  /* ===== 分享图片 ===== */
+  .img-view-wrap{display:flex;flex-direction:column;align-items:center;gap:14px;}
+  .img-view-wrap img{max-width:100%;border-radius:14px;
+    box-shadow:0 24px 60px -28px rgba(0,0,0,.45);-webkit-touch-callout:default;}
+  .img-hint{font-size:12px;color:var(--ink-faint);text-align:center;line-height:1.8;}
+
   @media (max-width:540px){
     .page{padding:0 16px 150px;}
     .masthead{padding:44px 0 26px;}
@@ -579,6 +647,13 @@
       </div>
     </div>
     <div class="header-actions">
+      <button class="icon-btn" id="askBtn" type="button" aria-label="问过去的自己">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round">
+          <path d="M21 11.5a8.38 8.38 0 0 1-.9 3.8 8.5 8.5 0 0 1-7.6 4.7 8.38 8.38 0 0 1-3.8-.9L3 21l1.9-5.7a8.38 8.38 0 0 1-.9-3.8 8.5 8.5 0 0 1 4.7-7.6 8.38 8.38 0 0 1 3.8-.9h.5a8.48 8.48 0 0 1 8 8v.5z"/>
+          <path d="M9.5 9.5a2.5 2.5 0 0 1 5 0c0 1.5-2.5 2-2.5 3.5"/>
+          <circle cx="12" cy="16.2" r=".4" fill="currentColor"/>
+        </svg>
+      </button>
       <button class="icon-btn" id="themeBtn" type="button" aria-label="切换主题">
         <svg id="iconSun" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.4" stroke-linecap="round" style="display:none;"><circle cx="12" cy="12" r="4"/><path d="M12 2v2M12 20v2M4.9 4.9l1.4 1.4M17.7 17.7l1.4 1.4M2 12h2M20 12h2M4.9 19.1l1.4-1.4M17.7 6.3l1.4-1.4"/></svg>
         <svg id="iconMoon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.4" stroke-linecap="round" stroke-linejoin="round"><path d="M21 12.8A9 9 0 1111.2 3a7 7 0 009.8 9.8z"/></svg>
@@ -591,6 +666,19 @@
       </button>
     </div>
   </header>
+
+  <section class="soul" id="soulCard" style="display:none;">
+    <div class="soul-head">
+      <span class="soul-name">竹 语</span>
+      <button class="soul-refresh" id="soulRefresh" type="button">再说一句</button>
+      <button class="soul-x" id="soulClose" type="button" aria-label="今日收起">×</button>
+    </div>
+    <div class="soul-text" id="soulText"></div>
+    <div class="soul-foot">
+      <span class="soul-meta" id="soulMeta"></span>
+      <button class="soul-ask" id="soulAsk" type="button">和它聊聊 →</button>
+    </div>
+  </section>
 
   <div class="review-banner" id="reviewBanner">
     <span class="review-date" id="reviewDate">去年的今天</span>
@@ -708,6 +796,10 @@
     <button id="importBtn" type="button">导入数据</button>
     <input type="file" id="importFile" accept=".json" style="display:none;">
   </div>
+  <div class="data-actions" style="margin-top:10px;padding-top:0;border-top:none;">
+    <button id="timeBtn" type="button">⏳ 时光机</button>
+    <button id="reportBtn" type="button">🌿 本周回顾</button>
+  </div>
 </aside>
 
 <div class="modal-mask" id="remindMask">
@@ -722,6 +814,10 @@
       <option value="weekly">每周</option>
       <option value="monthly">每月</option>
     </select>
+    <div class="snooze-row" id="snoozeRow">
+      <button class="snooze-btn" id="snooze30" type="button">⏱ 半小时后再响</button>
+      <button class="snooze-btn" id="snooze2h" type="button">⏱ 两小时后再响</button>
+    </div>
     <div class="modal-actions">
       <button class="m-btn ghost" id="modalClear" type="button">清除</button>
       <button class="m-btn" id="modalCancel" type="button">取消</button>
@@ -775,9 +871,61 @@
     <div class="share-preview" id="sharePreview"></div>
     <div class="modal-actions">
       <button class="m-btn" id="shareCopyBtn" type="button">复制</button>
+      <button class="m-btn" id="shareImgBtn" type="button">存为图片</button>
       <button class="m-btn" id="shareDownloadBtn" type="button">存为文件</button>
       <button class="m-btn solid" id="shareNativeBtn" type="button" style="display:none;">分享</button>
       <button class="m-btn ghost" id="shareCancelBtn" type="button" style="flex-basis:100%; margin-top:4px;">关闭</button>
+    </div>
+  </div>
+</div>
+
+<div class="modal-mask" id="askMask">
+  <div class="modal">
+    <h3>问过去的自己</h3>
+    <p>基于你的全部笔记回答。问得越具体，答得越诚实。</p>
+    <input type="text" id="askInput" placeholder="比如：我最近在纠结什么？" autocomplete="off">
+    <div class="modal-actions">
+      <button class="m-btn" id="askCancel" type="button">关闭</button>
+      <button class="m-btn solid" id="askGo" type="button">提问</button>
+    </div>
+    <div class="ask-answer md-render" id="askAnswer" style="display:none;"></div>
+    <div class="ask-refs" id="askRefs"></div>
+  </div>
+</div>
+
+<div class="modal-mask" id="timeMask">
+  <div class="modal">
+    <h3>时光机</h3>
+    <p>云端留着你每一次落笔的版本。</p>
+    <div class="time-list" id="timeList"></div>
+    <div class="modal-actions">
+      <button class="m-btn" id="timeClose" type="button">关闭</button>
+    </div>
+  </div>
+</div>
+
+<div class="modal-mask" id="reportMask">
+  <div class="modal">
+    <h3>本周回顾</h3>
+    <p>把散落的一周，收成一页。可编辑后存为笔记。</p>
+    <textarea id="reportArea"></textarea>
+    <div class="modal-actions">
+      <button class="m-btn" id="reportClose" type="button">关闭</button>
+      <button class="m-btn" id="reportRegen" type="button">重新生成</button>
+      <button class="m-btn solid" id="reportSave" type="button">存为笔记</button>
+    </div>
+  </div>
+</div>
+
+<div class="modal-mask" id="imgMask">
+  <div class="modal">
+    <h3>笔记卡片</h3>
+    <div class="img-view-wrap">
+      <img id="imgView" alt="笔记卡片">
+      <p class="img-hint">长按图片保存到相册<br>（电脑上右键另存为）</p>
+    </div>
+    <div class="modal-actions">
+      <button class="m-btn" id="imgClose" type="button">关闭</button>
     </div>
   </div>
 </div>
@@ -813,6 +961,7 @@ window.onerror = function (msg, url, line) {
   var state = {
     notes: [],
     tombstones: [],
+    ops: [],
     config: null,
     sha: null,
     view: VIEW.ACTIVE,
@@ -820,7 +969,8 @@ window.onerror = function (msg, url, line) {
     editingId: null,
     sharingId: null,
     searchQuery: '',
-    isRecording: false
+    isRecording: false,
+    soulSeed: 0
   };
 
   var recognition = null;
@@ -867,6 +1017,26 @@ window.onerror = function (msg, url, line) {
     els.pickH = $('pickH');
     els.pickMin = $('pickMin');
     els.pickerTarget = null;
+
+    els.askBtn = $('askBtn');
+    els.askMask = $('askMask');
+    els.askInput = $('askInput');
+    els.askAnswer = $('askAnswer');
+    els.askRefs = $('askRefs');
+
+    els.soulCard = $('soulCard');
+    els.soulText = $('soulText');
+    els.soulMeta = $('soulMeta');
+
+    els.timeMask = $('timeMask');
+    els.timeList = $('timeList');
+
+    els.reportMask = $('reportMask');
+    els.reportArea = $('reportArea');
+
+    els.imgMask = $('imgMask');
+    els.imgView = $('imgView');
+    els.snoozeRow = $('snoozeRow');
 
     els.editMask = $('editMask');
     els.editInput = $('editInput');
@@ -1387,17 +1557,36 @@ window.onerror = function (msg, url, line) {
     return after !== before;
   }
 
+  function cleanOps(arr) {
+    var out = [];
+    if (Array.isArray(arr)) {
+      for (var i = 0; i < arr.length && out.length < 100; i++) {
+        var o = arr[i];
+        if (o && typeof o.t === 'number' && typeof o.type === 'string' && o.type) {
+          out.push({ t: o.t, type: o.type.slice(0, 10), txt: o.txt ? String(o.txt).slice(0, 30) : undefined });
+        }
+      }
+    }
+    return out;
+  }
+
+  function addOps(type, txt) {
+    state.ops.unshift({ t: Date.now(), type: String(type || '').slice(0, 10), txt: txt ? String(txt).slice(0, 30) : undefined });
+    if (state.ops.length > 100) state.ops.length = 100;
+  }
+
   function saveLocal() {
-    try { localStorage.setItem(LS_NOTES, JSON.stringify({ notes: state.notes, tombstones: state.tombstones })); } catch (e) {}
+    try { localStorage.setItem(LS_NOTES, JSON.stringify({ notes: state.notes, tombstones: state.tombstones, ops: state.ops })); } catch (e) {}
   }
   function loadLocal() {
     try {
       var raw = localStorage.getItem(LS_NOTES);
-      if (!raw) { state.notes = []; state.tombstones = []; return; }
+      if (!raw) { state.notes = []; state.tombstones = []; state.ops = []; return; }
       var data = JSON.parse(raw);
       state.notes = cleanNotes(data && data.notes);
       state.tombstones = cleanTombstones(data && data.tombstones);
-    } catch (e) { state.notes = []; state.tombstones = []; }
+      state.ops = cleanOps(data && data.ops);
+    } catch (e) { state.notes = []; state.tombstones = []; state.ops = []; }
   }
   function loadCfg() {
     try {
@@ -1617,6 +1806,7 @@ window.onerror = function (msg, url, line) {
       status: VIEW.ACTIVE, remindAt: remindAt, repeat: repeat, reminded: false,
       doneAt: null, deletedAt: null, tags: tagRes.tags
     });
+    addOps('add', text);
 
     els.input.value = '';
     autoGrow(els.input);
@@ -1639,6 +1829,7 @@ window.onerror = function (msg, url, line) {
     if (status === VIEW.DONE) n.doneAt = now;
     else if (status === VIEW.ACTIVE) { n.doneAt = null; n.deletedAt = null; }
     else if (status === VIEW.TRASH) n.deletedAt = now;
+    addOps(status === VIEW.DONE ? 'done' : status === VIEW.TRASH ? 'del' : status === VIEW.ACTIVE ? 'reopen' : 'restore', n.text);
     saveLocal();
     render();
     scheduleSync();
@@ -1646,12 +1837,14 @@ window.onerror = function (msg, url, line) {
 
   function purgeNote(id) {
     if (!window.confirm('彻底删除后无法恢复，确定吗？')) return;
-    var arr = [];
+    var arr = [], purgedText = '';
     for (var i = 0; i < state.notes.length; i++) {
       if (state.notes[i].id !== id) arr.push(state.notes[i]);
+      else purgedText = state.notes[i].text || '';
     }
     state.notes = arr;
     addTombstone(id);
+    addOps('purge', purgedText);
     saveLocal();
     render();
     toast('已彻底删除');
@@ -1965,6 +2158,8 @@ window.onerror = function (msg, url, line) {
       els.modalRepeatInput.value = n.repeat || 'none';
     }
     syncRemindUI();
+    var pastDue = !!(n.remindAt && n.reminded && new Date(n.remindAt).getTime() <= Date.now());
+    if (els.snoozeRow) els.snoozeRow.classList.toggle('show', pastDue);
     if (els.remindMask) els.remindMask.classList.add('open');
   }
   function closeRemindModal() {
@@ -2094,6 +2289,7 @@ window.onerror = function (msg, url, line) {
           if (window.confirm('导入将覆盖当前本地记录，确定吗？')) {
             state.notes = cleanNotes(data.notes);
             state.tombstones = [];
+            state.ops = [];
             saveLocal();
             render();
             toast('导入成功');
@@ -2338,6 +2534,563 @@ window.onerror = function (msg, url, line) {
     }
   }
 
+  /* =========================================
+     AI 通用调用
+  ========================================= */
+
+  function hasAI() {
+    var c = state.config;
+    return !!(c && c.aiUrl && c.aiKey && c.aiModel);
+  }
+
+  function aiChat(prompt, temp) {
+    var cfg = state.config;
+    if (!hasAI()) return Promise.reject(new Error('未配置 AI'));
+    return fetch(cfg.aiUrl, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json', 'Authorization': 'Bearer ' + cfg.aiKey },
+      body: JSON.stringify({ model: cfg.aiModel, messages: [{ role: 'user', content: prompt }], temperature: temp == null ? 0.4 : temp })
+    }).then(function (res) {
+      if (!res.ok) throw new Error('请求失败(' + res.status + ')');
+      return res.json();
+    }).then(function (data) {
+      var c = data.choices && data.choices[0] && data.choices[0].message && data.choices[0].message.content;
+      if (!c) throw new Error('返回格式不正确');
+      return String(c).trim();
+    });
+  }
+
+  /* =========================================
+     竹语 · 首页心灵师
+  ========================================= */
+
+  var LS_SOUL = 'bamboo.v11.soul';
+
+  function buildSoulStats() {
+    var now = Date.now();
+    var s = {
+      total: 0, active: 0, done: 0, trash: 0,
+      last7: 0, last30: 0,
+      streak: 0, delTotal: state.tombstones.length,
+      hours: [0, 0, 0, 0, 0], tags: {},
+      topTags: [], recent: [], delSample: [], ops: [], purgedWeek: 0
+    };
+    var daySet = {}, i, j;
+    for (i = 0; i < state.notes.length; i++) {
+      var n = state.notes[i];
+      s.total++;
+      if (n.status === VIEW.DONE) s.done++; else if (n.status === VIEW.TRASH) s.trash++; else s.active++;
+      var t = new Date(n.createdAt).getTime();
+      if (!isNaN(t)) {
+        if (now - t < 7 * 86400000) s.last7++;
+        if (now - t < 30 * 86400000) s.last30++;
+        var h = new Date(t).getHours();
+        s.hours[(h >= 5 && h < 11) ? 0 : (h >= 11 && h < 14) ? 1 : (h >= 14 && h < 18) ? 2 : (h >= 18 && h < 23) ? 3 : 4]++;
+        var dk = new Date(t); dk.setHours(0, 0, 0, 0);
+        daySet[dk.getTime()] = true;
+      }
+      var tg = n.tags || [];
+      for (j = 0; j < tg.length; j++) s.tags[tg[j]] = (s.tags[tg[j]] || 0) + 1;
+    }
+    var d0 = new Date(); d0.setHours(0, 0, 0, 0);
+    var cur = d0.getTime();
+    if (!daySet[cur]) cur -= 86400000;
+    while (daySet[cur]) { s.streak++; cur -= 86400000; }
+
+    var tarr = [];
+    for (var k in s.tags) tarr.push([k, s.tags[k]]);
+    tarr.sort(function (a, b) { return b[1] - a[1]; });
+    s.topTags = tarr.slice(0, 4).map(function (x) { return x[0] + '×' + x[1]; });
+
+    var sample = [];
+    for (i = 0; i < state.notes.length && sample.length < 10; i++) {
+      var nn = state.notes[i];
+      if (nn.status !== VIEW.TRASH) sample.push({ d: fmtDate(nn.createdAt), t: (nn.text || '').slice(0, 50) });
+    }
+    s.recent = sample;
+
+    for (i = 0; i < state.ops.length; i++) {
+      var o = state.ops[i];
+      if (o.type === 'purge' && o.txt) {
+        if (s.delSample.length < 5) s.delSample.push(o.txt.slice(0, 30));
+        if (now - o.t < 7 * 86400000) s.purgedWeek++;
+      }
+    }
+    var opNames = { add: '记下', done: '完成', del: '删除', purge: '彻底删除', edit: '修改', remind: '设提醒', reopen: '恢复', snooze: '稍后再响' };
+    s.ops = state.ops.slice(0, 15).map(function (o) { return (opNames[o.type] || o.type) + (o.txt ? '「' + o.txt.slice(0, 12) + '」' : ''); });
+    return s;
+  }
+
+  function localSoulMessage(s) {
+    if (s.total === 0) return '这里还是一片空地。种下第一句话，我就在这里陪着你。';
+    var h = new Date().getHours();
+    var greet = h < 5 ? '夜很深了' : h < 11 ? '早上好' : h < 14 ? '中午好' : h < 18 ? '下午好' : h < 23 ? '晚上好' : '夜深了';
+    var hb = ['清晨', '中午', '午后', '夜晚', '深夜'][s.hours.indexOf(Math.max.apply(null, s.hours))];
+    var obs = [];
+    if (s.last7 === 0) obs.push('有一阵子没听到你的动静了，最近还好吗');
+    if (s.streak >= 3) obs.push('你已经连续记了 ' + s.streak + ' 天，像竹子一样安静地生长');
+    if (s.purgedWeek >= 3) obs.push('这一周你删掉了不少东西——有时候放下，也是一种整理');
+    if (s.done >= 5) obs.push('你完成了 ' + s.done + ' 件事，比自己以为的更可靠');
+    if (s.last7 >= 10) obs.push('这周你记了 ' + s.last7 + ' 条，落笔挺勤的');
+    if ((hb === '深夜' || hb === '夜晚') && s.total >= 5) obs.push('你常在' + hb + '写字，别忘了休息');
+    if (s.topTags.length) obs.push('「' + s.topTags[0].split('×')[0] + '」是你最常回到的地方');
+    var pool = [
+      '如果把这些句子连起来读，其实是一封写得很诚实的信。',
+      '记录本身，就是一种回答。',
+      '慢慢来，比较快。',
+      '竹子用四年只长三厘米，第五年起每天长三十厘米——前面的日子，根在往深处走。',
+      '被你写下来的，就不会真的消失。',
+      '你不需要记得所有事，记得重要的那几件，就够了。'
+    ];
+    var seed = new Date().getDate() + new Date().getHours() + state.soulSeed;
+    var q = pool[seed % pool.length];
+    var o = obs.length ? obs[seed % obs.length] : '';
+    return greet + '。' + (o ? o + '。' : '') + q;
+  }
+
+  function soulPrompt(s) {
+    return '你是一位安静温柔的观察者「竹语」，住在一个叫「竹间记」的笔记应用里，陪一位用户慢慢记录生活。\n\n' +
+      '以下是这位用户的真实画像（JSON）：\n' + JSON.stringify(s, null, 1) + '\n\n' +
+      '请基于这些真实记录，写一段放在首页送给用户的话（60~120字）。要求：\n' +
+      '1. 像一位真正了解他的老朋友，可以自然地引用他记过的具体内容（一两处即可，用他的原话碎片）\n' +
+      '2. 语气温柔、克制、不说教，有一点诗意但不油腻\n' +
+      '3. 可以是关心、观察、鼓励，或一个开放式的哲学小问题，自然就好\n' +
+      '4. 绝对不要出现「JSON」「数据」「系统」「AI」「画像」这类词，不要自我介绍\n' +
+      '5. 直接输出这段话本身，不要任何前后缀和引号';
+  }
+
+  function renderSoulText(text, mode) {
+    if (!els.soulCard || !els.soulText) return;
+    var hideDay = null;
+    try { hideDay = localStorage.getItem('bamboo.v11.soulHide'); } catch (e) {}
+    var today = new Date().toDateString();
+    if (hideDay === today) { els.soulCard.style.display = 'none'; return; }
+    els.soulCard.style.display = '';
+    els.soulText.textContent = text;
+    els.soulText.style.animation = 'none';
+    void els.soulText.offsetWidth;
+    els.soulText.style.animation = '';
+    if (els.soulMeta) {
+      els.soulMeta.textContent = mode === 'ai' ? '竹语 · 它读过了你的 ' + state.notes.length + ' 条记录'
+                                               : '竹语 · 本地心声（配置 AI 后它会更懂你）';
+    }
+  }
+
+  function initSoul() {
+    if (!els.soulCard) return;
+    renderSoulText(localSoulMessage(buildSoulStats()), 'local');
+    if (!hasAI()) return;
+    var cached = null;
+    try { cached = JSON.parse(localStorage.getItem(LS_SOUL) || 'null'); } catch (e) {}
+    var fresh = cached && cached.text && (Date.now() - cached.at) < 6 * 3600000;
+    if (fresh && cached.mode === 'ai') { renderSoulText(cached.text, 'ai'); return; }
+    aiChat(soulPrompt(buildSoulStats()), 0.85).then(function (text) {
+      try { localStorage.setItem(LS_SOUL, JSON.stringify({ text: text, at: Date.now(), mode: 'ai' })); } catch (e) {}
+      renderSoulText(text, 'ai');
+    }).catch(function () { /* 本地版已渲染，静默降级 */ });
+  }
+
+  function refreshSoul() {
+    state.soulSeed++;
+    if (!hasAI()) { renderSoulText(localSoulMessage(buildSoulStats()), 'local'); return; }
+    renderSoulText('（竹语正在翻你的记录…）', 'local');
+    aiChat(soulPrompt(buildSoulStats()) + '\n\n（这次请换一个角度，和上一次不同的话）', 0.9).then(function (text) {
+      try { localStorage.setItem(LS_SOUL, JSON.stringify({ text: text, at: Date.now(), mode: 'ai' })); } catch (e) {}
+      renderSoulText(text, 'ai');
+    }).catch(function () {
+      renderSoulText(localSoulMessage(buildSoulStats()), 'local');
+    });
+  }
+
+  /* =========================================
+     问过去的自己 · AI 问答
+  ========================================= */
+
+  function openAskModal() {
+    if (els.askMask) els.askMask.classList.add('open');
+    if (els.askInput) { els.askInput.value = ''; els.askInput.focus(); }
+    if (els.askAnswer) els.askAnswer.style.display = 'none';
+    if (els.askRefs) els.askRefs.innerHTML = '';
+  }
+  function closeAskModal() {
+    if (els.askMask) els.askMask.classList.remove('open');
+  }
+
+  function buildAskContext() {
+    var parts = [], i;
+    var sorted = state.notes.slice().sort(function (a, b) {
+      return new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime();
+    });
+    var shown = Math.min(sorted.length, 80);
+    for (i = 0; i < shown; i++) {
+      var n = sorted[i];
+      var st = n.status === VIEW.DONE ? '已完成' : n.status === VIEW.TRASH ? '已删除' : '进行中';
+      parts.push('[' + n.id + '] ' + fmtDate(n.createdAt) + ' (' + st + (n.tags && n.tags.length ? ' #' + n.tags.join(' #') : '') + ') ' + (n.text || '').slice(0, 200));
+    }
+    if (sorted.length > shown) parts.push('（另有 ' + (sorted.length - shown) + ' 条更早的记录未列出）');
+    return parts.join('\n');
+  }
+
+  function doAsk() {
+    var q = els.askInput ? els.askInput.value.trim() : '';
+    if (!q) { toast('先写一个问题吧'); return; }
+    var ansEl = els.askAnswer, refsEl = els.askRefs;
+    if (ansEl) { ansEl.style.display = 'block'; ansEl.innerHTML = '<span style="color:var(--ink-faint)">翻你的记录中…</span>'; }
+    if (refsEl) refsEl.innerHTML = '';
+
+    if (hasAI()) {
+      var prompt = '一个用户在问他的「过去的自己」。以下是他笔记库里全部记录（含状态标注）：\n\n' +
+        buildAskContext() + '\n\n他的问题是：' + q + '\n\n' +
+        '请基于这些真实记录回答他，像帮他回忆和梳理自己。要求：\n' +
+        '1. 语气温和诚实，不编造记录里没有的内容；若记录不足以回答，就温和地说没有找到相关内容，并给他一个可以从记录里观察到的相邻事实\n' +
+        '2. 引用具体笔记时在句末标注 [编号]，如 [a1b2c3]\n' +
+        '3. 简洁，300字以内';
+      aiChat(prompt, 0.3).then(function (text) {
+        var refs = [];
+        var m = text.match(/\[([a-z0-9]{6,})\]/g) || [];
+        for (var i = 0; i < m.length; i++) {
+          var id = m[i].slice(1, -1);
+          if (refs.indexOf(id) < 0 && findNote(id)) refs.push(id);
+        }
+        renderAskAnswer(text.replace(/\s*\[[a-z0-9]{6,}\]/g, ''), refs);
+      }).catch(function (err) {
+        renderAskAnswer('AI 出错了（' + err.message + '），先帮你搜了本地记录：', searchLocalNotes(q).map(function (h) { return h.id; }));
+      });
+    } else {
+      renderAskAnswer('我在你的记录里找到了这些：', searchLocalNotes(q).map(function (h) { return h.id; }));
+    }
+  }
+
+  function searchLocalNotes(q) {
+    var kw = q.replace(/[，。？！、\s]/g, '');
+    var grams = [];
+    for (var i = 0; i + 1 < kw.length; i += 2) grams.push(kw.slice(i, i + 2));
+    if (!grams.length && kw) grams.push(kw.slice(0, 2));
+    var hits = [];
+    for (var j = 0; j < state.notes.length && hits.length < 6; j++) {
+      var n = state.notes[j];
+      if (n.status === VIEW.TRASH) continue;
+      var txt = (n.text || '') + ' ' + ((n.tags || []).join(' '));
+      var score = 0;
+      for (var g = 0; g < grams.length; g++) if (txt.indexOf(grams[g]) > -1) score++;
+      if (score > 0) hits.push({ id: n.id, score: score, d: fmtDate(n.createdAt), t: (n.text || '').slice(0, 60) });
+    }
+    hits.sort(function (a, b) { return b.score - a.score; });
+    return hits;
+  }
+
+  function renderAskAnswer(text, refs) {
+    var ansEl = els.askAnswer, refsEl = els.askRefs;
+    if (ansEl) {
+      ansEl.style.display = 'block';
+      ansEl.innerHTML = renderMarkdown(text);
+    }
+    if (refsEl) {
+      refsEl.innerHTML = '';
+      if (refs && refs.length) {
+        var title = document.createElement('span');
+        title.className = 'ask-refs-title';
+        title.textContent = '相关记录（点击查看）';
+        refsEl.appendChild(title);
+        for (var i = 0; i < refs.length && i < 5; i++) {
+          (function (id) {
+            var b = document.createElement('button');
+            b.className = 'chip';
+            b.type = 'button';
+            var n = findNote(id);
+            b.textContent = '📝 ' + ((n && n.text) || '').slice(0, 14) + '…';
+            b.addEventListener('click', function () { closeAskModal(); openFocus(id); });
+            refsEl.appendChild(b);
+          })(refs[i]);
+        }
+      }
+    }
+  }
+
+  /* =========================================
+     时光机 · 云端版本历史
+  ========================================= */
+
+  function ghAPI(path) {
+    var cfg = state.config;
+    return fetch('https://api.github.com/repos/' + encodeURIComponent(cfg.owner) + '/' + encodeURIComponent(cfg.repo) + path, {
+      headers: ghHeaders(cfg.token), cache: 'no-store'
+    });
+  }
+
+  function openTimeMachine() {
+    var cfg = state.config;
+    if (!cfg || !cfg.owner || !cfg.repo || !cfg.token) {
+      toast('时光机需要先配置 GitHub 同步');
+      openDrawer();
+      return;
+    }
+    if (els.timeMask) els.timeMask.classList.add('open');
+    if (els.timeList) els.timeList.innerHTML = '<div style="color:var(--ink-faint);padding:12px 0;">正在翻云端的旧时光…</div>';
+    ghAPI('/commits?path=' + encodeURIComponent(cfg.path || 'notes.json') + '&per_page=20').then(function (res) {
+      if (!res.ok) throw new Error('读取失败(' + res.status + ')');
+      return res.json();
+    }).then(function (commits) {
+      if (!commits || !commits.length) {
+        els.timeList.innerHTML = '<div style="color:var(--ink-faint);padding:12px 0;">云端还没有版本记录。</div>';
+        return;
+      }
+      var html = '';
+      for (var i = 0; i < commits.length; i++) {
+        var c = commits[i];
+        var d = c.commit && c.commit.author ? new Date(c.commit.author.date) : new Date();
+        var msg = (c.commit && c.commit.message ? c.commit.message : '').replace(/^竹间记 ·\s*/, '');
+        html += '<div class="time-item" data-sha="' + escapeHTML(c.sha) + '">' +
+                  '<div class="t-date">' + escapeHTML(fmtDate(d.toISOString())) + '</div>' +
+                  '<div class="t-msg">' + escapeHTML(msg || '一次保存') + (i === 0 ? ' <span class="chip green" style="margin-left:6px;">当前</span>' : '') + '</div>' +
+                  '<button class="t-view" type="button">查看这一版</button>' +
+                  '<div class="time-preview" style="display:none;"></div>' +
+                '</div>';
+      }
+      els.timeList.innerHTML = html;
+    }).catch(function (err) {
+      els.timeList.innerHTML = '<div style="color:var(--ink-faint);padding:12px 0;">读取失败：' + escapeHTML(err.message) + '</div>';
+    });
+  }
+
+  function viewTimeVersion(item, sha) {
+    var prev = els.timeList.querySelector('.time-preview.showing');
+    if (prev) { prev.classList.remove('showing'); prev.style.display = 'none'; }
+    var box = item.querySelector('.time-preview');
+    if (box.classList.contains('loaded')) { box.classList.add('showing'); box.style.display = 'block'; return; }
+    box.style.display = 'block';
+    box.classList.add('showing');
+    box.textContent = '读取中…';
+    ghAPI('/contents/' + encodePath(state.config.path || 'notes.json') + '?ref=' + encodeURIComponent(sha)).then(function (res) {
+      if (!res.ok) throw new Error('读取失败');
+      return res.json();
+    }).then(function (data) {
+      var parsed = {};
+      try { parsed = JSON.parse(b64decode(data.content || '')); } catch (e) { parsed = { notes: [] }; }
+      var notes = cleanNotes(parsed.notes || []);
+      if (!notes.length) { box.textContent = '这一版是空的。'; return; }
+      var ids = {};
+      for (var k = 0; k < notes.length; k++) ids[notes[k].id] = true;
+      box.classList.add('loaded');
+      var first = notes[notes.length - 1], last = notes[0];
+      var ex = '';
+      for (var m = 0; m < Math.min(3, notes.length); m++) {
+        ex += '· ' + escapeHTML((notes[m].text || '').slice(0, 40)) + '<br>';
+      }
+      box.innerHTML = '共 ' + notes.length + ' 条 · 跨度 ' + escapeHTML(fmtDate(first.createdAt)) + ' ~ ' + escapeHTML(fmtDate(last.createdAt)) + '<br>' + ex;
+      var btn = document.createElement('button');
+      btn.className = 't-restore';
+      btn.type = 'button';
+      btn.textContent = '↩ 恢复到这一版';
+      btn.addEventListener('click', function () { restoreVersion(notes); });
+      box.appendChild(btn);
+    }).catch(function (err) {
+      box.textContent = '读取失败：' + err.message;
+    });
+  }
+
+  function restoreVersion(notes) {
+    if (!window.confirm('恢复后，比这一版更新的记录会被覆盖（云端也会被改写），确定吗？')) return;
+    var ids = {};
+    for (var i = 0; i < notes.length; i++) ids[notes[i].id] = true;
+    state.notes = notes;
+    // 墓碑调和：被恢复的笔记解除删除标记，其余保留
+    var kept = [];
+    for (var j = 0; j < state.tombstones.length; j++) {
+      if (!ids[state.tombstones[j].id]) kept.push(state.tombstones[j]);
+    }
+    state.tombstones = kept;
+    addOps('restore');
+    saveLocal();
+    render();
+    if (els.timeMask) els.timeMask.classList.remove('open');
+    toast('已回到那一版时光');
+    state.sha = null;
+    ghLoad().then(function () { pushToGitHub(); }).catch(function () { scheduleSync(); });
+  }
+
+  /* =========================================
+     本周回顾
+  ========================================= */
+
+  function buildWeekNotes() {
+    var cutoff = Date.now() - 7 * 86400000, out = [];
+    for (var i = 0; i < state.notes.length; i++) {
+      var n = state.notes[i];
+      if (n.status === VIEW.TRASH) continue;
+      var t = new Date(n.createdAt).getTime();
+      if (!isNaN(t) && t >= cutoff) out.push(n);
+    }
+    return out;
+  }
+
+  function localReport(week) {
+    var s = buildSoulStats();
+    var d1 = new Date(Date.now() - 6 * 86400000), d2 = new Date();
+    var lines = [];
+    lines.push('「一周回顾 · ' + (d1.getMonth() + 1) + '月' + d1.getDate() + '日 – ' + (d2.getMonth() + 1) + '月' + d2.getDate() + '日」');
+    lines.push('');
+    lines.push('这周你记下了 ' + week.length + ' 条。');
+    var done = 0;
+    for (var i = 0; i < week.length; i++) if (week[i].status === VIEW.DONE) done++;
+    if (done) lines.push('完成了 ' + done + ' 件，值得给自己记一功。');
+    if (s.topTags.length) lines.push('常出现的话题：' + s.topTags.slice(0, 3).join('、') + '。');
+    if (s.purgedWeek) lines.push('删掉了 ' + s.purgedWeek + ' 条——放下也是一种整理。');
+    if (s.streak >= 3) lines.push('已经连续记录 ' + s.streak + ' 天，竹林又长高了一点。');
+    lines.push('');
+    if (week.length) {
+      lines.push('这周的句子：');
+      for (var j = 0; j < Math.min(6, week.length); j++) lines.push('- ' + (week[j].text || '').slice(0, 40));
+    } else {
+      lines.push('这一周很安静。安静，也是一种记录。');
+    }
+    return lines.join('\n');
+  }
+
+  function genReport() {
+    var week = buildWeekNotes();
+    if (els.reportArea) {
+      if (!hasAI()) { els.reportArea.value = localReport(week); return; }
+      els.reportArea.value = '（正在为你收拢这一周…）';
+      var ctx = week.map(function (n) {
+        return fmtDate(n.createdAt) + (n.status === VIEW.DONE ? ' [完成]' : '') + '：' + (n.text || '');
+      }).join('\n');
+      var s = buildSoulStats();
+      var prompt = '以下是用户过去七天的全部笔记：\n' + (ctx || '（无记录）') + '\n\n' +
+        '补充信息：本周彻底删除了 ' + s.purgedWeek + ' 条；常用标签：' + (s.topTags.join('、') || '无') + '；连续记录 ' + s.streak + ' 天。\n\n' +
+        '请写一份温柔而诚实的一周回顾（Markdown，120~200字）：肯定具体做过的事（引用原话碎片）、点出情绪或主题的脉络、结尾一句对下周的轻展望。不要编造，不要说教。';
+      aiChat(prompt, 0.5).then(function (text) {
+        var d1 = new Date(Date.now() - 6 * 86400000), d2 = new Date();
+        els.reportArea.value = '「一周回顾 · ' + (d1.getMonth() + 1) + '月' + d1.getDate() + '日 – ' + (d2.getMonth() + 1) + '月' + d2.getDate() + '日」\n\n' + text;
+      }).catch(function () {
+        els.reportArea.value = localReport(week);
+        toast('AI 忙不过来，先用本地版生成了');
+      });
+    }
+  }
+
+  function openReport() {
+    if (els.reportMask) els.reportMask.classList.add('open');
+    genReport();
+  }
+
+  function saveReport() {
+    var text = els.reportArea ? els.reportArea.value.trim() : '';
+    if (!text) { toast('回顾还是空的'); return; }
+    var now = new Date().toISOString();
+    state.notes.unshift({
+      id: uid(), text: text, createdAt: now, updatedAt: now,
+      status: VIEW.ACTIVE, remindAt: null, repeat: 'none', reminded: false,
+      doneAt: null, deletedAt: null, tags: ['周报']
+    });
+    addOps('add', text);
+    saveLocal();
+    render();
+    if (els.reportMask) els.reportMask.classList.remove('open');
+    toast('这一周，收好了');
+    scheduleSync();
+  }
+
+  /* =========================================
+     稍后再响
+  ========================================= */
+
+  function snoozeNote(mins) {
+    var n = findNote(state.editingId);
+    if (!n) { closeRemindModal(); return; }
+    n.remindAt = new Date(Date.now() + mins * 60000).toISOString();
+    n.reminded = false;
+    n.updatedAt = new Date().toISOString();
+    addOps('snooze', n.text);
+    saveLocal(); render();
+    closeRemindModal();
+    toast('好，' + mins + '分钟后再提醒你');
+    scheduleSync();
+  }
+
+  /* =========================================
+     笔记卡片图片
+  ========================================= */
+
+  function wrapCanvasText(ctx, text, maxWidth) {
+    var lines = [], line = '';
+    for (var i = 0; i < text.length; i++) {
+      var ch = text.charAt(i);
+      if (ch === '\n') { lines.push(line); line = ''; continue; }
+      var test = line + ch;
+      if (ctx.measureText(test).width > maxWidth && line) { lines.push(line); line = ch; }
+      else line = test;
+    }
+    if (line) lines.push(line);
+    return lines;
+  }
+
+  function buildShareImage(n) {
+    var W = 1080, pad = 90, maxW = W - pad * 2;
+    var c = document.createElement('canvas');
+    var ctx = c.getContext('2d');
+    var isDark = document.documentElement.getAttribute('data-theme') === 'dark';
+    var font = '"PingFang SC", "Hiragino Sans GB", "Microsoft YaHei", sans-serif';
+    ctx.font = '46px ' + font;
+    var lines = wrapCanvasText(ctx, n.text || '', maxW).slice(0, 16);
+    var lineH = 76;
+    var H = 200 + lines.length * lineH + 190;
+    c.width = W; c.height = H;
+    // 背景
+    var g = ctx.createLinearGradient(0, 0, 0, H);
+    if (isDark) { g.addColorStop(0, '#22371b'); g.addColorStop(1, '#2b4326'); }
+    else { g.addColorStop(0, '#f4faef'); g.addColorStop(1, '#d3e6c6'); }
+    ctx.fillStyle = g;
+    ctx.fillRect(0, 0, W, H);
+    // 卡片
+    var cardX = 44, cardY = 120, cardW = W - 88, cardH = H - 240;
+    roundRect(ctx, cardX, cardY, cardW, cardH, 36);
+    ctx.fillStyle = isDark ? 'rgba(43,67,38,.55)' : 'rgba(255,255,255,.88)';
+    ctx.fill();
+    // 顶部小字
+    ctx.fillStyle = isDark ? '#83ab75' : '#5f8f57';
+    ctx.font = '28px ' + font;
+    ctx.textAlign = 'left';
+    ctx.fillText('🎋 竹间记', pad, 88);
+    // 正文
+    ctx.fillStyle = isDark ? '#e2efd9' : '#25321f';
+    ctx.font = '46px ' + font;
+    for (var i = 0; i < lines.length; i++) {
+      ctx.fillText(lines[i], pad, 200 + i * lineH);
+    }
+    // 日期 + 落款
+    var dt = fmtDate(n.createdAt);
+    ctx.fillStyle = isDark ? '#a5c699' : '#8ba07c';
+    ctx.font = '30px ' + font;
+    ctx.fillText(dt, pad, H - 130);
+    ctx.textAlign = 'right';
+    ctx.fillStyle = isDark ? '#83ab75' : '#77a86b';
+    ctx.fillText('— 慢慢来 —', W - pad, H - 70);
+    return c.toDataURL('image/png');
+  }
+
+  function roundRect(ctx, x, y, w, h, r) {
+    ctx.beginPath();
+    ctx.moveTo(x + r, y);
+    ctx.arcTo(x + w, y, x + w, y + h, r);
+    ctx.arcTo(x + w, y + h, x, y + h, r);
+    ctx.arcTo(x, y + h, x, y, r);
+    ctx.arcTo(x, y, x + w, y, r);
+    ctx.closePath();
+  }
+
+  function openShareImage() {
+    var n = findNote(state.sharingId);
+    if (!n) return;
+    try {
+      var url = buildShareImage(n);
+      if (els.imgView) els.imgView.src = url;
+      if (els.imgMask) els.imgMask.classList.add('open');
+    } catch (e) {
+      toast('生成图片失败：' + e.message);
+    }
+  }
+
   function init() {
     cacheEls();
     initTheme();
@@ -2362,6 +3115,62 @@ window.onerror = function (msg, url, line) {
     els.remindToggle.addEventListener('click', function () { setRemindMode(!state.remindOn); });
     els.micBtn.addEventListener('click', startRecording);
     els.aiBtn.addEventListener('click', processWithAI);
+
+    // 竹语
+    initSoul();
+    if ($('soulRefresh')) $('soulRefresh').addEventListener('click', refreshSoul);
+    if ($('soulClose')) $('soulClose').addEventListener('click', function () {
+      try { localStorage.setItem('bamboo.v11.soulHide', new Date().toDateString()); } catch (e) {}
+      if (els.soulCard) els.soulCard.style.display = 'none';
+      toast('竹语今日先歇了，明天再来');
+    });
+    if ($('soulAsk')) $('soulAsk').addEventListener('click', openAskModal);
+
+    // 问过去的自己
+    if (els.askBtn) els.askBtn.addEventListener('click', openAskModal);
+    if ($('askCancel')) $('askCancel').addEventListener('click', closeAskModal);
+    if ($('askGo')) $('askGo').addEventListener('click', doAsk);
+    if (els.askInput) els.askInput.addEventListener('keydown', function (e) {
+      if (e.key === 'Enter') { e.preventDefault(); doAsk(); }
+    });
+    if (els.askMask) els.askMask.addEventListener('click', function (e) {
+      if (e.target === els.askMask) closeAskModal();
+    });
+
+    // 时光机
+    if ($('timeBtn')) $('timeBtn').addEventListener('click', function () { closeDrawer(); openTimeMachine(); });
+    if ($('timeClose')) $('timeClose').addEventListener('click', function () { els.timeMask.classList.remove('open'); });
+    if (els.timeMask) els.timeMask.addEventListener('click', function (e) {
+      if (e.target === els.timeMask) els.timeMask.classList.remove('open');
+    });
+    if (els.timeList) els.timeList.addEventListener('click', function (e) {
+      var t = e.target;
+      if (t && t.classList && t.classList.contains('t-view')) {
+        var item = t.parentNode;
+        var sha = item.getAttribute('data-sha');
+        if (sha) viewTimeVersion(item, sha);
+      }
+    });
+
+    // 本周回顾
+    if ($('reportBtn')) $('reportBtn').addEventListener('click', function () { closeDrawer(); openReport(); });
+    if ($('reportClose')) $('reportClose').addEventListener('click', function () { els.reportMask.classList.remove('open'); });
+    if ($('reportRegen')) $('reportRegen').addEventListener('click', genReport);
+    if ($('reportSave')) $('reportSave').addEventListener('click', saveReport);
+    if (els.reportMask) els.reportMask.addEventListener('click', function (e) {
+      if (e.target === els.reportMask) els.reportMask.classList.remove('open');
+    });
+
+    // 笔记卡片图片
+    if ($('shareImgBtn')) $('shareImgBtn').addEventListener('click', openShareImage);
+    if ($('imgClose')) $('imgClose').addEventListener('click', function () { els.imgMask.classList.remove('open'); });
+    if (els.imgMask) els.imgMask.addEventListener('click', function (e) {
+      if (e.target === els.imgMask) els.imgMask.classList.remove('open');
+    });
+
+    // 稍后再响
+    if ($('snooze30')) $('snooze30').addEventListener('click', function () { snoozeNote(30); });
+    if ($('snooze2h')) $('snooze2h').addEventListener('click', function () { snoozeNote(120); });
 
     $('themeBtn').addEventListener('click', toggleTheme);
     $('settingsBtn').addEventListener('click', openDrawer);
@@ -2435,6 +3244,7 @@ window.onerror = function (msg, url, line) {
         var iso = fromLocalInput(els.modalInput.value);
         n.remindAt = iso; n.reminded = false;
         n.repeat = els.modalRepeatInput.value;
+        if (iso) addOps('remind', n.text);
         n.updatedAt = new Date().toISOString();
         saveLocal(); render();
         toast(iso ? '提醒已设好' : '已清除提醒');
@@ -2456,6 +3266,7 @@ window.onerror = function (msg, url, line) {
           n.text = et.text || text;
           n.tags = et.tags.length ? et.tags : [];
           n.updatedAt = new Date().toISOString();
+          addOps('edit', n.text);
           saveLocal(); render();
           toast('已保存修改');
           scheduleSync();
@@ -2486,6 +3297,10 @@ window.onerror = function (msg, url, line) {
     document.addEventListener('keydown', function (e) {
       if (e.key === 'Escape') {
         if (els.focusMask.classList.contains('open')) closeFocus();
+        else if (els.imgMask && els.imgMask.classList.contains('open')) els.imgMask.classList.remove('open');
+        else if (els.reportMask && els.reportMask.classList.contains('open')) els.reportMask.classList.remove('open');
+        else if (els.timeMask && els.timeMask.classList.contains('open')) els.timeMask.classList.remove('open');
+        else if (els.askMask && els.askMask.classList.contains('open')) closeAskModal();
         else if (els.pickerMask && els.pickerMask.classList.contains('open')) closeTimePicker();
         else if (els.remindMask.classList.contains('open')) closeRemindModal();
         else if (els.editMask.classList.contains('open')) closeEditModal();
