@@ -506,24 +506,19 @@
     max-width:86vw;text-align:center;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;}
   .toast.show{opacity:1;transform:translate(-50%,0);}
 
-  /* ===== 竹语（首页心灵师） ===== */
-  .soul{margin:16px 0 4px;padding:15px 18px 13px;border:1px solid var(--line);border-radius:20px;
-    background:var(--card);position:relative;overflow:hidden;}
-  .soul::before{content:'「';position:absolute;top:6px;left:8px;font-size:26px;color:var(--g300);
-    font-family:Georgia,serif;opacity:.7;}
-  .soul-head{display:flex;align-items:center;gap:8px;}
-  .soul-name{font-size:11px;letter-spacing:.34em;color:var(--ink-faint);}
-  .soul-refresh{margin-left:auto;border:none;background:none;color:var(--ink-faint);cursor:pointer;
-    font:inherit;font-size:11px;text-decoration:underline dotted;text-underline-offset:3px;
+  /* ===== 竹语（无框、融入页面的一句话） ===== */
+  .soul{margin:0 auto 6px;padding:0 6px;max-width:420px;text-align:center;}
+  .soul-line{height:1px;width:56px;margin:0 auto 12px;
+    background:linear-gradient(90deg,transparent,var(--g300),transparent);}
+  .soul-text{margin:0;font-size:14.5px;line-height:1.9;color:var(--ink-soft);
+    letter-spacing:.06em;animation:soulIn .8s ease;}
+  @keyframes soulIn{from{opacity:0;transform:translateY(4px);}to{opacity:1;transform:none;}}
+  .soul-acts{margin-top:5px;display:flex;justify-content:center;align-items:center;gap:10px;}
+  .soul-hint{border:none;background:none;color:var(--ink-faint);cursor:pointer;font:inherit;
+    font-size:11px;letter-spacing:.14em;padding:2px 4px;opacity:.85;
     -webkit-tap-highlight-color:transparent;}
-  .soul-refresh:active{color:var(--g600);}
-  .soul-text{margin-top:9px;font-size:15px;line-height:1.95;color:var(--ink-soft);letter-spacing:.02em;
-    animation:soulIn .8s ease;}
-  @keyframes soulIn{from{opacity:0;transform:translateY(6px);}to{opacity:1;transform:none;}}
-  .soul-foot{display:flex;justify-content:space-between;align-items:center;margin-top:9px;}
-  .soul-meta{font-size:10.5px;color:var(--ink-faint);letter-spacing:.08em;}
-  .soul-ask{border:none;background:none;color:var(--g600);cursor:pointer;font:inherit;font-size:12px;
-    letter-spacing:.06em;-webkit-tap-highlight-color:transparent;}
+  .soul-hint:active{color:var(--g600);opacity:1;}
+  .soul-dotsep{color:var(--ink-faint);font-size:10px;opacity:.6;}
 
   /* ===== 问过去的自己 ===== */
   .ask-answer{margin-top:14px;padding:13px 15px;border:1px solid var(--line);border-radius:14px;
@@ -665,15 +660,13 @@
     </div>
   </header>
 
-  <section class="soul" id="soulCard" style="display:none;">
-    <div class="soul-head">
-      <span class="soul-name">竹 语</span>
-      <button class="soul-refresh" id="soulRefresh" type="button">再说一句</button>
-    </div>
-    <div class="soul-text" id="soulText"></div>
-    <div class="soul-foot">
-      <span class="soul-meta" id="soulMeta"></span>
-      <button class="soul-ask" id="soulAsk" type="button">和它聊聊 →</button>
+  <section class="soul" id="soulCard" style="display:none;" aria-live="polite">
+    <div class="soul-line"></div>
+    <p class="soul-text" id="soulText"></p>
+    <div class="soul-acts">
+      <button class="soul-hint" id="soulAsk" type="button">聊聊</button>
+      <span class="soul-dotsep">·</span>
+      <button class="soul-hint" id="soulRefresh" type="button">换一句</button>
     </div>
   </section>
 
@@ -1023,7 +1016,6 @@ window.onerror = function (msg, url, line) {
 
     els.soulCard = $('soulCard');
     els.soulText = $('soulText');
-    els.soulMeta = $('soulMeta');
 
     els.timeMask = $('timeMask');
     els.timeList = $('timeList');
@@ -2624,24 +2616,23 @@ window.onerror = function (msg, url, line) {
   }
 
   function localSoulMessage(s) {
-    if (s.total === 0) return '种下第一句话，竹林从这里开始。';
+    if (s.total === 0) return '竹在等第一句话。';
     var seed = new Date().getDate() + new Date().getHours() + state.soulSeed;
-    // 先找值得说的实事（一句说完）
     var facts = [];
-    if (s.streak >= 3) facts.push('连续记了 ' + s.streak + ' 天，竹子在暗中生长。');
-    if (s.purgedWeek >= 3) facts.push('这周你删了 ' + s.purgedWeek + ' 条。放下也是一种整理。');
-    if (s.last7 === 0) facts.push('有一阵子没听到你的动静了。');
+    if (s.streak >= 3) facts.push('连记 ' + s.streak + ' 天，根在暗处长。');
+    if (s.purgedWeek >= 3) facts.push('这周删了 ' + s.purgedWeek + ' 条，放得下。');
+    if (s.last7 === 0) facts.push('许久没动静了。');
+    if (s.topTags.length) facts.push('「' + s.topTags[0].split('×')[0] + '」出现最多。');
+    if (s.done >= 5) facts.push('完成了 ' + s.done + ' 件，比你以为的多。');
     var hb = ['清晨', '中午', '午后', '夜晚', '深夜'][s.hours.indexOf(Math.max.apply(null, s.hours))];
-    if ((hb === '深夜' || hb === '夜晚') && s.total >= 5) facts.push('你常在' + hb + '落笔，夜里的字最诚实。');
-    if (s.topTags.length) facts.push('「' + s.topTags[0].split('×')[0] + '」是你最常回到的地方。');
-    if (s.done >= 5) facts.push('你完成了 ' + s.done + ' 件事，比自己以为的可靠。');
+    if ((hb === '深夜' || hb === '夜晚') && s.total >= 5) facts.push('夜里的字最诚实。');
     var pool = [
       '慢慢来，比较快。',
-      '记下来的，就不会真正消失。',
-      '竹子前四年只长三厘米，根在往深处走。',
-      '你需要的没有你以为的那么多。',
-      '今天的你，是过去所有笔记的合著者。',
-      '安静，也是一种记录。'
+      '写下的，不会消失。',
+      '根深者，不问风。',
+      '少即是从容。',
+      '今天的你，是昨天的合著者。',
+      '安静，也是记录。'
     ];
     if (facts.length) return facts[seed % facts.length];
     return pool[seed % pool.length];
@@ -2650,24 +2641,25 @@ window.onerror = function (msg, url, line) {
   function soulPrompt(s) {
     return '你是一位安静温柔的观察者「竹语」，住在一个叫「竹间记」的笔记应用里，陪一位用户慢慢记录生活。\n\n' +
       '以下是这位用户的真实画像（JSON）：\n' + JSON.stringify(s, null, 1) + '\n\n' +
-      '请只对用户说一句话（30字以内）。要求：\n' +
-      '1. 像一位了解他的老朋友或哲学家：要么基于他的真实记录说一个具体的事实（如他常记什么、最近删了什么），要么是一句简短而有分量的哲言\n' +
-      '2. 绝不废话、不客套、不说教、不自我介绍\n' +
-      '3. 绝对不要出现「JSON」「数据」「系统」「AI」「画像」这类词\n' +
-      '4. 直接输出这一句话，不要引号和任何前后缀';
+      '请只对用户说一句话（12~18个字，越短越有分量）。要求：\n' +
+      '1. 优先从他的真实记录里挑一个具体事实说（他常记什么、最近完成了什么、删了什么），说得像一个了解他的朋友随口一提\n' +
+      '2. 没有值得说的事就给一句极简的哲言，像禅宗偈语一样短\n' +
+      '3. 禁止：客套、称呼、自我介绍、说教、解释、比喻堆砌\n' +
+      '4. 绝对不要出现「JSON」「数据」「系统」「AI」「画像」这类词\n' +
+      '5. 直接输出这一句话，不要引号和任何前后缀';
+  }
+
+  function soulCap(text) {
+    return String(text || '').replace(/^["「'\s]+|["」'\s]+$/g, '').slice(0, 24);
   }
 
   function renderSoulText(text, mode) {
     if (!els.soulCard || !els.soulText) return;
     els.soulCard.style.display = '';
-    els.soulText.textContent = String(text || '').replace(/^["「'\s]+|["」'\s]+$/g, '').slice(0, 80);
+    els.soulText.textContent = soulCap(text);
     els.soulText.style.animation = 'none';
     void els.soulText.offsetWidth;
     els.soulText.style.animation = '';
-    if (els.soulMeta) {
-      els.soulMeta.textContent = mode === 'ai' ? '它读过你的 ' + state.notes.length + ' 条记录'
-                                               : '本地心声 · 配置 AI 后它会更懂你';
-    }
   }
 
   function initSoul() {
@@ -2677,10 +2669,10 @@ window.onerror = function (msg, url, line) {
     var cached = null;
     try { cached = JSON.parse(localStorage.getItem(LS_SOUL) || 'null'); } catch (e) {}
     var fresh = cached && cached.text && (Date.now() - cached.at) < 6 * 3600000;
-    if (fresh && cached.mode === 'ai') { renderSoulText(cached.text, 'ai'); return; }
+    if (fresh && cached.mode === 'ai') { renderSoulText(soulCap(cached.text), 'ai'); return; }
     aiChat(soulPrompt(buildSoulStats()), 0.85).then(function (text) {
-      try { localStorage.setItem(LS_SOUL, JSON.stringify({ text: text, at: Date.now(), mode: 'ai' })); } catch (e) {}
-      renderSoulText(text, 'ai');
+      try { localStorage.setItem(LS_SOUL, JSON.stringify({ text: soulCap(text), at: Date.now(), mode: 'ai' })); } catch (e) {}
+      renderSoulText(soulCap(text), 'ai');
     }).catch(function () { /* 本地版已渲染，静默降级 */ });
   }
 
@@ -2689,8 +2681,8 @@ window.onerror = function (msg, url, line) {
     if (!hasAI()) { renderSoulText(localSoulMessage(buildSoulStats()), 'local'); return; }
     renderSoulText('…', 'local');
     aiChat(soulPrompt(buildSoulStats()) + '\n\n（换一个角度，和刚才不同的话）', 0.9).then(function (text) {
-      try { localStorage.setItem(LS_SOUL, JSON.stringify({ text: text, at: Date.now(), mode: 'ai' })); } catch (e) {}
-      renderSoulText(text, 'ai');
+      try { localStorage.setItem(LS_SOUL, JSON.stringify({ text: soulCap(text), at: Date.now(), mode: 'ai' })); } catch (e) {}
+      renderSoulText(soulCap(text), 'ai');
     }).catch(function () {
       renderSoulText(localSoulMessage(buildSoulStats()), 'local');
     });
