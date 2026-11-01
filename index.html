@@ -517,8 +517,6 @@
     font:inherit;font-size:11px;text-decoration:underline dotted;text-underline-offset:3px;
     -webkit-tap-highlight-color:transparent;}
   .soul-refresh:active{color:var(--g600);}
-  .soul-x{border:none;background:none;color:var(--ink-faint);cursor:pointer;font-size:15px;line-height:1;
-    padding:2px 4px;-webkit-tap-highlight-color:transparent;}
   .soul-text{margin-top:9px;font-size:15px;line-height:1.95;color:var(--ink-soft);letter-spacing:.02em;
     animation:soulIn .8s ease;}
   @keyframes soulIn{from{opacity:0;transform:translateY(6px);}to{opacity:1;transform:none;}}
@@ -671,7 +669,6 @@
     <div class="soul-head">
       <span class="soul-name">竹 语</span>
       <button class="soul-refresh" id="soulRefresh" type="button">再说一句</button>
-      <button class="soul-x" id="soulClose" type="button" aria-label="今日收起">×</button>
     </div>
     <div class="soul-text" id="soulText"></div>
     <div class="soul-foot">
@@ -1995,9 +1992,8 @@ window.onerror = function (msg, url, line) {
       if (!txt) return;
       var cfg = state.config;
       if (cfg && cfg.aiUrl && cfg.aiKey && cfg.aiModel) {
-        // 已配置 AI：语音结束直接送去整理，无需手动点击
-        els.aiBtn.style.display = 'inline-flex';
-        if (!els.aiBtn.classList.contains('loading')) processWithAI();
+        // 已配置 AI：语音结束静默整理——不显示按钮、不显示整理中，直接等结果
+        if (!els.aiBtn.classList.contains('loading')) processWithAI(true);
       } else {
         // 未配置 AI：本地解析时间指令
         els.aiBtn.style.display = 'inline-flex';
@@ -2029,7 +2025,7 @@ window.onerror = function (msg, url, line) {
     els.micLabel.textContent = '语音';
   }
 
-  function processWithAI() {
+  function processWithAI(silent) {
     var text = els.input.value.trim();
     if (!text) return;
     var cfg = state.config;
@@ -2039,8 +2035,11 @@ window.onerror = function (msg, url, line) {
       return;
     }
 
-    els.aiBtn.classList.add('loading');
-    els.aiBtn.innerHTML = '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 12a9 9 0 11-6.219-8.56"/></svg><span>整理中...</span>';
+    // silent（语音自动触发）：不显示按钮、不显示整理中，直接等结果
+    if (!silent) {
+      els.aiBtn.classList.add('loading');
+      els.aiBtn.innerHTML = '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 12a9 9 0 11-6.219-8.56"/></svg><span>整理中...</span>';
+    }
 
     var now = new Date();
     var weekCN = ['日', '一', '二', '三', '四', '五', '六'][now.getDay()];
@@ -2100,10 +2099,13 @@ window.onerror = function (msg, url, line) {
     })
     .catch(err => {
       toast('AI 出错：' + err.message);
+      if (silent) els.aiBtn.style.display = 'inline-flex'; // 静默模式失败时才露出按钮，供手动重试
     })
     .finally(() => {
-      els.aiBtn.classList.remove('loading');
-      els.aiBtn.innerHTML = '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><path d="M12 2v4M12 18v4M4.93 4.93l2.83 2.83M16.24 16.24l2.83 2.83M2 12h4M18 12h4M4.93 19.07l2.83-2.83M16.24 7.76l2.83-2.83"/></svg><span>AI 提炼</span>';
+      if (!silent) {
+        els.aiBtn.classList.remove('loading');
+        els.aiBtn.innerHTML = '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><path d="M12 2v4M12 18v4M4.93 4.93l2.83 2.83M16.24 16.24l2.83 2.83M2 12h4M18 12h4M4.93 19.07l2.83-2.83M16.24 7.76l2.83-2.83"/></svg><span>AI 提炼</span>';
+      }
     });
   }
 
@@ -2622,57 +2624,49 @@ window.onerror = function (msg, url, line) {
   }
 
   function localSoulMessage(s) {
-    if (s.total === 0) return '这里还是一片空地。种下第一句话，我就在这里陪着你。';
-    var h = new Date().getHours();
-    var greet = h < 5 ? '夜很深了' : h < 11 ? '早上好' : h < 14 ? '中午好' : h < 18 ? '下午好' : h < 23 ? '晚上好' : '夜深了';
-    var hb = ['清晨', '中午', '午后', '夜晚', '深夜'][s.hours.indexOf(Math.max.apply(null, s.hours))];
-    var obs = [];
-    if (s.last7 === 0) obs.push('有一阵子没听到你的动静了，最近还好吗');
-    if (s.streak >= 3) obs.push('你已经连续记了 ' + s.streak + ' 天，像竹子一样安静地生长');
-    if (s.purgedWeek >= 3) obs.push('这一周你删掉了不少东西——有时候放下，也是一种整理');
-    if (s.done >= 5) obs.push('你完成了 ' + s.done + ' 件事，比自己以为的更可靠');
-    if (s.last7 >= 10) obs.push('这周你记了 ' + s.last7 + ' 条，落笔挺勤的');
-    if ((hb === '深夜' || hb === '夜晚') && s.total >= 5) obs.push('你常在' + hb + '写字，别忘了休息');
-    if (s.topTags.length) obs.push('「' + s.topTags[0].split('×')[0] + '」是你最常回到的地方');
-    var pool = [
-      '如果把这些句子连起来读，其实是一封写得很诚实的信。',
-      '记录本身，就是一种回答。',
-      '慢慢来，比较快。',
-      '竹子用四年只长三厘米，第五年起每天长三十厘米——前面的日子，根在往深处走。',
-      '被你写下来的，就不会真的消失。',
-      '你不需要记得所有事，记得重要的那几件，就够了。'
-    ];
+    if (s.total === 0) return '种下第一句话，竹林从这里开始。';
     var seed = new Date().getDate() + new Date().getHours() + state.soulSeed;
-    var q = pool[seed % pool.length];
-    var o = obs.length ? obs[seed % obs.length] : '';
-    return greet + '。' + (o ? o + '。' : '') + q;
+    // 先找值得说的实事（一句说完）
+    var facts = [];
+    if (s.streak >= 3) facts.push('连续记了 ' + s.streak + ' 天，竹子在暗中生长。');
+    if (s.purgedWeek >= 3) facts.push('这周你删了 ' + s.purgedWeek + ' 条。放下也是一种整理。');
+    if (s.last7 === 0) facts.push('有一阵子没听到你的动静了。');
+    var hb = ['清晨', '中午', '午后', '夜晚', '深夜'][s.hours.indexOf(Math.max.apply(null, s.hours))];
+    if ((hb === '深夜' || hb === '夜晚') && s.total >= 5) facts.push('你常在' + hb + '落笔，夜里的字最诚实。');
+    if (s.topTags.length) facts.push('「' + s.topTags[0].split('×')[0] + '」是你最常回到的地方。');
+    if (s.done >= 5) facts.push('你完成了 ' + s.done + ' 件事，比自己以为的可靠。');
+    var pool = [
+      '慢慢来，比较快。',
+      '记下来的，就不会真正消失。',
+      '竹子前四年只长三厘米，根在往深处走。',
+      '你需要的没有你以为的那么多。',
+      '今天的你，是过去所有笔记的合著者。',
+      '安静，也是一种记录。'
+    ];
+    if (facts.length) return facts[seed % facts.length];
+    return pool[seed % pool.length];
   }
 
   function soulPrompt(s) {
     return '你是一位安静温柔的观察者「竹语」，住在一个叫「竹间记」的笔记应用里，陪一位用户慢慢记录生活。\n\n' +
       '以下是这位用户的真实画像（JSON）：\n' + JSON.stringify(s, null, 1) + '\n\n' +
-      '请基于这些真实记录，写一段放在首页送给用户的话（60~120字）。要求：\n' +
-      '1. 像一位真正了解他的老朋友，可以自然地引用他记过的具体内容（一两处即可，用他的原话碎片）\n' +
-      '2. 语气温柔、克制、不说教，有一点诗意但不油腻\n' +
-      '3. 可以是关心、观察、鼓励，或一个开放式的哲学小问题，自然就好\n' +
-      '4. 绝对不要出现「JSON」「数据」「系统」「AI」「画像」这类词，不要自我介绍\n' +
-      '5. 直接输出这段话本身，不要任何前后缀和引号';
+      '请只对用户说一句话（30字以内）。要求：\n' +
+      '1. 像一位了解他的老朋友或哲学家：要么基于他的真实记录说一个具体的事实（如他常记什么、最近删了什么），要么是一句简短而有分量的哲言\n' +
+      '2. 绝不废话、不客套、不说教、不自我介绍\n' +
+      '3. 绝对不要出现「JSON」「数据」「系统」「AI」「画像」这类词\n' +
+      '4. 直接输出这一句话，不要引号和任何前后缀';
   }
 
   function renderSoulText(text, mode) {
     if (!els.soulCard || !els.soulText) return;
-    var hideDay = null;
-    try { hideDay = localStorage.getItem('bamboo.v11.soulHide'); } catch (e) {}
-    var today = new Date().toDateString();
-    if (hideDay === today) { els.soulCard.style.display = 'none'; return; }
     els.soulCard.style.display = '';
-    els.soulText.textContent = text;
+    els.soulText.textContent = String(text || '').replace(/^["「'\s]+|["」'\s]+$/g, '').slice(0, 80);
     els.soulText.style.animation = 'none';
     void els.soulText.offsetWidth;
     els.soulText.style.animation = '';
     if (els.soulMeta) {
-      els.soulMeta.textContent = mode === 'ai' ? '竹语 · 它读过了你的 ' + state.notes.length + ' 条记录'
-                                               : '竹语 · 本地心声（配置 AI 后它会更懂你）';
+      els.soulMeta.textContent = mode === 'ai' ? '它读过你的 ' + state.notes.length + ' 条记录'
+                                               : '本地心声 · 配置 AI 后它会更懂你';
     }
   }
 
@@ -2693,8 +2687,8 @@ window.onerror = function (msg, url, line) {
   function refreshSoul() {
     state.soulSeed++;
     if (!hasAI()) { renderSoulText(localSoulMessage(buildSoulStats()), 'local'); return; }
-    renderSoulText('（竹语正在翻你的记录…）', 'local');
-    aiChat(soulPrompt(buildSoulStats()) + '\n\n（这次请换一个角度，和上一次不同的话）', 0.9).then(function (text) {
+    renderSoulText('…', 'local');
+    aiChat(soulPrompt(buildSoulStats()) + '\n\n（换一个角度，和刚才不同的话）', 0.9).then(function (text) {
       try { localStorage.setItem(LS_SOUL, JSON.stringify({ text: text, at: Date.now(), mode: 'ai' })); } catch (e) {}
       renderSoulText(text, 'ai');
     }).catch(function () {
@@ -3114,16 +3108,11 @@ window.onerror = function (msg, url, line) {
     
     els.remindToggle.addEventListener('click', function () { setRemindMode(!state.remindOn); });
     els.micBtn.addEventListener('click', startRecording);
-    els.aiBtn.addEventListener('click', processWithAI);
+    els.aiBtn.addEventListener('click', function () { processWithAI(false); });
 
     // 竹语
     initSoul();
     if ($('soulRefresh')) $('soulRefresh').addEventListener('click', refreshSoul);
-    if ($('soulClose')) $('soulClose').addEventListener('click', function () {
-      try { localStorage.setItem('bamboo.v11.soulHide', new Date().toDateString()); } catch (e) {}
-      if (els.soulCard) els.soulCard.style.display = 'none';
-      toast('竹语今日先歇了，明天再来');
-    });
     if ($('soulAsk')) $('soulAsk').addEventListener('click', openAskModal);
 
     // 问过去的自己
