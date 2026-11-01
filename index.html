@@ -860,6 +860,7 @@ window.onerror = function (msg, url, line) {
     els.modalRepeatInput = $('modalRepeatInput');
 
     els.pickerMask = $('pickerMask');
+    els.pickQuick = $('pickQuick');
     els.pickY = $('pickY');
     els.pickM = $('pickM');
     els.pickD = $('pickD');
@@ -1106,6 +1107,23 @@ window.onerror = function (msg, url, line) {
   function parseVoiceTime(raw) {
     var text = String(raw || '');
     if (!text.trim()) return { matched: false, remindAt: null, repeat: 'none', cleanText: text };
+
+    // 相对时长：半小时后 / 一个半小时后 / X小时(之)后 / X分钟(之)后 / X天后
+    var dur = text.match(/(一个半|半|[0-9]{1,2}|[一二两三四五六七八九十]{1,3})\s*(?:个)?\s*(小时|钟头|分钟|分|天)\s*(?:之)?\s*后/);
+    if (dur) {
+      var base = 0;
+      if (dur[1] === '一个半') base = 1.5;
+      else if (dur[1] === '半') base = 0.5;
+      else base = cnNum(dur[1]);
+      if (base != null && base > 0 && base < 100) {
+        var unit = dur[2];
+        var ms = (unit === '分钟' || unit === '分') ? base * 60000
+               : (unit === '天') ? base * 86400000
+               : base * 3600000;
+        var dd = new Date(Date.now() + ms);
+        return { matched: true, remindAt: toLocalInput(dd.toISOString()), repeat: 'none', cleanText: cleanSpoken(text.replace(dur[0], ' ')) };
+      }
+    }
 
     var repeat = 'none';
     var forcedWeekday = null; // "每周X" 指定的星期
@@ -1780,11 +1798,18 @@ window.onerror = function (msg, url, line) {
 
     recognition.onend = function() {
       stopRecording();
-      if (els.input.value.trim()) {
+      var txt = els.input.value.trim();
+      if (!txt) return;
+      var cfg = state.config;
+      if (cfg && cfg.aiUrl && cfg.aiKey && cfg.aiModel) {
+        // 已配置 AI：语音结束直接送去整理，无需手动点击
         els.aiBtn.style.display = 'inline-flex';
-        // 语音默契层：说完自动识别时间指令，联动提醒开关
+        if (!els.aiBtn.classList.contains('loading')) processWithAI();
+      } else {
+        // 未配置 AI：本地解析时间指令
+        els.aiBtn.style.display = 'inline-flex';
         if (!state.remindOn) {
-          var parsed = parseVoiceTime(els.input.value);
+          var parsed = parseVoiceTime(txt);
           if (parsed.matched && applyVoiceParse(parsed)) {
             var hhmm = parsed.remindAt.split('T');
             toast('已识别提醒 ' + (hhmm[1] ? hhmm[1] : '') + (parsed.repeat !== 'none' ? ' · 循环' : '') + '，可直接发送');
