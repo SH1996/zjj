@@ -4,13 +4,13 @@
       "id": "mvxpnhdwh5wooj",
       "text": "去菜场买菜。",
       "createdAt": "2026-11-01T10:52:12.356Z",
-      "updatedAt": "2026-11-01T11:06:51.277Z",
-      "status": "trash",
+      "updatedAt": "2026-11-01T11:06:53.294Z",
+      "status": "active",
       "remindAt": "2026-11-02T00:00:00.000Z",
       "reminded": false,
       "repeat": "none",
       "doneAt": null,
-      "deletedAt": "2026-11-01T11:06:51.277Z",
+      "deletedAt": null,
       "tags": [
         "生活",
         "购物"
