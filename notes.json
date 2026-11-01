@@ -4,13 +4,13 @@
       "id": "mvxuak81pt1si0",
       "text": "哈哈",
       "createdAt": "2026-11-01T13:02:07.584Z",
-      "updatedAt": "2026-11-01T13:02:07.584Z",
-      "status": "active",
+      "updatedAt": "2026-11-01T13:39:57.950Z",
+      "status": "trash",
       "remindAt": null,
-      "repeat": "none",
       "reminded": false,
+      "repeat": "none",
       "doneAt": null,
-      "deletedAt": null,
+      "deletedAt": "2026-11-01T13:39:57.950Z",
       "tags": [
         "abd"
       ]
