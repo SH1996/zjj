@@ -12,6 +12,15 @@
 <title>竹间记 · 慢慢来</title>
 
 <script>
+  // PWA：注册 Service Worker（离线可开）
+  if ('serviceWorker' in navigator && (location.protocol === 'https:' || location.hostname === 'localhost')) {
+    window.addEventListener('load', function () {
+      try { navigator.serviceWorker.register('sw.js').catch(function () {}); } catch (e) {}
+    });
+  }
+</script>
+
+<script>
   try {
     var savedTheme = localStorage.getItem('bamboo.v11.theme');
     if (savedTheme === 'dark' || (!savedTheme && window.matchMedia('(prefers-color-scheme: dark)').matches)) {

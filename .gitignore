@@ -1,0 +1,6 @@
+# 防止敏感与临时文件进入公开仓库
+notes.json
+*.txt
+.test/
+*.local
+.DS_Store
