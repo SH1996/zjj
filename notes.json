@@ -1,16 +1,20 @@
 {
   "notes": [
     {
-      "id": "mvxpagcgw1o8sq",
-      "text": "哈哈哈哈哈哈哈哈#叫爸爸叫爸爸",
-      "createdAt": "2026-11-01T10:42:04.480Z",
-      "updatedAt": "2026-11-01T10:42:04.480Z",
+      "id": "mvxpnhdwh5wooj",
+      "text": "去菜场买菜。",
+      "createdAt": "2026-11-01T10:52:12.356Z",
+      "updatedAt": "2026-11-01T10:52:12.356Z",
       "status": "active",
-      "remindAt": null,
-      "reminded": false,
+      "remindAt": "2026-11-02T00:00:00.000Z",
       "repeat": "none",
+      "reminded": false,
       "doneAt": null,
-      "deletedAt": null
+      "deletedAt": null,
+      "tags": [
+        "生活",
+        "购物"
+      ]
     }
   ],
   "tombstones": [
@@ -21,6 +25,10 @@
     {
       "id": "mvxpaqprgtkq5z",
       "at": "2026-11-01T10:42:32.585Z"
+    },
+    {
+      "id": "mvxpagcgw1o8sq",
+      "at": "2026-11-01T10:42:36.569Z"
     }
   ]
 }
