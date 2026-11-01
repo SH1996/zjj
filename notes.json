@@ -4,11 +4,11 @@
       "id": "mvxndkql8k6gpx",
       "text": "哈哈",
       "createdAt": "2026-11-01T09:48:30.909Z",
-      "updatedAt": "2026-11-01T09:48:58.449Z",
+      "updatedAt": "2026-11-01T09:49:14.755Z",
       "status": "active",
-      "remindAt": "2026-11-01T09:49:00.000Z",
+      "remindAt": "2026-11-01T09:50:00.000Z",
       "repeat": "none",
-      "reminded": true,
+      "reminded": false,
       "doneAt": null,
       "deletedAt": null
     }
