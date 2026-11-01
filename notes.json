@@ -7,8 +7,8 @@
       "updatedAt": "2026-11-01T09:49:14.755Z",
       "status": "active",
       "remindAt": "2026-11-01T09:50:00.000Z",
+      "reminded": true,
       "repeat": "none",
-      "reminded": false,
       "doneAt": null,
       "deletedAt": null
     }
