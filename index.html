@@ -151,19 +151,39 @@
 
   .remind-row{display:none;gap:10px;align-items:center;padding:0 0 14px;flex-wrap:wrap;}
   .remind-row.show{display:flex;}
-  .remind-row input[type="datetime-local"]{
+  .remind-row .time-field{
     flex:1 1 140px;min-width:0;max-width:100%;
     border:1px solid var(--line);border-radius:14px;
     background:var(--card-hover);color:var(--ink);
     font:inherit;font-size:15px;padding:11px 13px;outline:none;
     box-sizing:border-box;-webkit-appearance:none;appearance:none;
+    text-align:left;cursor:pointer;font-family:inherit;
+    -webkit-tap-highlight-color:transparent;
   }
+  .remind-row .time-field.set{border-color:rgba(168,135,61,.45);color:var(--gold);}
   .remind-row select {
     flex: 1 1 100px; border:1px solid var(--line); border-radius:14px;
     background:var(--card-hover); color:var(--ink); font:inherit; font-size:14px;
     padding: 11px 13px; outline: none; cursor: pointer;
   }
-  .remind-row input:focus, .remind-row select:focus{border-color:var(--g400);}
+  .remind-row .time-field:focus, .remind-row select:focus{border-color:var(--g400);}
+
+  .quick-row{display:flex;flex-wrap:wrap;gap:8px;margin-bottom:16px;}
+  .qchip{
+    border:1px solid var(--line);border-radius:999px;background:var(--card);
+    color:var(--ink-soft);font:inherit;font-size:13px;padding:8px 14px;
+    cursor:pointer;transition:all .25s ease;-webkit-tap-highlight-color:transparent;
+  }
+  .qchip:active,.qchip.on{border-color:var(--g400);color:var(--g600);background:var(--g100);}
+  .psel-row{display:flex;align-items:center;justify-content:space-between;gap:4px;margin-bottom:18px;}
+  .psel{
+    flex:1;min-width:0;border:none;border-bottom:1.5px solid var(--line);
+    background:var(--card-hover);color:var(--ink);font:inherit;font-size:16px;
+    padding:10px 2px;outline:none;text-align:center;cursor:pointer;
+    -webkit-appearance:none;appearance:none;border-radius:0;
+  }
+  .psel:focus{border-bottom-color:var(--g500);}
+  .punit{color:var(--ink-faint);font-size:12px;flex:none;}
 
   .composer-bar{display:flex;align-items:center;justify-content:space-between;gap:12px;
     padding-top:14px;border-top:1px solid var(--line-soft);margin-top:10px;flex-wrap:wrap;}
@@ -396,7 +416,7 @@
   .modal p{font-size:12px;letter-spacing:.05em;color:var(--ink-faint);
     line-height:1.9;margin-bottom:16px;}
 
-  .modal input[type="text"], .modal input[type="datetime-local"], .modal textarea{
+  .modal input[type="text"], .modal textarea, .modal .time-field{
     display:block; width:100% !important; max-width:100% !important; min-width:0;
     box-sizing:border-box; border:1px solid var(--line); border-radius:14px;
     background:var(--card-hover); color:var(--ink); font:inherit; font-size:16px; 
@@ -405,7 +425,10 @@
     -webkit-tap-highlight-color:transparent;
   }
   .modal textarea { min-height: 120px; resize: none; line-height: 1.6; }
-  .modal input:focus, .modal textarea:focus{border-color:var(--g400);}
+  .modal input:focus, .modal textarea:focus, .modal .time-field:focus{border-color:var(--g400);}
+  .modal .time-field{text-align:left;cursor:pointer;font-family:inherit;}
+  .modal .time-field.set{border-color:rgba(168,135,61,.45);color:var(--gold);}
+  .modal.no-anim{transform:none;transition:none;}
 
   .share-preview {
     background: var(--card-hover);
@@ -490,7 +513,7 @@
 
     .composer{padding:20px 18px 14px;border-radius:20px;}
     .composer textarea{font-size:16px;min-height:78px;}
-    .remind-row input[type="datetime-local"]{font-size:15px;padding:10px;}
+    .remind-row .time-field{font-size:15px;padding:10px;}
     .remind-row select{font-size:13px;padding:10px;}
 
     .toolbar{margin-top:26px; gap: 10px;}
@@ -578,7 +601,8 @@
     <textarea id="input" rows="1" placeholder="此刻，想记下点什么… （支持语音，#标签，说明时间会自动设提醒）"></textarea>
     
     <div class="remind-row" id="remindRow">
-      <input type="datetime-local" id="remindInput">
+      <input type="hidden" id="remindInput">
+      <button type="button" class="time-field" id="remindField">设置时间…</button>
       <select id="repeatInput">
         <option value="none">不循环</option>
         <option value="daily">每天</option>
@@ -690,7 +714,8 @@
   <div class="modal">
     <h3>设置提醒</h3>
     <p>到时间后，页面会轻轻提醒你。</p>
-    <input type="datetime-local" id="modalRemindInput" style="margin-bottom:12px;">
+    <input type="hidden" id="modalRemindInput">
+    <button type="button" class="time-field" id="modalRemindField" style="margin-bottom:12px;">设置时间…</button>
     <select id="modalRepeatInput" style="width:100%;border:1px solid var(--line);border-radius:14px;padding:12px 14px;background:var(--card-hover);color:var(--ink);outline:none;font:inherit;font-size:16px;">
       <option value="none">不循环 (仅一次)</option>
       <option value="daily">每天</option>
@@ -701,6 +726,32 @@
       <button class="m-btn ghost" id="modalClear" type="button">清除</button>
       <button class="m-btn" id="modalCancel" type="button">取消</button>
       <button class="m-btn solid" id="modalOk" type="button">确定</button>
+    </div>
+  </div>
+</div>
+
+<div class="modal-mask" id="pickerMask">
+  <div class="modal no-anim">
+    <h3>提醒时间</h3>
+    <p>选一个时间，到点轻轻提醒你。</p>
+    <div class="quick-row" id="pickQuick">
+      <button type="button" class="qchip" data-q="30m">半小时后</button>
+      <button type="button" class="qchip" data-q="1h">一小时后</button>
+      <button type="button" class="qchip" data-q="tonight">今晚8点</button>
+      <button type="button" class="qchip" data-q="tomorrow">明早8点</button>
+      <button type="button" class="qchip" data-q="nextday">明天此时</button>
+      <button type="button" class="qchip" data-q="twoday">后天此时</button>
+    </div>
+    <div class="psel-row">
+      <select class="psel" id="pickY"></select><span class="punit">年</span>
+      <select class="psel" id="pickM"></select><span class="punit">月</span>
+      <select class="psel" id="pickD"></select><span class="punit">日</span>
+      <select class="psel" id="pickH"></select><span class="punit">时</span>
+      <select class="psel" id="pickMin"></select><span class="punit">分</span>
+    </div>
+    <div class="modal-actions">
+      <button class="m-btn" id="pickCancel" type="button">取消</button>
+      <button class="m-btn solid" id="pickOk" type="button">确定</button>
     </div>
   </div>
 </div>
@@ -789,6 +840,7 @@ window.onerror = function (msg, url, line) {
     els.remindToggle = $('remindToggle');
     els.remindRow = $('remindRow');
     els.remindInput = $('remindInput');
+    els.remindField = $('remindField');
     els.repeatInput = $('repeatInput');
     els.remindLabel = $('remindLabel');
     els.saveBtn = $('saveBtn');
@@ -804,7 +856,16 @@ window.onerror = function (msg, url, line) {
 
     els.remindMask = $('remindMask');
     els.modalInput = $('modalRemindInput');
+    els.modalRemindField = $('modalRemindField');
     els.modalRepeatInput = $('modalRepeatInput');
+
+    els.pickerMask = $('pickerMask');
+    els.pickY = $('pickY');
+    els.pickM = $('pickM');
+    els.pickD = $('pickD');
+    els.pickH = $('pickH');
+    els.pickMin = $('pickMin');
+    els.pickerTarget = null;
 
     els.editMask = $('editMask');
     els.editInput = $('editInput');
@@ -887,6 +948,139 @@ window.onerror = function (msg, url, line) {
     return toLocalInput(d.toISOString());
   }
 
+  /* ===== 自定义时间选择面板（替代原生 datetime-local，兼容微信内置浏览器） ===== */
+
+  function parseLocalDT(v) {
+    if (!v) return null;
+    var m = String(v).match(/^(\d{4})-(\d{2})-(\d{2})T(\d{2}):(\d{2})/);
+    if (!m) return null;
+    var d = new Date(+m[1], +m[2] - 1, +m[3], +m[4], +m[5]);
+    return isNaN(d.getTime()) ? null : d;
+  }
+
+  function fmtRemindLabel(v) {
+    var d = parseLocalDT(v);
+    if (!d) return '设置时间…';
+    var hm = pad2(d.getHours()) + ':' + pad2(d.getMinutes());
+    var now = new Date();
+    var today = new Date(now.getFullYear(), now.getMonth(), now.getDate());
+    var target = new Date(d.getFullYear(), d.getMonth(), d.getDate());
+    var diff = Math.round((target - today) / 86400000);
+    if (diff === 0) return '今天 ' + hm;
+    if (diff === 1) return '明天 ' + hm;
+    if (diff === 2) return '后天 ' + hm;
+    if (diff === -1) return '昨天 ' + hm;
+    if (d.getFullYear() === now.getFullYear()) return (d.getMonth() + 1) + '月' + d.getDate() + '日 ' + hm;
+    return d.getFullYear() + '年' + (d.getMonth() + 1) + '月' + d.getDate() + '日 ' + hm;
+  }
+
+  function syncRemindUI() {
+    if (els.remindField) {
+      var v1 = els.remindInput ? els.remindInput.value : '';
+      els.remindField.textContent = fmtRemindLabel(v1);
+      els.remindField.classList.toggle('set', !!v1);
+    }
+    if (els.modalRemindField && els.modalInput) {
+      var v2 = els.modalInput.value;
+      els.modalRemindField.textContent = fmtRemindLabel(v2);
+      els.modalRemindField.classList.toggle('set', !!v2);
+    }
+  }
+
+  function fillSel(sel, from, to, val, fmt) {
+    if (!sel) return;
+    var html = '';
+    for (var i = from; i <= to; i++) {
+      html += '<option value="' + i + '">' + (fmt ? fmt(i) : i) + '</option>';
+    }
+    sel.innerHTML = html;
+    sel.value = String(val);
+    if (sel.selectedIndex < 0) sel.selectedIndex = 0;
+  }
+
+  function refillPickerDays(keep) {
+    if (!els.pickY || !els.pickM || !els.pickD) return;
+    var y = +els.pickY.value, m = +els.pickM.value;
+    var days = new Date(y, m, 0).getDate();
+    var cur = keep || +els.pickD.value || 1;
+    if (cur > days) cur = days;
+    fillSel(els.pickD, 1, days, cur, function (i) { return pad2(i); });
+  }
+
+  function fillPicker(dt) {
+    if (!dt) dt = new Date(Date.now() + 3600000);
+    dt = new Date(dt.getTime());
+    dt.setSeconds(0, 0);
+    var nowY = new Date().getFullYear();
+    fillSel(els.pickY, nowY, nowY + 1, dt.getFullYear());
+    fillSel(els.pickM, 1, 12, dt.getMonth() + 1, function (i) { return pad2(i); });
+    refillPickerDays(dt.getDate());
+    fillSel(els.pickH, 0, 23, dt.getHours(), function (i) { return pad2(i); });
+    fillSel(els.pickMin, 0, 59, dt.getMinutes(), function (i) { return pad2(i); });
+  }
+
+  function readPicker() {
+    var d = new Date(+els.pickY.value, +els.pickM.value - 1, +els.pickD.value, +els.pickH.value, +els.pickMin.value);
+    return d;
+  }
+
+  function closeTimePicker() {
+    if (els.pickerMask) els.pickerMask.classList.remove('open');
+    els.pickerTarget = null;
+  }
+
+  function openTimePicker(input, fieldBtn) {
+    els.pickerTarget = input;
+    fillPicker(parseLocalDT(input.value));
+    if (els.pickerMask) els.pickerMask.classList.add('open');
+  }
+
+  function initTimePicker() {
+    if (els.remindField) {
+      els.remindField.addEventListener('click', function () { openTimePicker(els.remindInput, els.remindField); });
+    }
+    if (els.modalRemindField) {
+      els.modalRemindField.addEventListener('click', function () { openTimePicker(els.modalInput, els.modalRemindField); });
+    }
+    if (els.pickY) els.pickY.addEventListener('change', function () { refillPickerDays(); });
+    if (els.pickM) els.pickM.addEventListener('change', function () { refillPickerDays(); });
+    if (els.pickQuick) {
+      els.pickQuick.addEventListener('click', function (e) {
+        var btn = e.target;
+        while (btn && btn !== els.pickQuick && !btn.getAttribute) btn = btn.parentNode;
+        var q = btn && btn.getAttribute && btn.getAttribute('data-q');
+        if (!q) return;
+        var d = new Date();
+        if (q === '30m') d = new Date(Date.now() + 30 * 60000);
+        else if (q === '1h') d = new Date(Date.now() + 3600000);
+        else if (q === 'tonight') { d.setHours(20, 0, 0, 0); if (d.getTime() < Date.now()) d.setDate(d.getDate() + 1); }
+        else if (q === 'tomorrow') { d.setDate(d.getDate() + 1); d.setHours(8, 0, 0, 0); }
+        else if (q === 'nextday') { d.setDate(d.getDate() + 1); }
+        else if (q === 'twoday') { d.setDate(d.getDate() + 2); }
+        fillPicker(d);
+        var chips = els.pickQuick.querySelectorAll('.qchip');
+        for (var i = 0; i < chips.length; i++) chips[i].classList.remove('on');
+        btn.classList.add('on');
+      });
+    }
+    if ($('pickOk')) {
+      $('pickOk').addEventListener('click', function () {
+        if (els.pickerTarget) {
+          var d = readPicker();
+          els.pickerTarget.value = toLocalInput(d.toISOString());
+          syncRemindUI();
+        }
+        closeTimePicker();
+      });
+    }
+    if ($('pickCancel')) $('pickCancel').addEventListener('click', closeTimePicker);
+    if (els.pickerMask) {
+      els.pickerMask.addEventListener('click', function (e) {
+        if (e.target === els.pickerMask) closeTimePicker();
+      });
+    }
+  }
+
   /* ===== 语音默契层：中文时间 & #标签 解析 ===== */
 
   function cnNum(s) {
@@ -942,13 +1136,13 @@ window.onerror = function (msg, url, line) {
       d.setDate(d.getDate() + delta);
       hasDate = true;
     } else {
-      // 相对日期（今晚/明晚 转为时段词，避免丢失"晚上"语义）
-      var md = text.match(/(大后天|后天|明天|今天|今晚|明早|明晚)/);
+      // 相对日期（今晚/明早/明晚/今早 转为时段词，避免丢失"晚上/早上"语义）
+      var md = text.match(/(大后天|后天|明天|今天|今晚|今早|明早|明晚)/);
       if (md) {
-        var off = { '今天': 0, '今晚': 0, '明天': 1, '明早': 1, '明晚': 1, '后天': 2, '大后天': 3 }[md[1]];
+        var off = { '今天': 0, '今晚': 0, '今早': 0, '明天': 1, '明早': 1, '明晚': 1, '后天': 2, '大后天': 3 }[md[1]];
         d.setDate(d.getDate() + off);
         hasDate = true;
-        var toSeg = { '今晚': '晚上', '明晚': '晚上', '明早': '早上' }[md[1]];
+        var toSeg = { '今晚': '晚上', '今早': '早上', '明晚': '晚上', '明早': '早上' }[md[1]];
         text = toSeg ? text.replace(md[0], toSeg) : text.replace(md[0], ' ');
       } else {
         // 下周X / 周X
@@ -1042,6 +1236,7 @@ window.onerror = function (msg, url, line) {
     els.repeatInput.value = parsed.repeat || 'none';
     els.input.value = parsed.cleanText || '';
     autoGrow(els.input);
+    syncRemindUI();
     return true;
   }
 
@@ -1526,6 +1721,7 @@ window.onerror = function (msg, url, line) {
         try { Notification.requestPermission(); } catch (e) {}
       }
     }
+    syncRemindUI();
   }
 
   /* =========================================
@@ -1723,6 +1919,7 @@ window.onerror = function (msg, url, line) {
       } else if (els.repeatInput) {
         els.repeatInput.value = 'none';
       }
+      syncRemindUI();
       toast('AI 整理完成 · 提醒 ' + remindLocal.replace('T', ' ') +
             (p.repeat && p.repeat !== 'none' ? ' · ' + ({daily:'每天',weekly:'每周',monthly:'每月'})[p.repeat] : ''));
     } else {
@@ -1742,6 +1939,7 @@ window.onerror = function (msg, url, line) {
     if (els.modalRepeatInput) {
       els.modalRepeatInput.value = n.repeat || 'none';
     }
+    syncRemindUI();
     if (els.remindMask) els.remindMask.classList.add('open');
   }
   function closeRemindModal() {
@@ -1753,7 +1951,10 @@ window.onerror = function (msg, url, line) {
     var n = findNote(id);
     if (!n) return;
     state.editingId = id;
-    els.editInput.value = n.text;
+    var text = n.text || '';
+    var tg = n.tags || [];
+    if (tg.length) text += '\n' + tg.map(function (t) { return '#' + t; }).join(' ');
+    els.editInput.value = text;
     els.editMask.classList.add('open');
     setTimeout(function(){ els.editInput.focus(); }, 100);
   }
@@ -2118,6 +2319,8 @@ window.onerror = function (msg, url, line) {
     loadLocal();
     loadCfg();
     initSpeechRecognition();
+    initTimePicker();
+    syncRemindUI();
 
     els.saveBtn.addEventListener('click', addNote);
     els.notesList.addEventListener('click', handleListClick);
@@ -2258,6 +2461,7 @@ window.onerror = function (msg, url, line) {
     document.addEventListener('keydown', function (e) {
       if (e.key === 'Escape') {
         if (els.focusMask.classList.contains('open')) closeFocus();
+        else if (els.pickerMask && els.pickerMask.classList.contains('open')) closeTimePicker();
         else if (els.remindMask.classList.contains('open')) closeRemindModal();
         else if (els.editMask.classList.contains('open')) closeEditModal();
         else if (els.shareMask.classList.contains('open')) closeShareModal();
