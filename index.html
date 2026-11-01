@@ -760,6 +760,7 @@ window.onerror = function (msg, url, line) {
 
   var state = {
     notes: [],
+    tombstones: [],
     config: null,
     sha: null,
     view: VIEW.ACTIVE,
@@ -929,16 +930,90 @@ window.onerror = function (msg, url, line) {
     return out;
   }
 
+  function cleanTombstones(arr) {
+    if (!Array.isArray(arr)) return [];
+    var out = [];
+    for (var i = 0; i < arr.length; i++) {
+      var t = arr[i];
+      if (t && typeof t.id === 'string' && t.id) {
+        var d = new Date(t.at);
+        out.push({ id: t.id, at: isNaN(d.getTime()) ? new Date().toISOString() : d.toISOString() });
+      }
+    }
+    return out;
+  }
+
+  function addTombstone(id) {
+    var now = new Date().toISOString();
+    for (var i = 0; i < state.tombstones.length; i++) {
+      if (state.tombstones[i].id === id) { state.tombstones[i].at = now; return; }
+    }
+    state.tombstones.push({ id: id, at: now });
+  }
+
+  function pruneTombstones() {
+    var cutoff = Date.now() - 90 * 86400000;
+    var kept = [];
+    for (var i = 0; i < state.tombstones.length; i++) {
+      if (new Date(state.tombstones[i].at).getTime() >= cutoff) kept.push(state.tombstones[i]);
+    }
+    state.tombstones = kept;
+  }
+
+  // 统一的云端合并：墓碑并集优先，笔记按 updatedAt 新者胜，已删除的不复活
+  function mergeRemote(remote) {
+    var before = JSON.stringify(state.notes) + '|' + JSON.stringify(state.tombstones);
+    var remoteNotes = cleanNotes((remote && remote.notes) || []);
+    var remoteTombs = cleanTombstones((remote && remote.tombstones) || []);
+
+    var tomb = {}, i, key;
+    for (i = 0; i < state.tombstones.length; i++) tomb[state.tombstones[i].id] = state.tombstones[i];
+    for (i = 0; i < remoteTombs.length; i++) {
+      var rt = remoteTombs[i];
+      if (!tomb[rt.id] || new Date(rt.at).getTime() > new Date(tomb[rt.id].at).getTime()) tomb[rt.id] = rt;
+    }
+    var tombList = [];
+    for (key in tomb) if (Object.prototype.hasOwnProperty.call(tomb, key)) tombList.push(tomb[key]);
+
+    var map = {};
+    for (i = 0; i < remoteNotes.length; i++) {
+      if (tomb[remoteNotes[i].id]) continue;
+      map[remoteNotes[i].id] = remoteNotes[i];
+    }
+    for (i = 0; i < state.notes.length; i++) {
+      var n = state.notes[i];
+      if (tomb[n.id]) continue;
+      var old = map[n.id];
+      if (!old) { map[n.id] = n; }
+      else {
+        var tn = new Date(n.updatedAt || n.createdAt).getTime();
+        var to = new Date(old.updatedAt || old.createdAt).getTime();
+        if (tn >= to) map[n.id] = n;
+      }
+    }
+    var merged = [];
+    for (key in map) if (Object.prototype.hasOwnProperty.call(map, key)) merged.push(map[key]);
+
+    state.tombstones = tombList;
+    pruneTombstones();
+    state.notes = merged;
+    saveLocal(); render();
+
+    var after = JSON.stringify(state.notes) + '|' + JSON.stringify(state.tombstones);
+    return after !== before;
+  }
+
   function saveLocal() {
-    try { localStorage.setItem(LS_NOTES, JSON.stringify({ notes: state.notes })); } catch (e) {}
+    try { localStorage.setItem(LS_NOTES, JSON.stringify({ notes: state.notes, tombstones: state.tombstones })); } catch (e) {}
   }
   function loadLocal() {
     try {
       var raw = localStorage.getItem(LS_NOTES);
-      if (!raw) { state.notes = []; return; }
+      if (!raw) { state.notes = []; state.tombstones = []; return; }
       var data = JSON.parse(raw);
       state.notes = cleanNotes(data && data.notes);
-    } catch (e) { state.notes = []; }
+      state.tombstones = cleanTombstones(data && data.tombstones);
+    } catch (e) { state.notes = []; state.tombstones = []; }
   }
   function loadCfg() {
     try {
@@ -1140,6 +1215,7 @@ window.onerror = function (msg, url, line) {
     setRemindMode(false);
     els.aiBtn.style.display = 'none';
     saveLocal();
+    scheduleSync();
 
     if (state.view !== VIEW.ACTIVE) { state.view = VIEW.ACTIVE; syncTabs(); }
     render();
@@ -1157,6 +1233,7 @@ window.onerror = function (msg, url, line) {
     else if (status === VIEW.TRASH) n.deletedAt = now;
     saveLocal();
     render();
+    scheduleSync();
   }
 
   function purgeNote(id) {
@@ -1166,9 +1243,11 @@ window.onerror = function (msg, url, line) {
       if (state.notes[i].id !== id) arr.push(state.notes[i]);
     }
     state.notes = arr;
+    addTombstone(id);
     saveLocal();
     render();
     toast('已彻底删除');
+    scheduleSync();
   }
 
   function handleListClick(e) {
@@ -1520,10 +1599,12 @@ window.onerror = function (msg, url, line) {
         if (data && Array.isArray(data.notes)) {
           if (window.confirm('导入将覆盖当前本地记录，确定吗？')) {
             state.notes = cleanNotes(data.notes);
+            state.tombstones = [];
             saveLocal();
             render();
             toast('导入成功');
             closeDrawer();
+            scheduleSync();
           }
         } else {
           toast('文件格式不正确');
@@ -1652,6 +1733,7 @@ window.onerror = function (msg, url, line) {
             if (text.trim()) parsed = JSON.parse(text);
           } catch (e) { parsed = { notes: [] }; }
           if (!Array.isArray(parsed.notes)) parsed.notes = [];
+          parsed.tombstones = cleanTombstones(parsed.tombstones);
           return parsed;
         });
       });
@@ -1662,7 +1744,7 @@ window.onerror = function (msg, url, line) {
     if (!cfg || !cfg.owner || !cfg.repo || !cfg.token) return Promise.reject(new Error('未配置云端'));
     var payload = {
       message: '竹间记 · ' + new Date().toLocaleString('zh-CN'),
-      content: b64encode(JSON.stringify({ notes: state.notes }, null, 2)),
+      content: b64encode(JSON.stringify({ notes: state.notes, tombstones: state.tombstones }, null, 2)),
       branch: cfg.branch || 'main'
     };
     if (state.sha) payload.sha = state.sha;
@@ -1820,23 +1902,7 @@ window.onerror = function (msg, url, line) {
       if (cfg.owner) {
         setSync('正在读取云端…', 'warn');
         ghLoad().then(function (remote) {
-          var map = {}, i, n, key;
-          var remoteNotes = cleanNotes(remote.notes || []);
-          for (i = 0; i < remoteNotes.length; i++) map[remoteNotes[i].id] = remoteNotes[i];
-          for (i = 0; i < state.notes.length; i++) {
-            n = state.notes[i];
-            var old = map[n.id];
-            if (!old) { map[n.id] = n; }
-            else {
-              var tn = new Date(n.updatedAt || n.createdAt).getTime();
-              var to = new Date(old.updatedAt || old.createdAt).getTime();
-              if (tn > to) map[n.id] = n;
-            }
-          }
-          var merged = [];
-          for (key in map) if (Object.prototype.hasOwnProperty.call(map, key)) merged.push(map[key]);
-          state.notes = merged;
-          saveLocal(); render();
+          mergeRemote(remote);
           setSync('已连上云端');
           toast('配置已保存，云端同步成功');
           pushToGitHub();
@@ -1940,25 +2006,9 @@ window.onerror = function (msg, url, line) {
     if (state.config && state.config.owner) {
       setSync('正在读取云端…', 'warn');
       ghLoad().then(function (remote) {
-        var remoteNotes = cleanNotes(remote.notes || []);
-        if (!remoteNotes.length && !state.notes.length) { setSync('已连上云端'); return; }
-        var map = {}, i, n, key;
-        for (i = 0; i < remoteNotes.length; i++) map[remoteNotes[i].id] = remoteNotes[i];
-        for (i = 0; i < state.notes.length; i++) {
-          n = state.notes[i];
-          var old = map[n.id];
-          if (!old) { map[n.id] = n; }
-          else {
-            var tn = new Date(n.updatedAt || n.createdAt).getTime();
-            var to = new Date(old.updatedAt || old.createdAt).getTime();
-            if (tn >= to) map[n.id] = n;
-          }
-        }
-        var merged = [];
-        for (key in map) if (Object.prototype.hasOwnProperty.call(map, key)) merged.push(map[key]);
-        state.notes = merged;
-        saveLocal(); render();
-        setSync('已连上云端');
+        var changed = mergeRemote(remote);
+        if (changed) scheduleSync();
+        else setSync('已连上云端');
       }).catch(function (err) {
         setSync(err.message || '读不到云端', 'err');
       });
