@@ -2432,9 +2432,26 @@ window.onerror = function (msg, url, line) {
       });
   }
 
+  // 安全防线：同步目标是本站托管的公开仓库时，笔记会全世界可读 → 拦截并引导
+  function unsafeSyncTarget() {
+    var cfg = state.config;
+    if (!cfg || !cfg.owner || !cfg.repo) return false;
+    // 本页面托管在 /zjj/（GitHub Pages 公开库）
+    var hostRepoMatch = location.pathname.match(/^\/([^/]+)\//);
+    if (hostRepoMatch && hostRepoMatch[1].toLowerCase() === String(cfg.repo).toLowerCase() && String(cfg.owner).toLowerCase() === location.hostname.split('.')[0].toLowerCase()) {
+      return true; // 同步目标 = 托管本页面的公开仓库
+    }
+    return false;
+  }
+
   function ghSave() {
     var cfg = state.config;
     if (!cfg || !cfg.owner || !cfg.repo || !cfg.token) return Promise.reject(new Error('未配置云端'));
+    if (unsafeSyncTarget()) {
+      toast('笔记正要写进公开仓库（' + cfg.repo + '），已拦截！请到设置里把仓库名改回私有库');
+      if (!$('drawer').classList.contains('open')) openDrawer();
+      return Promise.reject(new Error('同步目标为公开仓库，已阻止'));
+    }
     var payload = {
       message: '竹间记 · ' + new Date().toLocaleString('zh-CN'),
       content: b64encode(JSON.stringify({ notes: state.notes, tombstones: state.tombstones }, null, 2)),
@@ -3192,6 +3209,15 @@ window.onerror = function (msg, url, line) {
       state.config = cfg;
       state.sha = null;
       try { localStorage.setItem(LS_CONFIG, JSON.stringify(cfg)); } catch (e) {}
+
+      // 安全防线：保存时若指向公开托管仓库，直接警告并要求改
+      var hostRepoMatch = location.pathname.match(/^\/([^/]+)\//);
+      if (hostRepoMatch && hostRepoMatch[1].toLowerCase() === String(cfg.repo).toLowerCase() && String(cfg.owner).toLowerCase() === location.hostname.split('.')[0].toLowerCase()) {
+        setSync('仓库为公开，已暂停同步', 'err');
+        toast('⚠ 「' + cfg.repo + '」是公开网页仓库，笔记会全世界可见！请改成私有仓库名');
+        $('cfgRepo').focus();
+        return;
+      }
       closeDrawer();
       
       if (cfg.owner) {
@@ -3308,14 +3334,19 @@ window.onerror = function (msg, url, line) {
     setTimeout(checkReminders, 800);
 
     if (state.config && state.config.owner) {
-      setSync('正在读取云端…', 'warn');
-      ghLoad().then(function (remote) {
-        var changed = mergeRemote(remote);
-        if (changed) scheduleSync();
-        else setSync('已连上云端');
-      }).catch(function (err) {
-        setSync(err.message || '读不到云端', 'err');
-      });
+      if (unsafeSyncTarget()) {
+        setSync('仓库为公开，已暂停同步', 'err');
+        toast('⚠ 同步仓库是公开的，笔记会全世界可见！点设置改成私有仓库');
+      } else {
+        setSync('正在读取云端…', 'warn');
+        ghLoad().then(function (remote) {
+          var changed = mergeRemote(remote);
+          if (changed) scheduleSync();
+          else setSync('已连上云端');
+        }).catch(function (err) {
+          setSync(err.message || '读不到云端', 'err');
+        });
+      }
     } else {
       setSync('本地记录中');
     }
