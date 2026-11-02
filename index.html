@@ -774,6 +774,7 @@
     <div class="ne-counts">
       <span class="ne-tag">待办 <b id="neActive">0</b></span>
       <span class="ne-tag">完成 <b id="neDone">0</b></span>
+      <span class="ne-tag">店铺 <b id="neShop">0</b></span>
       <span class="ne-tag">垃圾 <b id="neTrash">0</b></span>
     </div>
     <span class="ne-arrow">›</span>
@@ -802,6 +803,7 @@
       <button class="tab active" data-view="active" type="button">待办 <span class="num" id="numActive">0</span></button>
       <button class="tab" data-view="done" type="button">已完成 <span class="num" id="numDone">0</span></button>
       <button class="tab" data-view="trash" type="button">垃圾桶 <span class="num" id="numTrash">0</span></button>
+      <button class="tab" data-view="shop" type="button">店铺 <span class="num" id="numShop">0</span></button>
     </nav>
   </div>
   <section class="notes" id="notesList"></section>
@@ -1014,7 +1016,7 @@ window.onerror = function (msg, url, line) {
   var LS_CONFIG = 'bamboo.v11.config';
   var LS_NOTES  = 'bamboo.v11.notes';
   var LS_THEME  = 'bamboo.v11.theme';
-  var VIEW = { ACTIVE: 'active', DONE: 'done', TRASH: 'trash' };
+  var VIEW = { ACTIVE: 'active', DONE: 'done', TRASH: 'trash', SHOP: 'shop' };
   var LIST_PAGE = 15;
 
   var state = {
@@ -1047,6 +1049,7 @@ window.onerror = function (msg, url, line) {
     els.numActive = $('numActive');
     els.numDone = $('numDone');
     els.numTrash = $('numTrash');
+    els.numShop = $('numShop');
     els.remindToggle = $('remindToggle');
     els.remindRow = $('remindRow');
     els.remindInput = $('remindInput');
@@ -1119,6 +1122,7 @@ window.onerror = function (msg, url, line) {
     els.neActive = $('neActive');
     els.neDone = $('neDone');
     els.neTrash = $('neTrash');
+    els.neShop = $('neShop');
   }
 
   function openNotesPage() {
@@ -1715,20 +1719,36 @@ window.onerror = function (msg, url, line) {
   }
 
   function updateCounts() {
-    var a = 0, d = 0, t = 0;
+    var a = 0, d = 0, t = 0, sh = 0;
     for (var i = 0; i < state.notes.length; i++) {
       var s = state.notes[i].status;
       if (s === VIEW.DONE) d++;
       else if (s === VIEW.TRASH) t++;
       else a++;
+      if (s !== VIEW.TRASH && hasShopTag(state.notes[i])) sh++;
     }
     if (els.numActive) els.numActive.textContent = a;
     if (els.numDone)   els.numDone.textContent = d;
     if (els.numTrash)  els.numTrash.textContent = t;
+    if (els.numShop)   els.numShop.textContent = sh;
     if (els.neSub) els.neSub.textContent = '共 ' + state.notes.length + ' 条';
     if (els.neActive) els.neActive.textContent = a;
     if (els.neDone)   els.neDone.textContent = d;
     if (els.neTrash)  els.neTrash.textContent = t;
+    if (els.neShop)   els.neShop.textContent = sh;
+  }
+
+  function hasShopTag(n) {
+    if (!n) return false;
+    if (Array.isArray(n.tags)) {
+      for (var i = 0; i < n.tags.length; i++) {
+        if (String(n.tags[i]).indexOf('店铺') !== -1) return true;
+      }
+    }
+    var txt = String(n.text || '');
+    return txt.indexOf('#店铺') !== -1 || txt.indexOf('#店铺 ') !== -1 ||
+           txt.indexOf('#店铺\n') !== -1 || txt.indexOf('#店铺，') !== -1 ||
+           txt.indexOf('#店铺。') !== -1 || txt.indexOf('#店铺,') !== -1;
   }
 
   var ICON = {
@@ -1754,6 +1774,7 @@ window.onerror = function (msg, url, line) {
         if (state.view === VIEW.ACTIVE && n.status !== VIEW.ACTIVE) continue;
         if (state.view === VIEW.DONE && n.status !== VIEW.DONE) continue;
         if (state.view === VIEW.TRASH && n.status !== VIEW.TRASH) continue;
+        if (state.view === VIEW.SHOP && (n.status === VIEW.TRASH || !hasShopTag(n))) continue;
 
         if (kw && n.text.toLowerCase().indexOf(kw) === -1
             && (n.tags || []).join(' ').toLowerCase().indexOf(kw) === -1) continue;
@@ -1772,6 +1793,8 @@ window.onerror = function (msg, url, line) {
           ? '<span class="big">🌱</span>这里还空着。<br><span class="small">慢慢来，不用急</span>'
           : state.view === VIEW.DONE
           ? '<span class="big">🍃</span>还没有完成的事。<br><span class="small">做完了，就放到这里</span>'
+          : state.view === VIEW.SHOP
+          ? '<span class="big">🏬</span>店铺里还空着。<br><span class="small">打上 #店铺 标签的笔记会进这里</span>'
           : '<span class="big">🗑</span>垃圾桶是空的。<br><span class="small">删掉的东西会先在这里</span>';
         if (kw) msg = '<span class="big">🔍</span>没有找到匹配的记录。';
         els.notesList.innerHTML = '<div class="empty">' + msg + '</div>';
