@@ -248,6 +248,15 @@
   .save-btn:hover{opacity:.92;letter-spacing:.26em;}
   .save-btn:active{transform:translateY(1px);}
 
+  .composer-top{display:flex;align-items:flex-end;justify-content:space-between;gap:10px;flex-wrap:wrap;padding-bottom:12px;}
+  .composer-hint{font-size:14.5px;font-weight:600;letter-spacing:.12em;color:var(--g700);line-height:1.6;}
+  .composer-counts{display:flex;gap:6px;flex-wrap:wrap;justify-content:flex-end;}
+  .composer-counts .ne-tag{font-size:11px;color:var(--ink-faint);background:var(--g100);border:1px solid var(--line-soft);border-radius:999px;padding:5px 10px;letter-spacing:.04em;}
+  .composer-counts .ne-tag b{color:var(--g600);font-weight:600;margin-left:2px;}
+  .composer-save-row{display:flex;justify-content:flex-end;padding:0 0 14px;}
+  .composer-line{border-top:1px solid var(--line-soft);margin:0 0 14px;}
+  .composer-body{background:var(--card-hover);border:1px solid var(--line);border-radius:18px;padding:14px 16px 4px;}
+
   .toolbar { display: flex; flex-direction: column; gap: 14px; margin-top: 36px; }
 
   /* ===== 首页：笔记入口卡 ===== */
@@ -792,6 +801,20 @@
   </div>
 
   <section class="composer" id="composerBox">
+    <div class="composer-top">
+      <span class="composer-hint" id="composerHint">此刻想记下点什么</span>
+      <div class="composer-counts" id="composerCounts">
+        <span class="ne-tag">待办 <b id="neActiveTop">0</b></span>
+        <span class="ne-tag">完成 <b id="neDoneTop">0</b></span>
+        <span class="ne-tag">店铺 <b id="neShopTop">0</b></span>
+        <span class="ne-tag">垃圾 <b id="neTrashTop">0</b></span>
+      </div>
+    </div>
+    <div class="composer-save-row">
+      <button class="save-btn" id="saveBtn" type="button">记 下</button>
+    </div>
+    <div class="composer-line"></div>
+    <div class="composer-body">
     <textarea id="input" rows="1" placeholder="此刻，想记下点什么… （支持语音，#标签，说明时间会自动设提醒）"></textarea>
     
     <div class="remind-row" id="remindRow">
@@ -848,7 +871,7 @@
           <span>店铺</span>
         </button>
       </div>
-      <button class="save-btn" id="saveBtn" type="button">记 下</button>
+      </div>
     </div>
   </section>
 
@@ -1723,6 +1746,130 @@ window.onerror = function (msg, url, line) {
     return L.join('\n');
   }
 
+  // ===== 送货清单按日期 + 客户 + 联系方式归集 =====
+  function isShopBillText(text) {
+    return String(text || '').indexOf('【送货清单存档】') !== -1;
+  }
+
+  function parseShopBillText(text) {
+    var s = String(text || '');
+    if (!isShopBillText(s)) return null;
+    var date = '', customer = '', phone = '', total = 0, rows = [];
+    var lines = s.split('\n');
+    var inBody = false;
+    for (var i = 0; i < lines.length; i++) {
+      var ln = lines[i].trim();
+      if (ln.indexOf('日期') === 0) { date = ln.replace(/^日期[：:]\s*/, '').trim(); continue; }
+      if (ln.indexOf('客户') === 0) { customer = ln.replace(/^客户[：:]\s*/, '').trim(); continue; }
+      if (ln.indexOf('联系方式') === 0) { phone = ln.replace(/^联系方式[：:]\s*/, '').trim(); continue; }
+      if (ln.indexOf('总计金额') === 0) {
+        var tm = ln.match(/[0-9.]+/);
+        if (tm) total = parseFloat(tm[0]) || 0;
+        continue;
+      }
+      if (ln.indexOf('货品名称 | 规格 | 单价 | 交货数量 | 小计') !== -1) { inBody = true; continue; }
+      if (!inBody) continue;
+      if (ln.indexOf('----') !== -1) break;
+      if (!ln) continue;
+      var parts = ln.split('|');
+      if (parts.length < 5) continue;
+      rows.push({
+        name: parts[0].trim(),
+        spec: parts[1].trim(),
+        price: parts[2].trim(),
+        count: parts[3].trim(),
+        subtotal: parts[4].replace(/元/g, '').trim()
+      });
+    }
+    if (!rows.length) return null;
+    return { date: date, customer: customer, phone: phone, rows: rows, total: total };
+  }
+
+  function rebuildShopBill(b) {
+    return formatShopBill(b.date, b.customer, b.phone, b.rows, b.total);
+  }
+
+  function calcRowSub(r) {
+    var p = numFromText(r.price);
+    var c = numFromText(r.count);
+    if (!isNaN(p) && !isNaN(c)) return fmtMoney(p * c);
+    return '';
+  }
+
+  function mergeShopBills(base, add) {
+    var rows = [];
+    var seen = {};
+    var key = function (r) { return String(r.name) + '\u0001' + String(r.spec); };
+    var push = function (r) {
+      var k = key(r);
+      if (seen[k]) return;
+      seen[k] = true;
+      rows.push({
+        name: r.name, spec: r.spec, price: r.price, count: r.count,
+        subtotal: (r.subtotal === '' || r.subtotal == null) ? calcRowSub(r) : fmtMoney(r.subtotal)
+      });
+    };
+    for (var i = 0; i < (base.rows || []).length; i++) push(base.rows[i]);
+    for (var j = 0; j < (add.rows || []).length; j++) push(add.rows[j]);
+    var total = 0;
+    for (var k = 0; k < rows.length; k++) {
+      var v = parseFloat(rows[k].subtotal);
+      if (!isNaN(v)) total += v;
+    }
+    return { date: base.date, customer: base.customer, phone: base.phone, rows: rows, total: total };
+  }
+
+  function appendShopBillText(oldText, addRows, addTotal) {
+    var base = parseShopBillText(oldText);
+    if (!base) return oldText;
+    var merged = mergeShopBills(base, { rows: addRows, total: addTotal });
+    return rebuildShopBill(merged);
+  }
+
+  function findShopCell(notes, date, customer, phone) {
+    for (var i = 0; i < notes.length; i++) {
+      var n = notes[i];
+      if (!n || n.status === VIEW.TRASH) continue;
+      if (!hasShopTag(n)) continue;
+      var b = parseShopBillText(n.text);
+      if (!b) continue;
+      if (b.date !== date) continue;
+      if (String(b.customer || '') !== String(customer || '')) continue;
+      if (String(b.phone || '') !== String(phone || '')) continue;
+      return i;
+    }
+    return -1;
+  }
+
+  // 归集保存：同一天、同一客户、同一联系方式 → 追加合并到已有清单；否则新建
+  function saveShopBillMerged(date, customer, phone, rows, total) {
+    var now = new Date().toISOString();
+    var idx = findShopCell(state.notes, date, customer, phone);
+    if (idx >= 0) {
+      var n = state.notes[idx];
+      n.text = appendShopBillText(n.text, rows, total);
+      n.updatedAt = now;
+      addOps('edit', n.text);
+      var top = state.notes.splice(idx, 1)[0];
+      state.notes.unshift(top);
+      saveLocal();
+      scheduleSync();
+      render();
+      return true;
+    }
+    var text = formatShopBill(date, customer, phone, rows, total);
+    state.notes.unshift({
+      id: uid(), text: text, createdAt: now, updatedAt: now,
+      status: VIEW.ACTIVE, remindAt: null, repeat: 'none', reminded: false,
+      doneAt: null, deletedAt: null, tags: ['店铺']
+    });
+    addOps('add', text);
+    saveLocal();
+    scheduleSync();
+    render();
+    return false;
+  }
+
   function shopRowHTML(name, spec, price, count, sub) {
     return '<div class="shop-tr">' +
       '<input type="text" class="si-name" placeholder="货品名称" value="' + escapeHTML(name || '') + '">' +
@@ -1807,19 +1954,9 @@ window.onerror = function (msg, url, line) {
       var v = parseFloat(rows[j].subtotal);
       if (!isNaN(v)) total += v;
     }
-    var text = formatShopBill(date, customer, phone, rows, total);
-    var now = new Date().toISOString();
-    state.notes.unshift({
-      id: uid(), text: text, createdAt: now, updatedAt: now,
-      status: VIEW.ACTIVE, remindAt: null, repeat: 'none', reminded: false,
-      doneAt: null, deletedAt: null, tags: ['店铺']
-    });
-    addOps('add', text);
-    saveLocal();
-    scheduleSync();
+    var merged = saveShopBillMerged(date, customer, phone, rows, total);
     closeShopBill();
-    render();
-    toast('送货清单已存档');
+    toast(merged ? '已归集追加到当天该客户的送货清单' : '送货清单已存档');
   }
 
   function buildAIPrompt(text) {
@@ -2103,6 +2240,10 @@ window.onerror = function (msg, url, line) {
     if (els.neDone)   els.neDone.textContent = d;
     if (els.neTrash)  els.neTrash.textContent = t;
     if (els.neShop)   els.neShop.textContent = sh;
+    if ($('neActiveTop')) $('neActiveTop').textContent = a;
+    if ($('neDoneTop'))   $('neDoneTop').textContent = d;
+    if ($('neTrashTop'))  $('neTrashTop').textContent = t;
+    if ($('neShopTop'))   $('neShopTop').textContent = sh;
   }
 
   function hasShopTag(n) {
@@ -2318,6 +2459,21 @@ window.onerror = function (msg, url, line) {
     if (state.shopMode && tagRes.tags.indexOf('店铺') === -1) {
       tagRes.tags.unshift('店铺');
       if (tagRes.tags.length > 3) tagRes.tags.length = 3;
+    }
+
+    // 送货清单：按日期 + 客户 + 联系方式归集（同一天同一清单追加到对应小格）
+    var shopBill = isShopBillText(text) ? parseShopBillText(text) : null;
+    if (shopBill) {
+      var merged = saveShopBillMerged(shopBill.date, shopBill.customer, shopBill.phone, shopBill.rows, shopBill.total);
+      els.input.value = '';
+      autoGrow(els.input);
+      setRemindMode(false);
+      els.aiBtn.style.display = 'none';
+      if (state.view !== VIEW.ACTIVE) { state.view = VIEW.ACTIVE; syncTabs(); }
+      state.listLimit = LIST_PAGE;
+      render();
+      toast(merged ? '已追加到当天该客户的清单' : '送货清单已存档');
+      return;
     }
 
     var now = new Date().toISOString();
