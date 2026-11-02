@@ -1107,6 +1107,26 @@ window.onerror = function (msg, url, line) {
     els.reviewBanner = $('reviewBanner');
     els.reviewDate = $('reviewDate');
     els.reviewText = $('reviewText');
+
+    els.notesEntry = $('notesEntry');
+    els.notesPage = $('notesPage');
+    els.npBack = $('npBack');
+  }
+
+  function openNotesPage() {
+    if (!els.notesPage) return;
+    els.notesPage.classList.add('open');
+    document.body.classList.add('np-locked');
+    if (els.searchInput) els.searchInput.value = '';
+    state.searchQuery = '';
+    state.listLimit = LIST_PAGE;
+    render();
+  }
+
+  function closeNotesPage() {
+    if (!els.notesPage) return;
+    els.notesPage.classList.remove('open');
+    document.body.classList.remove('np-locked');
   }
 
   function uid() { return Date.now().toString(36) + Math.random().toString(36).slice(2, 8); }
