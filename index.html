@@ -62,7 +62,9 @@
 
   *{box-sizing:border-box;margin:0;padding:0;}
   html,body{
+    height:100%;
     min-height:100vh;color:var(--ink);
+    overflow:hidden;
     font-family:"Iowan Old Style","Palatino Linotype","Songti SC","Noto Serif CJK SC",Georgia,serif;
     -webkit-font-smoothing:antialiased;
     -webkit-text-size-adjust:100%;
@@ -995,6 +997,7 @@
 <div class="toast" id="toast"></div>
 
 <script>
+
 window.onerror = function (msg, url, line) {
   var bar = document.getElementById('errBar');
   var txt = document.getElementById('errMsg');
@@ -1111,6 +1114,11 @@ window.onerror = function (msg, url, line) {
     els.notesEntry = $('notesEntry');
     els.notesPage = $('notesPage');
     els.npBack = $('npBack');
+
+    els.neSub = $('neSub');
+    els.neActive = $('neActive');
+    els.neDone = $('neDone');
+    els.neTrash = $('neTrash');
   }
 
   function openNotesPage() {
@@ -1127,6 +1135,39 @@ window.onerror = function (msg, url, line) {
     if (!els.notesPage) return;
     els.notesPage.classList.remove('open');
     document.body.classList.remove('np-locked');
+  }
+
+  function initSwipeBack() {
+    if (!els.notesPage) return;
+    var startX = 0, startY = 0, tracking = false;
+    els.notesPage.addEventListener('touchstart', function (e) {
+      if (!e.touches || e.touches.length !== 1) { tracking = false; return; }
+      startX = e.touches[0].clientX;
+      startY = e.touches[0].clientY;
+      tracking = startX <= 32;
+    }, { passive: true });
+    els.notesPage.addEventListener('touchmove', function (e) {
+      if (tracking && e.touches && e.touches.length === 1) {
+        var dx = e.touches[0].clientX - startX;
+        var dy = e.touches[0].clientY - startY;
+        if (dx > 0 && Math.abs(dy) < Math.abs(dx)) e.preventDefault();
+      }
+    }, { passive: false });
+    els.notesPage.addEventListener('touchend', function (e) {
+      if (!tracking) return;
+      var t = e.changedTouches && e.changedTouches[0];
+      if (!t) return;
+      var dx = t.clientX - startX;
+      var dy = t.clientY - startY;
+      tracking = false;
+      if (dx > 60 && Math.abs(dy) < Math.abs(dx)) closeNotesPage();
+    }, { passive: true });
+  }
+
+  function initPinchLock() {
+    document.addEventListener('touchmove', function (e) {
+      if (e.touches && e.touches.length > 1) e.preventDefault();
+    }, { passive: false });
   }
 
   function uid() { return Date.now().toString(36) + Math.random().toString(36).slice(2, 8); }
@@ -2768,7 +2809,7 @@ window.onerror = function (msg, url, line) {
   function renderSoulText(text, mode) {
     if (!els.soulCard || !els.soulText) return;
     els.soulCard.style.display = '';
-    els.soulText.textContent = soulCap(text);
+    els.soulText.textContent = '竹语：' + soulCap(text);
     els.soulText.style.animation = 'none';
     void els.soulText.offsetWidth;
     els.soulText.style.animation = '';
@@ -3203,6 +3244,8 @@ window.onerror = function (msg, url, line) {
     els.tabs.addEventListener('click', handleTabsClick);
     els.notesEntry.addEventListener('click', openNotesPage);
     els.npBack.addEventListener('click', closeNotesPage);
+    initSwipeBack();
+    initPinchLock();
     
     els.input.addEventListener('input', function () { 
       autoGrow(els.input); 
