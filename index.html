@@ -1722,10 +1722,11 @@ window.onerror = function (msg, url, line) {
     var a = 0, d = 0, t = 0, sh = 0;
     for (var i = 0; i < state.notes.length; i++) {
       var s = state.notes[i].status;
-      if (s === VIEW.DONE) d++;
+      var isShop = hasShopTag(state.notes[i]);
+      if (s === VIEW.DONE) { if (!isShop) d++; }
       else if (s === VIEW.TRASH) t++;
-      else a++;
-      if (s !== VIEW.TRASH && hasShopTag(state.notes[i])) sh++;
+      else { if (!isShop) a++; }
+      if (s !== VIEW.TRASH && isShop) sh++;
     }
     if (els.numActive) els.numActive.textContent = a;
     if (els.numDone)   els.numDone.textContent = d;
@@ -1771,8 +1772,8 @@ window.onerror = function (msg, url, line) {
       for (var i = 0; i < state.notes.length; i++) {
         var n = state.notes[i];
         
-        if (state.view === VIEW.ACTIVE && n.status !== VIEW.ACTIVE) continue;
-        if (state.view === VIEW.DONE && n.status !== VIEW.DONE) continue;
+        if (state.view === VIEW.ACTIVE && (n.status !== VIEW.ACTIVE || hasShopTag(n))) continue;
+        if (state.view === VIEW.DONE && (n.status !== VIEW.DONE || hasShopTag(n))) continue;
         if (state.view === VIEW.TRASH && n.status !== VIEW.TRASH) continue;
         if (state.view === VIEW.SHOP && (n.status === VIEW.TRASH || !hasShopTag(n))) continue;
 
