@@ -1804,6 +1804,17 @@ window.onerror = function (msg, url, line) {
       });
     }
     if (!rows.length) return null;
+    if (!total) {
+      for (var k = 0; k < rows.length; k++) {
+        var subNum2 = parseFloat(rows[k].subtotal);
+        if (isNaN(subNum2)) {
+          var s2 = calcRowSub(rows[k]);
+          var sn = parseFloat(s2);
+          if (!isNaN(sn)) { rows[k].subtotal = s2; subNum2 = sn; }
+        }
+        if (!isNaN(subNum2)) total += subNum2;
+      }
+    }
     return { date: date, customer: customer, phone: phone, rows: rows, total: total };
   }
 
@@ -2020,22 +2031,30 @@ window.onerror = function (msg, url, line) {
       for (var i = 0; i < o.items.length; i++) {
         var it = o.items[i];
         if (!it || typeof it !== 'object') continue;
+        var subRaw = String(it.subtotal == null ? '' : it.subtotal).trim();
+        var subNum = parseFloat(subRaw);
+        if (isNaN(subNum)) {
+          var pp = numFromText(String(it.price));
+          var cc = numFromText(String(it.count));
+          if (!isNaN(pp) && !isNaN(cc)) subNum = pp * cc;
+        }
         rows.push({
           name: String(it.name == null ? '' : it.name),
           spec: String(it.spec == null ? '' : it.spec),
           price: String(it.price == null ? '' : it.price),
           count: String(it.count == null ? '' : it.count),
-          subtotal: String(it.subtotal == null ? '' : it.subtotal)
+          subtotal: isNaN(subNum) ? '' : fmtMoney(subNum)
         });
       }
       if (!rows.length) return null;
-      var total = parseFloat(o.total);
-      if (isNaN(total)) {
-        total = 0;
-        for (var j = 0; j < rows.length; j++) {
-          var v = parseFloat(rows[j].subtotal);
-          if (!isNaN(v)) total += v;
-        }
+      var total = 0;
+      for (var j = 0; j < rows.length; j++) {
+        var v = parseFloat(rows[j].subtotal);
+        if (!isNaN(v)) total += v;
+      }
+      if (!total) {
+        var t0 = parseFloat(o.total);
+        if (!isNaN(t0) && t0 > 0) total = t0;
       }
       return {
         date: String(o.date == null ? '' : o.date),
