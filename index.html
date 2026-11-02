@@ -2503,6 +2503,16 @@ window.onerror = function (msg, url, line) {
 
     // 送货清单：按日期 + 客户 + 联系方式归集（同一天同一清单追加到对应小格）
     var shopBill = isShopBillText(text) ? parseShopBillText(text) : null;
+    if (!shopBill && state.shopMode) {
+      // 店铺模式口述：非标准清单文本，先交给 AI 自动整理成清单，不直接落库
+      var cfg = state.config;
+      if (cfg && cfg.aiUrl && cfg.aiKey && cfg.aiModel) {
+        toast('正在用 AI 整理成送货清单…');
+        processWithAI(false);
+        return;
+      }
+      toast('未配置 AI，按原话记录；在设置配置 AI 后，店铺口述可自动整理成清单');
+    }
     if (shopBill) {
       var merged = saveShopBillMerged(shopBill.date, shopBill.customer, shopBill.phone, shopBill.rows, shopBill.total);
       els.input.value = '';
