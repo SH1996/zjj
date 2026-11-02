@@ -609,6 +609,76 @@
     box-shadow:0 24px 60px -28px rgba(0,0,0,.45);-webkit-touch-callout:default;}
   .img-hint{font-size:12px;color:var(--ink-faint);text-align:center;line-height:1.8;}
 
+  /* ===== 店铺模式 & 送货单 ===== */
+  .tool-btn.shop-mode-btn.on{
+    color:var(--gold);border-color:rgba(168,135,61,.5);background:var(--gold-bg);
+  }
+  .tool-btn.shop-bill-btn{
+    color:var(--g500);border-color:var(--g300);background:var(--g100);
+  }
+  .shop-mask{
+    position:fixed;inset:0;z-index:70;background:var(--mask-bg);
+    backdrop-filter:blur(4px);-webkit-backdrop-filter:blur(4px);
+    display:flex;align-items:center;justify-content:center;
+    padding:14px;opacity:0;pointer-events:none;transition:opacity .4s ease;
+  }
+  .shop-mask.open{opacity:1;pointer-events:auto;}
+  .shop-panel{
+    width:100%;max-width:520px;max-height:88vh;overflow:auto;
+    background:var(--bg-top);border:1px solid var(--line);border-radius:22px;
+    padding:20px 18px 18px;box-sizing:border-box;
+    box-shadow:0 30px 80px -40px rgba(0,0,0,.4);
+    transform:translateY(14px) scale(.97);
+    transition:transform .45s cubic-bezier(.2,.8,.3,1);
+  }
+  .shop-mask.open .shop-panel{transform:translateY(0) scale(1);}
+  .shop-head{display:flex;align-items:center;justify-content:space-between;margin-bottom:12px;}
+  .shop-head h3{font-size:16px;font-weight:400;letter-spacing:.16em;color:var(--g900);margin:0;}
+  .shop-fields{display:flex;flex-direction:column;gap:10px;margin-bottom:14px;}
+  .shop-fields .field{display:flex;flex-direction:column;gap:6px;}
+  .shop-fields .field span{font-size:11.5px;letter-spacing:.1em;color:var(--ink-faint);}
+  .shop-fields input{
+    box-sizing:border-box;width:100%;border:1px solid var(--line);border-radius:14px;
+    background:var(--card-hover);color:var(--ink);font:inherit;font-size:15px;
+    padding:11px 13px;outline:none;-webkit-appearance:none;appearance:none;
+    -webkit-tap-highlight-color:transparent;
+  }
+  .shop-fields input:focus{border-color:var(--g400);}
+  .shop-table-head{
+    display:grid;grid-template-columns:1.2fr 1.2fr .9fr 1fr .8fr 26px;gap:6px;
+    padding:0 2px 6px;font-size:11px;letter-spacing:.06em;color:var(--ink-faint);
+  }
+  .shop-rows{display:flex;flex-direction:column;gap:8px;margin-bottom:12px;}
+  .shop-tr{
+    display:grid;grid-template-columns:1.2fr 1.2fr .9fr 1fr .8fr 26px;gap:6px;align-items:center;
+  }
+  .shop-tr input{
+    box-sizing:border-box;min-width:0;width:100%;border:1px solid var(--line);border-radius:10px;
+    background:var(--card-hover);color:var(--ink);font:inherit;font-size:12.5px;
+    padding:8px 9px;outline:none;-webkit-appearance:none;appearance:none;
+    -webkit-tap-highlight-color:transparent;
+  }
+  .shop-tr input:focus{border-color:var(--g400);}
+  .si-del{
+    width:26px;height:26px;border:none;border-radius:8px;background:transparent;
+    color:var(--ink-faint);font-size:13px;cursor:pointer;line-height:1;
+    -webkit-tap-highlight-color:transparent;
+  }
+  .si-del:active{color:var(--danger);background:var(--card-hover);}
+  .shop-add{
+    width:100%;padding:10px;border:1px dashed var(--line);border-radius:12px;
+    background:none;color:var(--ink-soft);font:inherit;font-size:12.5px;cursor:pointer;
+    letter-spacing:.08em;-webkit-tap-highlight-color:transparent;
+  }
+  .shop-add:active{border-color:var(--g400);color:var(--g600);}
+  .shop-total{
+    display:flex;align-items:baseline;justify-content:flex-end;gap:4px;
+    margin:14px 0 2px;font-size:13px;color:var(--ink-soft);
+  }
+  .shop-total b{font-size:20px;font-weight:600;color:var(--g700);}
+  .shop-total-unit{font-size:12px;color:var(--ink-faint);}
+  .shop-actions{display:flex;gap:8px;margin-top:14px;}
+
   @media (max-width:540px){
     .page{padding:0 16px 150px;}
     .masthead{padding:44px 0 26px;}
@@ -761,6 +831,22 @@
           </svg>
           <span>AI 提炼</span>
         </button>
+
+        <!-- 送货单按钮 -->
+        <button class="tool-btn shop-bill-btn" id="shopBillBtn" type="button">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round">
+            <path d="M6 2h12v20H6z"/><path d="M6 6h12"/><path d="M9 11h6M9 15h6"/>
+          </svg>
+          <span>送货单</span>
+        </button>
+
+        <!-- 店铺模式开关 -->
+        <button class="tool-btn shop-mode-btn" id="shopModeBtn" type="button">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round">
+            <path d="M3 9l1.5-5h15L21 9"/><path d="M3 9a3 3 0 006 0 3 3 0 006 0 3 3 0 006 0"/><path d="M5 11v9M19 11v9M9 20h6"/>
+          </svg>
+          <span>店铺</span>
+        </button>
       </div>
       <button class="save-btn" id="saveBtn" type="button">记 下</button>
     </div>
@@ -807,6 +893,32 @@
     </nav>
   </div>
   <section class="notes" id="notesList"></section>
+</div>
+
+<div class="shop-mask" id="shopMask">
+  <div class="shop-panel">
+    <div class="shop-head">
+      <h3>送货清单存档</h3>
+      <button class="icon-btn" id="shopClose" type="button" aria-label="关闭">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.4" stroke-linecap="round"><path d="M6 6l12 12M18 6L6 18"/></svg>
+      </button>
+    </div>
+    <div class="shop-fields">
+      <label class="field"><span>日期</span><input type="date" id="shopDate"></label>
+      <label class="field"><span>客户</span><input type="text" id="shopCust" placeholder="客户名称（店铺/人名）" autocomplete="off"></label>
+      <label class="field"><span>联系方式</span><input type="text" id="shopPhone" placeholder="手机号" autocomplete="off"></label>
+    </div>
+    <div class="shop-table-head">
+      <span>货品名称</span><span>规格</span><span>单价</span><span>交货数量</span><span>小计</span><span></span>
+    </div>
+    <div class="shop-rows" id="shopRows"></div>
+    <button class="shop-add" id="shopAdd" type="button">＋ 添加货品</button>
+    <div class="shop-total">总计金额：<b id="shopTotal">0</b><span class="shop-total-unit"> 元</span></div>
+    <div class="shop-actions">
+      <button class="m-btn" id="shopCancel" type="button">取消</button>
+      <button class="m-btn solid" id="shopSave" type="button">保存清单</button>
+    </div>
+  </div>
 </div>
 
 <div class="mask" id="mask"></div>
@@ -1032,7 +1144,8 @@ window.onerror = function (msg, url, line) {
     searchQuery: '',
     isRecording: false,
     soulSeed: 0,
-    listLimit: LIST_PAGE
+    listLimit: LIST_PAGE,
+    shopMode: false
   };
 
   var recognition = null;
@@ -1064,6 +1177,17 @@ window.onerror = function (msg, url, line) {
     els.micBtn = $('micBtn');
     els.micLabel = $('micLabel');
     els.aiBtn = $('aiBtn');
+
+    els.shopBillBtn = $('shopBillBtn');
+    els.shopModeBtn = $('shopModeBtn');
+    els.shopMask = $('shopMask');
+    els.shopDate = $('shopDate');
+    els.shopCust = $('shopCust');
+    els.shopPhone = $('shopPhone');
+    els.shopRows = $('shopRows');
+    els.shopTotal = $('shopTotal');
+    els.shopAdd = $('shopAdd');
+    els.shopSave = $('shopSave');
 
     els.searchInput = $('searchInput');
 
@@ -1537,6 +1661,248 @@ window.onerror = function (msg, url, line) {
     return { tags: tags, text: text };
   }
 
+  // ===== 店铺模式 & 送货清单 =====
+  function todayStr() {
+    var d = new Date();
+    return d.getFullYear() + '-' + pad2(d.getMonth() + 1) + '-' + pad2(d.getDate());
+  }
+
+  function fmtMoney(v) {
+    var x = Number(v);
+    if (isNaN(x)) return '0';
+    x = Math.round(x * 100) / 100;
+    return String(x);
+  }
+
+  function numFromText(s) {
+    var m = String(s == null ? '' : s).match(/\d+(?:\.\d+)?/);
+    return m ? parseFloat(m[0]) : NaN;
+  }
+
+  function cleanCell(s) {
+    return String(s == null ? '' : s).replace(/\|/g, '｜').trim();
+  }
+
+  function isShopCtx(text) {
+    if (state.shopMode) return true;
+    return String(text || '').indexOf('#店铺') !== -1;
+  }
+
+  function setShopMode(on) {
+    state.shopMode = !!on;
+    if (els.shopModeBtn) els.shopModeBtn.classList.toggle('on', state.shopMode);
+    if (els.input) {
+      els.input.placeholder = state.shopMode
+        ? '口述送货内容，AI 自动整理成清单；或点“送货单”录入…'
+        : '此刻，想记下点什么… （支持语音，#标签，说明时间会自动设提醒）';
+    }
+    if (!state.shopMode && !els.input.value.trim()) {
+      if (els.aiBtn) els.aiBtn.style.display = 'none';
+    }
+  }
+
+  function formatShopBill(date, customer, phone, rows, total) {
+    var L = [];
+    L.push('【送货清单存档】');
+    L.push('日期：' + (date || ''));
+    L.push('客户：' + (customer || ''));
+    L.push('联系方式：' + (phone || ''));
+    L.push('----------------------------------------');
+    L.push('货品名称 | 规格 | 单价 | 交货数量 | 小计');
+    for (var i = 0; i < rows.length; i++) {
+      var r = rows[i];
+      var sub = '';
+      if (r.subtotal !== '' && r.subtotal != null && !isNaN(Number(r.subtotal))) {
+        sub = fmtMoney(r.subtotal) + '元';
+      }
+      L.push(cleanCell(r.name) + ' | ' + cleanCell(r.spec) + ' | ' + cleanCell(r.price) +
+             ' | ' + cleanCell(r.count) + ' | ' + sub);
+    }
+    L.push('----------------------------------------');
+    L.push('总计金额：' + fmtMoney(total) + '元');
+    return L.join('\n');
+  }
+
+  function shopRowHTML(name, spec, price, count, sub) {
+    return '<div class="shop-tr">' +
+      '<input type="text" class="si-name" placeholder="货品名称" value="' + escapeHTML(name || '') + '">' +
+      '<input type="text" class="si-spec" placeholder="规格" value="' + escapeHTML(spec || '') + '">' +
+      '<input type="text" class="si-price" placeholder="100元/件" inputmode="decimal" value="' + escapeHTML(price || '') + '">' +
+      '<input type="text" class="si-count" placeholder="1件" inputmode="decimal" value="' + escapeHTML(count || '') + '">' +
+      '<input type="text" class="si-sub" placeholder="小计" inputmode="decimal" value="' + escapeHTML(sub || '') + '">' +
+      '<button type="button" class="si-del" aria-label="删除">✕</button>' +
+      '</div>';
+  }
+
+  function addShopRow(name, spec, price, count, sub) {
+    var div = document.createElement('div');
+    div.innerHTML = shopRowHTML(name, spec, price, count, sub);
+    var row = div.firstChild;
+    els.shopRows.appendChild(row);
+    return row;
+  }
+
+  function shopRowOf(el) {
+    while (el && el !== els.shopRows) {
+      if (el.classList && el.classList.contains('shop-tr')) return el;
+      el = el.parentNode;
+    }
+    return null;
+  }
+
+  function recalcShopRow(row) {
+    if (!row) return;
+    var price = numFromText(row.querySelector('.si-price').value);
+    var count = numFromText(row.querySelector('.si-count').value);
+    if (!isNaN(price) && !isNaN(count)) {
+      row.querySelector('.si-sub').value = fmtMoney(price * count);
+    }
+  }
+
+  function recalcShopTotal() {
+    var total = 0;
+    var rows = els.shopRows.querySelectorAll('.shop-tr');
+    for (var i = 0; i < rows.length; i++) {
+      var v = parseFloat(rows[i].querySelector('.si-sub').value);
+      if (!isNaN(v)) total += v;
+    }
+    els.shopTotal.textContent = fmtMoney(total);
+  }
+
+  function shopBillOpen() {
+    els.shopDate.value = todayStr();
+    els.shopCust.value = '';
+    els.shopPhone.value = '';
+    els.shopRows.innerHTML = '';
+    addShopRow();
+    recalcShopTotal();
+    els.shopMask.classList.add('open');
+  }
+
+  function closeShopBill() {
+    els.shopMask.classList.remove('open');
+  }
+
+  function shopBillSave() {
+    var date = els.shopDate.value || todayStr();
+    var customer = els.shopCust.value.trim();
+    var phone = els.shopPhone.value.trim();
+    if (!customer) { toast('请填写客户'); els.shopCust.focus(); return; }
+    var rowEls = els.shopRows.querySelectorAll('.shop-tr');
+    var rows = [];
+    for (var i = 0; i < rowEls.length; i++) {
+      var name = rowEls[i].querySelector('.si-name').value.trim();
+      if (!name) continue;
+      rows.push({
+        name: name,
+        spec: rowEls[i].querySelector('.si-spec').value.trim(),
+        price: rowEls[i].querySelector('.si-price').value.trim(),
+        count: rowEls[i].querySelector('.si-count').value.trim(),
+        subtotal: rowEls[i].querySelector('.si-sub').value.trim()
+      });
+    }
+    if (!rows.length) { toast('请至少填写一行货品'); return; }
+    var total = 0;
+    for (var j = 0; j < rows.length; j++) {
+      var v = parseFloat(rows[j].subtotal);
+      if (!isNaN(v)) total += v;
+    }
+    var text = formatShopBill(date, customer, phone, rows, total);
+    var now = new Date().toISOString();
+    state.notes.unshift({
+      id: uid(), text: text, createdAt: now, updatedAt: now,
+      status: VIEW.ACTIVE, remindAt: null, repeat: 'none', reminded: false,
+      doneAt: null, deletedAt: null, tags: ['店铺']
+    });
+    addOps('add', text);
+    saveLocal();
+    scheduleSync();
+    closeShopBill();
+    render();
+    toast('送货清单已存档');
+  }
+
+  function buildAIPrompt(text) {
+    var now = new Date();
+    var weekCN = ['日', '一', '二', '三', '四', '五', '六'][now.getDay()];
+    var nowStr = now.getFullYear() + '年' + (now.getMonth() + 1) + '月' + now.getDate() + '日 ' +
+                 pad2(now.getHours()) + ':' + pad2(now.getMinutes()) + ' 星期' + weekCN;
+    if (isShopCtx(text)) {
+      return '你是一个送货清单整理助手。当前时间：' + nowStr + '。\n' +
+        '请把下面这段口语化的语音/文字整理成送货清单存档，严格按 JSON 输出，不要输出 JSON 以外的任何内容：\n' +
+        '{\n' +
+        '  "date": "送货日期，格式 YYYY-MM-DD；原文没提就取今天",\n' +
+        '  "customer": "客户名称（店铺/人名）",\n' +
+        '  "phone": "联系方式；没有则为空字符串",\n' +
+        '  "items": [{"name":"货品名称","spec":"规格（如 1件18包(6个/包)）","price":"单价（含单位，如 100元/件）","count":"交货数量（含单位，如 1件）","subtotal":"小计金额（纯数字，如 100）"}],\n' +
+        '  "total": 总计金额（纯数字，等于所有小计之和）\n' +
+        '}\n\n' +
+        '要求：忠于原文逐项罗列货品，不要合并、漏项或编造；小计=单价数值×数量数值；没有的信息填空字符串或空数组。\n\n' +
+        '用户的原文：\n' + text;
+    }
+    return '你是一个细致的笔记整理助手。当前时间：' + nowStr + '。\n' +
+      '请把下面这段口语化的语音/文字整理成结构化笔记，严格按 JSON 输出，不要输出 JSON 以外的任何内容：\n' +
+      '{\n' +
+      '  "text": "整理后的笔记正文（Markdown）。要求：多个待办用 - 开头的无序列表分条；保留关键信息（时间、地点、人物、数字）；去除口语废话与重复；忠于原意，不要编造内容；若内容本身就是一句话，直接润色即可，不要强行列点；正文中不要再重复提醒时间（它已在 remindAt 里）",\n' +
+      '  "remindAt": "若原文含提醒/日程时间，按当前时间换算成具体时间，格式 YYYY-MM-DDTHH:mm（24小时制）；没有则为 null",\n' +
+      '  "repeat": "循环提醒：每天=daily，每周=weekly，每月=monthly，无=none",\n' +
+      '  "tags": ["从内容提炼 1-3 个简短分类标签（如 工作/生活/学习/健康/灵感），若用户提到\"标签\"或\"#\"开头的词必须收录；没有合适则 []"]\n' +
+      '}\n\n' +
+      '用户的原文：\n' + text;
+  }
+
+  function parseShopBillJSON(content) {
+    try {
+      var m = String(content || '').match(/\{[\s\S]*\}/);
+      if (!m) return null;
+      var o = JSON.parse(m[0]);
+      if (!o || typeof o !== 'object' || !Array.isArray(o.items)) return null;
+      var rows = [];
+      for (var i = 0; i < o.items.length; i++) {
+        var it = o.items[i];
+        if (!it || typeof it !== 'object') continue;
+        rows.push({
+          name: String(it.name == null ? '' : it.name),
+          spec: String(it.spec == null ? '' : it.spec),
+          price: String(it.price == null ? '' : it.price),
+          count: String(it.count == null ? '' : it.count),
+          subtotal: String(it.subtotal == null ? '' : it.subtotal)
+        });
+      }
+      if (!rows.length) return null;
+      var total = parseFloat(o.total);
+      if (isNaN(total)) {
+        total = 0;
+        for (var j = 0; j < rows.length; j++) {
+          var v = parseFloat(rows[j].subtotal);
+          if (!isNaN(v)) total += v;
+        }
+      }
+      return {
+        date: String(o.date == null ? '' : o.date),
+        customer: String(o.customer == null ? '' : o.customer),
+        phone: String(o.phone == null ? '' : o.phone),
+        rows: rows,
+        total: total
+      };
+    } catch (e) {
+      return null;
+    }
+  }
+
+  function applyShopParsed(p) {
+    var date = String(p.date || '').trim();
+    var dm = date.match(/^(\d{4})[-/年](\d{1,2})[-/月](\d{1,2})/);
+    if (dm) date = dm[1] + '-' + pad2(+dm[2]) + '-' + pad2(+dm[3]);
+    else if (!/^\d{4}-\d{2}-\d{2}$/.test(date)) date = todayStr();
+    var text = formatShopBill(date, String(p.customer || '').trim(),
+      String(p.phone || '').trim(), p.rows, p.total);
+    if (text.indexOf('#店铺') === -1) text += '\n#店铺';
+    els.input.value = text;
+    autoGrow(els.input);
+    toast('已整理成送货清单，可修改后发送');
+  }
+
   // 把解析结果应用到输入区（提醒开关 + 时间 + 循环 + 清理正文）
   function applyVoiceParse(parsed) {
     if (!parsed || !parsed.matched || !parsed.remindAt) return false;
@@ -1949,6 +2315,10 @@ window.onerror = function (msg, url, line) {
     // #标签 提取
     var tagRes = extractTags(text);
     if (tagRes.text) text = tagRes.text;
+    if (state.shopMode && tagRes.tags.indexOf('店铺') === -1) {
+      tagRes.tags.unshift('店铺');
+      if (tagRes.tags.length > 3) tagRes.tags.length = 3;
+    }
 
     var now = new Date().toISOString();
     state.notes.unshift({
@@ -2201,16 +2571,7 @@ window.onerror = function (msg, url, line) {
     var nowStr = now.getFullYear() + '年' + (now.getMonth() + 1) + '月' + now.getDate() + '日 ' +
                  pad2(now.getHours()) + ':' + pad2(now.getMinutes()) + ' 星期' + weekCN;
 
-    var prompt =
-      '你是一个细致的笔记整理助手。当前时间：' + nowStr + '。\n' +
-      '请把下面这段口语化的语音/文字整理成结构化笔记，严格按 JSON 输出，不要输出 JSON 以外的任何内容：\n' +
-      '{\n' +
-      '  "text": "整理后的笔记正文（Markdown）。要求：多个待办用 - 开头的无序列表分条；保留关键信息（时间、地点、人物、数字）；去除口语废话与重复；忠于原意，不要编造内容；若内容本身就是一句话，直接润色即可，不要强行列点；正文中不要再重复提醒时间（它已在 remindAt 里）",\n' +
-      '  "remindAt": "若原文含提醒/日程时间，按当前时间换算成具体时间，格式 YYYY-MM-DDTHH:mm（24小时制）；没有则为 null",\n' +
-      '  "repeat": "循环提醒：每天=daily，每周=weekly，每月=monthly，无=none",\n' +
-      '  "tags": ["从内容提炼 1-3 个简短分类标签（如 工作/生活/学习/健康/灵感），若用户提到\"标签\"或\"#\"开头的词必须收录；没有合适则 []"]\n' +
-      '}\n\n' +
-      '用户的原文：\n' + text;
+    var prompt = buildAIPrompt(text);
 
     fetch(cfg.aiUrl, {
       method: 'POST',
@@ -2239,6 +2600,16 @@ window.onerror = function (msg, url, line) {
 
         if (parsed && typeof parsed.text === 'string') {
           applyAIParsed(parsed);
+        } else if (isShopCtx(text)) {
+          var shop = parseShopBillJSON(content);
+          if (shop) {
+            applyShopParsed(shop);
+          } else {
+            // 兼容：模型没按 JSON 输出时，降级为纯文本整理
+            els.input.value = content;
+            autoGrow(els.input);
+            toast('整理完成，但未能生成标准清单，可点“送货单”手动录入');
+          }
         } else {
           // 兼容：模型没按 JSON 输出时，降级为纯文本整理
           els.input.value = content;
@@ -3282,6 +3653,36 @@ window.onerror = function (msg, url, line) {
     els.remindToggle.addEventListener('click', function () { setRemindMode(!state.remindOn); });
     els.micBtn.addEventListener('click', startRecording);
     els.aiBtn.addEventListener('click', function () { processWithAI(false); });
+
+    // 店铺模式 & 送货单
+    els.shopModeBtn.addEventListener('click', function () { setShopMode(!state.shopMode); });
+    els.shopBillBtn.addEventListener('click', shopBillOpen);
+    if ($('shopClose')) $('shopClose').addEventListener('click', closeShopBill);
+    if ($('shopCancel')) $('shopCancel').addEventListener('click', closeShopBill);
+    els.shopAdd.addEventListener('click', function () { addShopRow(); recalcShopTotal(); });
+    els.shopSave.addEventListener('click', shopBillSave);
+    if (els.shopMask) {
+      els.shopMask.addEventListener('click', function (e) {
+        if (e.target === els.shopMask) closeShopBill();
+      });
+    }
+    els.shopRows.addEventListener('input', function (e) {
+      var t = e.target;
+      if (t && t.classList && (t.classList.contains('si-price') || t.classList.contains('si-count'))) {
+        recalcShopRow(shopRowOf(t));
+      }
+      recalcShopTotal();
+    });
+    els.shopRows.addEventListener('click', function (e) {
+      var t = e.target;
+      if (t && t.classList && t.classList.contains('si-del')) {
+        var row = shopRowOf(t);
+        if (row) {
+          row.parentNode.removeChild(row);
+          recalcShopTotal();
+        }
+      }
+    });
 
     // 竹语
     initSoul();
