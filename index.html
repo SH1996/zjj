@@ -516,18 +516,24 @@
   .toast.show{opacity:1;transform:translate(-50%,0);}
 
   /* ===== 竹语（无框、融入页面的一句话） ===== */
-  .soul{margin:0 auto 6px;padding:0 6px;max-width:420px;text-align:center;}
-  .soul-line{height:1px;width:56px;margin:0 auto 12px;
-    background:linear-gradient(90deg,transparent,var(--g300),transparent);}
-  .soul-text{margin:0;font-size:14.5px;line-height:1.9;color:var(--ink-soft);
-    letter-spacing:.06em;animation:soulIn .8s ease;}
+  .soul{margin:0 auto 2px;padding:0 6px;max-width:600px;text-align:center;}
+  .soul-line{display:none;}
+  .soul-text{margin:0;font-size:12.5px;line-height:1.7;color:var(--ink-faint);
+    letter-spacing:.04em;animation:soulIn .8s ease;}
   @keyframes soulIn{from{opacity:0;transform:translateY(4px);}to{opacity:1;transform:none;}}
-  .soul-acts{margin-top:5px;display:flex;justify-content:center;align-items:center;gap:10px;}
+  .soul-acts{margin-top:0;display:flex;justify-content:center;align-items:center;gap:8px;}
   .soul-hint{border:none;background:none;color:var(--ink-faint);cursor:pointer;font:inherit;
-    font-size:11px;letter-spacing:.14em;padding:2px 4px;opacity:.85;
+    font-size:10px;letter-spacing:.1em;padding:1px 3px;opacity:.6;
     -webkit-tap-highlight-color:transparent;}
   .soul-hint:active{color:var(--g600);opacity:1;}
-  .soul-dotsep{color:var(--ink-faint);font-size:10px;opacity:.6;}
+  .soul-dotsep{color:var(--ink-faint);font-size:9px;opacity:.5;}
+
+  /* ===== 列表：加载更多 ===== */
+  .more-btn{width:100%;margin:14px 0 4px;padding:11px;border:1px dashed var(--line);border-radius:14px;
+    background:var(--card);color:var(--ink-faint);font:inherit;font-size:12.5px;
+    letter-spacing:.12em;cursor:pointer;transition:all .3s ease;
+    -webkit-tap-highlight-color:transparent;}
+  .more-btn:active{background:var(--g100);color:var(--g600);border-color:var(--g400);}
 
   /* ===== 问过去的自己 ===== */
   .ask-answer{margin-top:14px;padding:13px 15px;border:1px solid var(--line);border-radius:14px;
@@ -956,6 +962,7 @@ window.onerror = function (msg, url, line) {
   var LS_NOTES  = 'bamboo.v11.notes';
   var LS_THEME  = 'bamboo.v11.theme';
   var VIEW = { ACTIVE: 'active', DONE: 'done', TRASH: 'trash' };
+  var LIST_PAGE = 15;
 
   var state = {
     notes: [],
@@ -969,7 +976,8 @@ window.onerror = function (msg, url, line) {
     sharingId: null,
     searchQuery: '',
     isRecording: false,
-    soulSeed: 0
+    soulSeed: 0,
+    listLimit: LIST_PAGE
   };
 
   var recognition = null;
@@ -1655,8 +1663,13 @@ window.onerror = function (msg, url, line) {
         return;
       }
 
+      var total = list.length;
+      var shown = total > state.listLimit ? list.slice(0, state.listLimit) : list;
       var html = '';
-      for (var j = 0; j < list.length; j++) html += noteHTML(list[j], kw);
+      for (var j = 0; j < shown.length; j++) html += noteHTML(shown[j], kw);
+      if (total > state.listLimit) {
+        html += '<button type="button" class="more-btn" data-act="more">还有 ' + (total - state.listLimit) + ' 条 · 慢慢翻</button>';
+      }
       els.notesList.innerHTML = html;
     } catch (e) {
       console.error('[render]', e);
@@ -1814,6 +1827,7 @@ window.onerror = function (msg, url, line) {
     scheduleSync();
 
     if (state.view !== VIEW.ACTIVE) { state.view = VIEW.ACTIVE; syncTabs(); }
+    state.listLimit = LIST_PAGE;
     render();
     toast(remindAt ? '已记下，到时会提醒你' : '已记下');
   }
@@ -1866,6 +1880,7 @@ window.onerror = function (msg, url, line) {
     }
 
     if (isAction) {
+      if (act === 'more') { state.listLimit += LIST_PAGE; render(); return; }
       if (!id) return;
       if (act === 'done') setStatus(id, VIEW.DONE);
       else if (act === 'reopen') setStatus(id, VIEW.ACTIVE);
@@ -2644,39 +2659,36 @@ window.onerror = function (msg, url, line) {
   function localSoulMessage(s) {
     if (s.total === 0) return '竹在等第一句话。';
     var seed = new Date().getDate() + new Date().getHours() + state.soulSeed;
-    var facts = [];
-    if (s.streak >= 3) facts.push('连记 ' + s.streak + ' 天，根在暗处长。');
-    if (s.purgedWeek >= 3) facts.push('这周删了 ' + s.purgedWeek + ' 条，放得下。');
-    if (s.last7 === 0) facts.push('许久没动静了。');
-    if (s.topTags.length) facts.push('「' + s.topTags[0].split('×')[0] + '」出现最多。');
-    if (s.done >= 5) facts.push('完成了 ' + s.done + ' 件，比你以为的多。');
-    var hb = ['清晨', '中午', '午后', '夜晚', '深夜'][s.hours.indexOf(Math.max.apply(null, s.hours))];
-    if ((hb === '深夜' || hb === '夜晚') && s.total >= 5) facts.push('夜里的字最诚实。');
     var pool = [
-      '慢慢来，比较快。',
-      '写下的，不会消失。',
-      '根深者，不问风。',
-      '少即是从容。',
-      '今天的你，是昨天的合著者。',
-      '安静，也是记录。'
+      '不急，日子自有它的秩序。',
+      '写下来，是为了放下；放下，是为了往前走。',
+      '真正重要的东西，往往在安静里显形。',
+      '你所记下的每一笔，终将成为走过的路。',
+      '烦恼写出来，就已经轻了一半。',
+      '缓慢不是落后，是另一种坚定。',
+      '答案不在远方，在你重复的小事里。',
+      '心里的竹，比眼里的景更值得照看。',
+      '少记一些，反而记得更清楚。',
+      '风来竹响，风去竹静，你也一样。',
+      '别急着开花，根深了自然会结果。',
+      '今日落笔处，就是明日回望的灯。'
     ];
-    if (facts.length) return facts[seed % facts.length];
     return pool[seed % pool.length];
   }
 
   function soulPrompt(s) {
-    return '你是一位安静温柔的观察者「竹语」，住在一个叫「竹间记」的笔记应用里，陪一位用户慢慢记录生活。\n\n' +
-      '以下是这位用户的真实画像（JSON）：\n' + JSON.stringify(s, null, 1) + '\n\n' +
-      '请只对用户说一句话（12~18个字，越短越有分量）。要求：\n' +
-      '1. 优先从他的真实记录里挑一个具体事实说（他常记什么、最近完成了什么、删了什么），说得像一个了解他的朋友随口一提\n' +
-      '2. 没有值得说的事就给一句极简的哲言，像禅宗偈语一样短\n' +
-      '3. 禁止：客套、称呼、自我介绍、说教、解释、比喻堆砌\n' +
-      '4. 绝对不要出现「JSON」「数据」「系统」「AI」「画像」这类词\n' +
+    return '你是一位参透世事、言辞凝练的智者「竹语」，住在「竹间记」笔记应用里，陪伴一位记录生活的人。\n\n' +
+      '以下是这位用户的真实画像（JSON），仅作背景参考，用来了解他的处境：\n' + JSON.stringify(s, null, 1) + '\n\n' +
+      '请送他一两句（18~30字）有分量的哲思之言，像良师益友语重心长地点醒他。要求：\n' +
+      '1. 绝不复述他做过的事、记过的内容（不要出现「你记了」「你完成」「你删了」「你常记」这类事实陈述），那些他自己都知道\n' +
+      '2. 从他的处境里提炼一个值得深思的命题，用一句话点破，让他忽然想通点什么（金句、箴言、禅语皆可），让平凡的一天被升华\n' +
+      '3. 语气：平实、笃定、有温度；禁止客套、称呼、自我介绍、说教、解释、比喻堆砌\n' +
+      '4. 禁止出现「JSON」「数据」「系统」「AI」「画像」等词\n' +
       '5. 直接输出这一句话，不要引号和任何前后缀';
   }
 
   function soulCap(text) {
-    return String(text || '').replace(/^["「'\s]+|["」'\s]+$/g, '').slice(0, 24);
+    return String(text || '').replace(/^["「'\s]+|["」'\s]+$/g, '').slice(0, 40);
   }
 
   function renderSoulText(text, mode) {
@@ -3186,6 +3198,7 @@ window.onerror = function (msg, url, line) {
 
     els.searchInput.addEventListener('input', function() {
       state.searchQuery = this.value.trim();
+      state.listLimit = LIST_PAGE;
       render();
     });
 
