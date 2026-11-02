@@ -247,6 +247,35 @@
   .save-btn:active{transform:translateY(1px);}
 
   .toolbar { display: flex; flex-direction: column; gap: 14px; margin-top: 36px; }
+
+  /* ===== 首页：笔记入口卡 ===== */
+  .notes-entry{display:flex;align-items:center;justify-content:space-between;gap:12px;
+    margin-top:30px;padding:17px 20px;border:1px solid var(--line);border-radius:18px;
+    background:var(--card);cursor:pointer;transition:all .3s ease;
+    -webkit-tap-highlight-color:transparent;}
+  .notes-entry:active{background:var(--card-hover);border-color:var(--g300);}
+  .ne-main{display:flex;flex-direction:column;gap:4px;min-width:0;}
+  .ne-title{font-size:15px;letter-spacing:.18em;color:var(--g900);}
+  .ne-sub{font-size:11.5px;color:var(--ink-faint);letter-spacing:.08em;}
+  .ne-counts{display:flex;gap:7px;flex:none;flex-wrap:wrap;justify-content:flex-end;}
+  .ne-tag{font-size:11px;color:var(--ink-faint);background:var(--g100);
+    border:1px solid var(--line-soft);border-radius:999px;padding:5px 10px;letter-spacing:.04em;}
+  .ne-tag b{color:var(--g600);font-weight:600;margin-left:2px;}
+  .ne-arrow{color:var(--ink-faint);font-size:19px;flex:none;margin-left:2px;}
+
+  /* ===== 笔记独立页面 ===== */
+  .notes-page{position:fixed;inset:0;z-index:40;background:var(--bg-top);
+    overflow-y:auto;-webkit-overflow-scrolling:touch;padding:0 20px 44px;
+    opacity:0;pointer-events:none;transition:opacity .35s ease;}
+  .notes-page.open{opacity:1;pointer-events:auto;}
+  .notes-page .np-head,.notes-page .np-toolbar,.notes-page .notes{
+    max-width:720px;margin-left:auto;margin-right:auto;}
+  .np-head{display:flex;align-items:center;justify-content:space-between;
+    padding:22px 0 8px;position:sticky;top:0;background:var(--bg-top);z-index:2;}
+  .np-head h2{font-size:17px;font-weight:400;letter-spacing:.22em;color:var(--g900);}
+  .np-spacer{width:42px;}
+  .toolbar.np-toolbar{margin-top:14px;}
+  body.np-locked{overflow:hidden;}
   
   .search-wrap { position: relative; display: flex; align-items: center; }
   .search-wrap input {
@@ -735,7 +764,34 @@
     </div>
   </section>
 
-  <div class="toolbar">
+  <div class="notes-entry" id="notesEntry" role="button" tabindex="0">
+    <div class="ne-main">
+      <span class="ne-title">我的笔记</span>
+      <span class="ne-sub" id="neSub">共 0 条</span>
+    </div>
+    <div class="ne-counts">
+      <span class="ne-tag">待办 <b id="neActive">0</b></span>
+      <span class="ne-tag">完成 <b id="neDone">0</b></span>
+      <span class="ne-tag">垃圾 <b id="neTrash">0</b></span>
+    </div>
+    <span class="ne-arrow">›</span>
+  </div>
+</div>
+
+<footer class="foot">
+  <span class="dot" id="syncDot"></span>
+  <span id="syncText">本地记录中</span>
+</footer>
+
+<div class="notes-page" id="notesPage">
+  <div class="np-head">
+    <button class="icon-btn" id="npBack" type="button" aria-label="返回">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M15 18l-6-6 6-6"/></svg>
+    </button>
+    <h2>我的笔记</h2>
+    <div class="np-spacer"></div>
+  </div>
+  <div class="toolbar np-toolbar">
     <div class="search-wrap">
       <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><circle cx="11" cy="11" r="8"/><path d="M21 21l-4.3-4.3"/></svg>
       <input type="text" id="searchInput" placeholder="搜索记录、标签..." autocomplete="off">
@@ -746,14 +802,8 @@
       <button class="tab" data-view="trash" type="button">垃圾桶 <span class="num" id="numTrash">0</span></button>
     </nav>
   </div>
-
   <section class="notes" id="notesList"></section>
 </div>
-
-<footer class="foot">
-  <span class="dot" id="syncDot"></span>
-  <span id="syncText">本地记录中</span>
-</footer>
 
 <div class="mask" id="mask"></div>
 
@@ -1614,6 +1664,10 @@ window.onerror = function (msg, url, line) {
     if (els.numActive) els.numActive.textContent = a;
     if (els.numDone)   els.numDone.textContent = d;
     if (els.numTrash)  els.numTrash.textContent = t;
+    if (els.neSub) els.neSub.textContent = '共 ' + state.notes.length + ' 条';
+    if (els.neActive) els.neActive.textContent = a;
+    if (els.neDone)   els.neDone.textContent = d;
+    if (els.neTrash)  els.neTrash.textContent = t;
   }
 
   var ICON = {
@@ -3127,6 +3181,8 @@ window.onerror = function (msg, url, line) {
     els.saveBtn.addEventListener('click', addNote);
     els.notesList.addEventListener('click', handleListClick);
     els.tabs.addEventListener('click', handleTabsClick);
+    els.notesEntry.addEventListener('click', openNotesPage);
+    els.npBack.addEventListener('click', closeNotesPage);
     
     els.input.addEventListener('input', function () { 
       autoGrow(els.input); 
