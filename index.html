@@ -241,15 +241,15 @@
   .toolbar { display: flex; flex-direction: column; gap: 14px; margin-top: 36px; }
 
   /* ===== 首页：底部分类导航 ===== */
-  .home-nav{display:grid;grid-template-columns:repeat(4,1fr);gap:8px;margin-top:22px;
+  .home-nav{display:grid;grid-template-columns:repeat(6,1fr);gap:4px;margin-top:22px;
     background:var(--card);border:1px solid var(--line);border-radius:18px;padding:8px;}
   .hn-item{display:flex;flex-direction:column;align-items:center;gap:2px;border:none;
     background:transparent;color:var(--ink-soft);font:inherit;cursor:pointer;
-    padding:9px 2px 7px;border-radius:13px;transition:all .25s ease;
+    padding:9px 1px 7px;border-radius:13px;transition:all .25s ease;
     -webkit-tap-highlight-color:transparent;}
   .hn-item:active{background:var(--g100);}
-  .hn-name{font-size:12.5px;letter-spacing:.16em;color:var(--g800);}
-  .hn-count{font-size:17px;font-weight:700;color:var(--g600);line-height:1.2;}
+  .hn-name{font-size:12px;letter-spacing:.08em;color:var(--g800);}
+  .hn-count{font-size:16px;font-weight:700;color:var(--g600);line-height:1.2;}
 
   /* ===== 笔记独立页面 ===== */
   .notes-page{position:fixed;inset:0;z-index:40;background:var(--bg-top);
@@ -282,17 +282,19 @@
   @keyframes swipeInLeft{from{opacity:.4;transform:translateX(-56px);}to{opacity:1;transform:translateX(0);}}
   .swipe-in-right{animation:swipeInRight .3s cubic-bezier(.2,.8,.3,1);}
   .swipe-in-left{animation:swipeInLeft .3s cubic-bezier(.2,.8,.3,1);}
-  .tabs{display:flex;gap:6px;padding:5px;
+  .tabs{display:flex;gap:3px;padding:4px;
     background:var(--card);border:1px solid var(--line);
-    border-radius:999px;backdrop-filter:blur(8px);-webkit-backdrop-filter:blur(8px);}
+    border-radius:999px;backdrop-filter:blur(8px);-webkit-backdrop-filter:blur(8px);
+    overflow-x:auto;-webkit-overflow-scrolling:touch;scrollbar-width:none;}
+  .tabs::-webkit-scrollbar{display:none;}
   .tab{
-    flex:1;padding:12px 6px;border:none;border-radius:999px;background:transparent;
-    color:var(--ink-soft);font:inherit;font-size:13.5px;letter-spacing:.1em;
+    flex:1 1 0;min-width:0;padding:11px 3px;border:none;border-radius:999px;background:transparent;
+    color:var(--ink-soft);font:inherit;font-size:12px;letter-spacing:.01em;
     cursor:pointer;transition:all .45s ease;
-    display:inline-flex;align-items:center;justify-content:center;gap:7px;white-space:nowrap;
+    display:inline-flex;align-items:center;justify-content:center;gap:4px;white-space:nowrap;
     -webkit-tap-highlight-color:transparent;
   }
-  .tab .num{font-size:11px;min-width:19px;height:19px;padding:0 6px;border-radius:10px;
+  .tab .num{font-size:10px;min-width:16px;height:16px;padding:0 4px;border-radius:8px;
     background:var(--line);color:var(--ink-faint);
     display:inline-flex;align-items:center;justify-content:center;
     font-variant-numeric:tabular-nums;transition:all .4s ease;}
@@ -690,9 +692,9 @@
     .toolbar{margin-top:26px; gap: 10px;}
     .search-wrap input {padding: 10px 14px 10px 36px; font-size: 13.5px;}
     .search-wrap svg {width: 14px; height: 14px; left: 12px;}
-    .tabs{padding:4px;gap:4px;}
-    .tab{font-size:12.5px;padding:10px 4px;letter-spacing:.04em;gap:5px;}
-    .tab .num{font-size:10.5px;min-width:18px;height:18px;}
+    .tabs{padding:4px;gap:2px;}
+    .tab{font-size:11px;padding:10px 2px;letter-spacing:0;gap:3px;}
+    .tab .num{font-size:9.5px;min-width:14px;height:14px;padding:0 3px;}
 
     .notes{margin-top:20px;}
     .note{padding:15px 15px 13px 19px;border-radius:16px;}
@@ -717,8 +719,8 @@
   @media (max-width:380px){
     .page{padding:0 14px 150px;}
     .masthead h1{font-size:21px;letter-spacing:.2em;text-indent:.2em;}
-    .tab{font-size:11.5px;padding:9px 2px;}
-    .tab .num{display:none;}
+    .tab{font-size:10.5px;padding:9px 2px;letter-spacing:0;gap:3px;}
+    .tab .num{font-size:9px;min-width:13px;height:13px;padding:0 2px;}
     .note{padding:14px 12px 12px 16px;}
     .note-text{font-size:14.6px;}
     .note-actions{gap:3px;}
@@ -836,6 +838,12 @@
   </section>
 
   <nav class="home-nav" id="homeNav" aria-label="分类">
+    <button class="hn-item" data-view="pin" type="button">
+      <span class="hn-name">置顶</span><b class="hn-count" id="nePin">0</b>
+    </button>
+    <button class="hn-item" data-view="note" type="button">
+      <span class="hn-name">笔记</span><b class="hn-count" id="neNote">0</b>
+    </button>
     <button class="hn-item" data-view="active" type="button">
       <span class="hn-name">待办</span><b class="hn-count" id="neActive">0</b>
     </button>
@@ -880,6 +888,8 @@
       <input type="text" id="searchInput" placeholder="搜索记录、标签..." autocomplete="off">
     </div>
     <nav class="tabs" id="tabs">
+      <button class="tab" data-view="pin" type="button">置顶 <span class="num" id="numPin">0</span></button>
+      <button class="tab" data-view="note" type="button">笔记 <span class="num" id="numNote">0</span></button>
       <button class="tab active" data-view="active" type="button">待办 <span class="num" id="numActive">0</span></button>
       <button class="tab" data-view="done" type="button">已完成 <span class="num" id="numDone">0</span></button>
       <button class="tab" data-view="shop" type="button">店铺 <span class="num" id="numShop">0</span></button>
@@ -1122,7 +1132,21 @@ window.onerror = function (msg, url, line) {
   var LS_CONFIG = 'bamboo.v11.config';
   var LS_NOTES  = 'bamboo.v11.notes';
   var LS_THEME  = 'bamboo.v11.theme';
-  var VIEW = { ACTIVE: 'active', DONE: 'done', TRASH: 'trash', SHOP: 'shop' };
+  var VIEW = { ACTIVE: 'active', DONE: 'done', TRASH: 'trash', SHOP: 'shop', PIN: 'pin', NOTE: 'note' };
+
+  // 六分类归属（互斥，优先级：置顶 > 店铺 > 待办(带提醒) > 笔记）
+  function noteCategory(n) {
+    if (!n) return 'note';
+    if (n.status === VIEW.TRASH) return 'trash';
+    var isShop = hasShopTag(n);
+    if (n.status === VIEW.DONE) return isShop ? 'shop' : 'done';
+    if (isShop) return 'shop';
+    var tags = n.tags || [];
+    for (var i = 0; i < tags.length; i++) {
+      if (String(tags[i]).trim() === '置顶') return 'pin';
+    }
+    return n.remindAt ? 'active' : 'note';
+  }
   var LIST_PAGE = 15;
 
   var state = {
@@ -1232,10 +1256,14 @@ window.onerror = function (msg, url, line) {
     els.notesPage = $('notesPage');
     els.npBack = $('npBack');
 
+    els.nePin = $('nePin');
+    els.neNote = $('neNote');
     els.neActive = $('neActive');
     els.neDone = $('neDone');
     els.neTrash = $('neTrash');
     els.neShop = $('neShop');
+    els.numPin = $('numPin');
+    els.numNote = $('numNote');
   }
 
   function openNotesPage() {
@@ -1318,7 +1346,7 @@ window.onerror = function (msg, url, line) {
       }
       if (!moving || Math.abs(dx) < 64 || Math.abs(dx) < Math.abs(dy)) { moving = false; return; }
       moving = false;
-      var views = [VIEW.ACTIVE, VIEW.DONE, VIEW.SHOP, VIEW.TRASH];
+      var views = [VIEW.PIN, VIEW.NOTE, VIEW.ACTIVE, VIEW.DONE, VIEW.SHOP, VIEW.TRASH];
       var idx = views.indexOf(state.view);
       if (idx < 0) return;
       var next;
@@ -2263,27 +2291,22 @@ window.onerror = function (msg, url, line) {
   }
 
   function updateCounts() {
-    var a = 0, d = 0, t = 0, sh = 0;
+    var c = { pin: 0, note: 0, active: 0, done: 0, shop: 0, trash: 0 };
     for (var i = 0; i < state.notes.length; i++) {
-      var s = state.notes[i].status;
-      var isShop = hasShopTag(state.notes[i]);
-      if (s === VIEW.DONE) { if (!isShop) d++; }
-      else if (s === VIEW.TRASH) t++;
-      else { if (!isShop) a++; }
-      if (s !== VIEW.TRASH && isShop) sh++;
+      c[noteCategory(state.notes[i])]++;
     }
-    if (els.numActive) els.numActive.textContent = a;
-    if (els.numDone)   els.numDone.textContent = d;
-    if (els.numTrash)  els.numTrash.textContent = t;
-    if (els.numShop)   els.numShop.textContent = sh;
-    if (els.neActive) els.neActive.textContent = a;
-    if (els.neDone)   els.neDone.textContent = d;
-    if (els.neTrash)  els.neTrash.textContent = t;
-    if (els.neShop)   els.neShop.textContent = sh;
-    if ($('neActiveTop')) $('neActiveTop').textContent = a;
-    if ($('neDoneTop'))   $('neDoneTop').textContent = d;
-    if ($('neTrashTop'))  $('neTrashTop').textContent = t;
-    if ($('neShopTop'))   $('neShopTop').textContent = sh;
+    if (els.numPin)    els.numPin.textContent = c.pin;
+    if (els.numNote)   els.numNote.textContent = c.note;
+    if (els.numActive) els.numActive.textContent = c.active;
+    if (els.numDone)   els.numDone.textContent = c.done;
+    if (els.numShop)   els.numShop.textContent = c.shop;
+    if (els.numTrash)  els.numTrash.textContent = c.trash;
+    if (els.nePin)     els.nePin.textContent = c.pin;
+    if (els.neNote)    els.neNote.textContent = c.note;
+    if (els.neActive)  els.neActive.textContent = c.active;
+    if (els.neDone)    els.neDone.textContent = c.done;
+    if (els.neShop)    els.neShop.textContent = c.shop;
+    if (els.neTrash)   els.neTrash.textContent = c.trash;
   }
 
   function hasShopTag(n) {
@@ -2318,11 +2341,8 @@ window.onerror = function (msg, url, line) {
 
       for (var i = 0; i < state.notes.length; i++) {
         var n = state.notes[i];
-        
-        if (state.view === VIEW.ACTIVE && (n.status !== VIEW.ACTIVE || hasShopTag(n))) continue;
-        if (state.view === VIEW.DONE && (n.status !== VIEW.DONE || hasShopTag(n))) continue;
-        if (state.view === VIEW.TRASH && n.status !== VIEW.TRASH) continue;
-        if (state.view === VIEW.SHOP && (n.status === VIEW.TRASH || !hasShopTag(n))) continue;
+
+        if (noteCategory(n) !== state.view) continue;
 
         if (kw && n.text.toLowerCase().indexOf(kw) === -1
             && (n.tags || []).join(' ').toLowerCase().indexOf(kw) === -1) continue;
@@ -2337,13 +2357,15 @@ window.onerror = function (msg, url, line) {
       if (!els.notesList) return;
 
       if (!list.length) {
-        var msg = state.view === VIEW.ACTIVE
-          ? '<span class="big">🌱</span>这里还空着。<br><span class="small">慢慢来，不用急</span>'
-          : state.view === VIEW.DONE
-          ? '<span class="big">🍃</span>还没有完成的事。<br><span class="small">做完了，就放到这里</span>'
-          : state.view === VIEW.SHOP
-          ? '<span class="big">🏬</span>店铺里还空着。<br><span class="small">打上 #店铺 标签的笔记会进这里</span>'
-          : '<span class="big">🗑</span>垃圾桶是空的。<br><span class="small">删掉的东西会先在这里</span>';
+        var EMPTY = {
+          pin:    '<span class="big">📌</span>还没有置顶的记录。<br><span class="small">打上 #置顶 标签的笔记会进这里</span>',
+          note:   '<span class="big">🌱</span>这里还空着。<br><span class="small">随手记的句子，会安静地躺在这里</span>',
+          active: '<span class="big">⏰</span>没有待办。<br><span class="small">说明了时间的笔记，会在这里等你</span>',
+          done:   '<span class="big">🍃</span>还没有完成的事。<br><span class="small">做完了，就放到这里</span>',
+          shop:   '<span class="big">🏬</span>店铺里还空着。<br><span class="small">打上 #店铺 标签的笔记会进这里</span>',
+          trash:  '<span class="big">🗑</span>垃圾桶是空的。<br><span class="small">删掉的东西会先在这里</span>'
+        };
+        var msg = EMPTY[state.view] || EMPTY.note;
         if (kw) msg = '<span class="big">🔍</span>没有找到匹配的记录。';
         els.notesList.innerHTML = '<div class="empty">' + msg + '</div>';
         return;
@@ -2519,7 +2541,7 @@ window.onerror = function (msg, url, line) {
       autoGrow(els.input);
       setRemindMode(false);
       els.aiBtn.style.display = 'none';
-      if (state.view !== VIEW.ACTIVE) { state.view = VIEW.ACTIVE; syncTabs(); }
+      if (state.view !== VIEW.SHOP) { state.view = VIEW.SHOP; syncTabs(); }
       state.listLimit = LIST_PAGE;
       render();
       toast(merged ? '已追加到当天该客户的清单' : '送货清单已存档');
@@ -2541,7 +2563,9 @@ window.onerror = function (msg, url, line) {
     saveLocal();
     scheduleSync();
 
-    if (state.view !== VIEW.ACTIVE) { state.view = VIEW.ACTIVE; syncTabs(); }
+    // 跳到新笔记所属的分类（六分类之一），保证发送后立刻看到
+    var newCat = noteCategory(state.notes[0]);
+    if (state.view !== newCat) { state.view = newCat; syncTabs(); }
     state.listLimit = LIST_PAGE;
     render();
     toast(remindAt ? '已记下，到时会提醒你' : '已记下');
