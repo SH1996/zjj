@@ -559,11 +559,18 @@
   .more-btn:active{background:var(--g100);color:var(--g600);border-color:var(--g400);}
 
   /* ===== 问过去的自己 ===== */
+  .ask-modes{display:flex;gap:8px;margin-bottom:12px;}
+  .ask-mode{flex:1;padding:9px 4px;border:1px solid var(--line);border-radius:999px;background:none;
+    color:var(--ink-faint);font:inherit;font-size:12.5px;letter-spacing:.04em;cursor:pointer;
+    transition:all .3s ease;-webkit-tap-highlight-color:transparent;}
+  .ask-mode.on{border-color:var(--g400);background:var(--g100);color:var(--g600);}
+  .ask-mode:active{opacity:.85;}
   .ask-answer{margin-top:14px;padding:13px 15px;border:1px solid var(--line);border-radius:14px;
     background:var(--card-hover);font-size:14px;line-height:1.95;max-height:38vh;overflow:auto;}
   .ask-answer.md-render>*:first-child{margin-top:0;}
   .ask-answer.md-render>*:last-child{margin-bottom:0;}
   .ask-refs{display:flex;flex-wrap:wrap;gap:6px;margin-top:10px;}
+  .ask-refs a.chip{text-decoration:none;color:var(--g600);border-color:var(--g200);}
   .ask-refs:empty{display:none;}
   .ask-refs .chip{cursor:pointer;}
   .ask-refs-title{width:100%;font-size:11px;color:var(--ink-faint);letter-spacing:.1em;}
@@ -1056,8 +1063,11 @@
 
 <div class="modal-mask" id="askMask">
   <div class="modal">
-    <h3>问过去的自己</h3>
-    <p>基于你的全部笔记回答。问得越具体，答得越诚实。</p>
+    <h3>问一问</h3>
+    <div class="ask-modes" id="askModes">
+      <button class="ask-mode on" id="askModeNotes" type="button">🌿 问笔记</button>
+      <button class="ask-mode" id="askModeWeb" type="button">🌐 问网络</button>
+    </div>
     <input type="text" id="askInput" placeholder="比如：我最近在纠结什么？" autocomplete="off">
     <div class="modal-actions">
       <button class="m-btn" id="askCancel" type="button">关闭</button>
@@ -1163,7 +1173,8 @@ window.onerror = function (msg, url, line) {
     isRecording: false,
     soulSeed: 0,
     listLimit: LIST_PAGE,
-    shopMode: false
+    shopMode: false,
+    askWeb: false
   };
 
   var recognition = null;
@@ -1226,6 +1237,8 @@ window.onerror = function (msg, url, line) {
     els.askBtn = $('askBtn');
     els.askMask = $('askMask');
     els.askInput = $('askInput');
+    els.askModeNotes = $('askModeNotes');
+    els.askModeWeb = $('askModeWeb');
     els.askAnswer = $('askAnswer');
     els.askRefs = $('askRefs');
 
@@ -3303,9 +3316,42 @@ window.onerror = function (msg, url, line) {
     return !!(c && c.aiUrl && c.aiKey && c.aiModel);
   }
 
-  function aiChat(prompt, temp) {
+  // 从用户配置的 AI 端点推导 origin（如 https://api.deepseek.com/chat/completions → https://api.deepseek.com）
+  function aiOrigin() {
+    try {
+      var u = new URL(state.config.aiUrl);
+      return u.origin;
+    } catch (e) { return null; }
+  }
+
+  // DeepSeek 官方 Search API（联网降级路径）：返回 [{title,url,snippet,summary,site_name,date}]
+  function webSearchApi(query) {
+    var base = aiOrigin();
+    if (!base) return Promise.reject(new Error('AI 接口地址无法解析'));
+    return fetch(base + '/v1/tools/search', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json', 'Authorization': 'Bearer ' + state.config.aiKey },
+      body: JSON.stringify({ query: String(query).slice(0, 128), count: 6, ori_question: String(query).slice(0, 128) })
+    }).then(function (res) {
+      if (!res.ok) throw new Error('搜索接口失败(' + res.status + ')');
+      return res.json();
+    }).then(function (data) {
+      var out = [];
+      if (data && Array.isArray(data.results)) {
+        for (var i = 0; i < data.results.length; i++) {
+          var r = data.results[i];
+          if (r && r.url && (r.summary || r.snippet)) {
+            out.push({ title: r.title || r.url, url: r.url, summary: r.summary || r.snippet, site: r.site_name || '', date: r.date || '' });
+          }
+        }
+      }
+      return out;
+    });
+  }
+
+  // 普通对话（不发工具）
+  function aiPlain(prompt, temp) {
     var cfg = state.config;
-    if (!hasAI()) return Promise.reject(new Error('未配置 AI'));
     return fetch(cfg.aiUrl, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json', 'Authorization': 'Bearer ' + cfg.aiKey },
@@ -3317,6 +3363,49 @@ window.onerror = function (msg, url, line) {
       var c = data.choices && data.choices[0] && data.choices[0].message && data.choices[0].message.content;
       if (!c) throw new Error('返回格式不正确');
       return String(c).trim();
+    });
+  }
+
+  // AI 调用主入口。opts.webSearch=true 时联网（DeepSeek web_search 工具优先，失败降级 Search API）
+  function aiChat(prompt, temp, opts) {
+    var cfg = state.config;
+    if (!hasAI()) return Promise.reject(new Error('未配置 AI'));
+    if (!opts || !opts.webSearch) return aiPlain(prompt, temp);
+
+    // 联网主路径：chat/completions + tools: web_search（模型自动搜索，答案自带来源）
+    return fetch(cfg.aiUrl, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json', 'Authorization': 'Bearer ' + cfg.aiKey },
+      body: JSON.stringify({
+        model: cfg.aiModel,
+        messages: [{ role: 'user', content: prompt }],
+        temperature: temp == null ? 0.4 : temp,
+        tools: [{ type: 'web_search' }]
+      })
+    }).then(function (res) {
+      if (!res.ok) {
+        // 服务不支持 web_search 工具 → 降级：Search API 拿结果再普通对话
+        return res.text().then(function () {
+          return webSearchApi(prompt).then(function (results) {
+            if (!results.length) throw new Error('联网没有搜到相关内容');
+            var ctx = '以下是联网搜索到的资料（请基于它们回答，并在句末用 [1][2] 标注来源序号）：\n';
+            for (var i = 0; i < results.length; i++) {
+              ctx += '[' + (i + 1) + '] ' + results[i].title + (results[i].site ? '（' + results[i].site + '）' : '') + '\n' + results[i].summary + '\n链接: ' + results[i].url + '\n\n';
+            }
+            ctx += '\n用户的问题：' + prompt + '\n请综合以上资料回答，简洁（300字内），保留关键数字与时间。';
+            return aiPlain(ctx, 0.3).then(function (text) {
+              return text + '\n\n__WEB_REFS__' + JSON.stringify(results);
+            });
+          }).catch(function (err) {
+            throw new Error('联网搜索不可用（' + err.message + '）。当前 AI 服务可能不支持联网，或网络受限');
+          });
+        });
+      }
+      return res.json().then(function (data) {
+        var c = data.choices && data.choices[0] && data.choices[0].message && data.choices[0].message.content;
+        if (!c) throw new Error('返回格式不正确');
+        return String(c).trim();
+      });
     });
   }
 
@@ -3455,11 +3544,23 @@ window.onerror = function (msg, url, line) {
      问过去的自己 · AI 问答
   ========================================= */
 
+  function setAskMode(web) {
+    state.askWeb = !!web;
+    if (els.askModeNotes) els.askModeNotes.classList.toggle('on', !web);
+    if (els.askModeWeb) els.askModeWeb.classList.toggle('on', !!web);
+    if (els.askInput) els.askInput.placeholder = web
+      ? '比如：DeepSeek 最新模型是什么？今天有什么新闻？'
+      : '比如：我最近在纠结什么？';
+    if (els.askAnswer) els.askAnswer.style.display = 'none';
+    if (els.askRefs) els.askRefs.innerHTML = '';
+  }
+
   function openAskModal() {
     if (els.askMask) els.askMask.classList.add('open');
     if (els.askInput) { els.askInput.value = ''; els.askInput.focus(); }
     if (els.askAnswer) els.askAnswer.style.display = 'none';
     if (els.askRefs) els.askRefs.innerHTML = '';
+    setAskMode(state.askWeb);
   }
   function closeAskModal() {
     if (els.askMask) els.askMask.classList.remove('open');
@@ -3484,6 +3585,24 @@ window.onerror = function (msg, url, line) {
     var q = els.askInput ? els.askInput.value.trim() : '';
     if (!q) { toast('先写一个问题吧'); return; }
     var ansEl = els.askAnswer, refsEl = els.askRefs;
+
+    // 联网模式
+    if (state.askWeb) {
+      if (!hasAI()) {
+        renderAskAnswer('联网问答需要先在设置里配置 AI（推荐 DeepSeek）。', []);
+        return;
+      }
+      if (ansEl) { ansEl.style.display = 'block'; ansEl.innerHTML = '<span style="color:var(--ink-faint)">联网查询中…</span>'; }
+      if (refsEl) refsEl.innerHTML = '';
+      aiChat(q, 0.3, { webSearch: true }).then(function (text) {
+        renderWebAnswer(text);
+      }).catch(function (err) {
+        renderAskAnswer('联网出错了：' + err.message, []);
+      });
+      return;
+    }
+
+    // 笔记模式（原逻辑）
     if (ansEl) { ansEl.style.display = 'block'; ansEl.innerHTML = '<span style="color:var(--ink-faint)">翻你的记录中…</span>'; }
     if (refsEl) refsEl.innerHTML = '';
 
@@ -3507,6 +3626,50 @@ window.onerror = function (msg, url, line) {
       });
     } else {
       renderAskAnswer('我在你的记录里找到了这些：', searchLocalNotes(q).map(function (h) { return h.id; }));
+    }
+  }
+
+  // 渲染联网答案：拆出降级路径带的 __WEB_REFS__，正文里提取来源链接
+  function renderWebAnswer(text) {
+    var refs = [];
+    var m = String(text || '').split('__WEB_REFS__');
+    var body = m[0].trim();
+    if (m[1]) {
+      try {
+        var parsed = JSON.parse(m[1]);
+        if (Array.isArray(parsed)) refs = parsed.slice(0, 6);
+      } catch (e) {}
+    }
+    if (!refs.length) {
+      // 主路径（web_search 工具）：从正文提取 URL 作为来源
+      var urls = body.match(/https?:\/\/[^\s)】」'"，。；]+/g) || [];
+      var seen = {};
+      for (var i = 0; i < urls.length && refs.length < 6; i++) {
+        var u = urls[i].replace(/[.,;:]+$/, '');
+        if (!seen[u]) { seen[u] = 1; refs.push({ title: u.replace(/^https?:\/\//, '').slice(0, 30), url: u }); }
+      }
+      // 过滤掉正文里已展示的链接（避免答案与来源重复）
+      if (refs.length) body = body.replace(/https?:\/\/[^\s)】」'"，。；]+/g, '').replace(/[ \t]{2,}/g, ' ').trim();
+    }
+    renderAskAnswer(body, []);
+    if (refs.length && els.askRefs) {
+      var refsEl = els.askRefs;
+      refsEl.innerHTML = '';
+      var title = document.createElement('span');
+      title.className = 'ask-refs-title';
+      title.textContent = '来源（点击打开）';
+      refsEl.appendChild(title);
+      for (var j = 0; j < refs.length; j++) {
+        (function (r) {
+          var a = document.createElement('a');
+          a.className = 'chip';
+          a.href = r.url;
+          a.target = '_blank';
+          a.rel = 'noopener noreferrer';
+          a.textContent = '🔗 ' + (r.title || r.url).slice(0, 18);
+          refsEl.appendChild(a);
+        })(refs[j]);
+      }
     }
   }
 
@@ -3907,6 +4070,8 @@ window.onerror = function (msg, url, line) {
 
     // 问过去的自己
     if (els.askBtn) els.askBtn.addEventListener('click', openAskModal);
+    if (els.askModeNotes) els.askModeNotes.addEventListener('click', function () { setAskMode(false); });
+    if (els.askModeWeb) els.askModeWeb.addEventListener('click', function () { setAskMode(true); });
     if ($('askCancel')) $('askCancel').addEventListener('click', closeAskModal);
     if ($('askGo')) $('askGo').addEventListener('click', doAsk);
     if (els.askInput) els.askInput.addEventListener('keydown', function (e) {
