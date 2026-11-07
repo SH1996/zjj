@@ -2,7 +2,7 @@
 <html lang="zh-CN">
 <head>
 <meta charset="UTF-8">
-<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
 <meta name="apple-mobile-web-app-capable" content="yes">
 <meta name="apple-mobile-web-app-status-bar-style" content="default">
 <meta name="theme-color" content="#5f8f57">
@@ -946,6 +946,9 @@
     <strong>AI 语音整理配置 (支持 OpenAI 格式)</strong><br>
     填入模型接口（如 DeepSeek）。录音后点击“AI 提炼”，帮你把废话变成清爽的待办。
   </p>
+  <p class="drawer-desc" style="font-size:11.5px;color:var(--ink-faint);border-left:2px solid var(--line);padding-left:10px;">
+    隐私提示：启用 AI 后，「AI 提炼」「竹语」「问一问」「本周回顾」会把相关笔记内容发送到你填写的模型服务；<strong>已删除的笔记不会外发</strong>。API 密钥与访问令牌以明文保存在本机浏览器，请只使用最小权限的密钥与细粒度令牌。
+  </p>
   <label class="field"><span>API 接口地址</span><input id="cfgAiUrl" placeholder="https://api.deepseek.com/chat/completions"></label>
   <label class="field"><span>API 密钥 (Key)</span><input id="cfgAiKey" type="password" placeholder="sk-..."></label>
   <label class="field"><span>模型名称 (Model)</span><input id="cfgAiModel" placeholder="deepseek-chat"></label>
@@ -982,9 +985,10 @@
     <button id="timeBtn" type="button">⏳ 时光机</button>
     <button id="reportBtn" type="button">🌿 本周回顾</button>
   </div>
+  <p style="text-align:center;font-size:11px;color:var(--ink-faint);margin-top:22px;letter-spacing:.08em;">竹间记 <span id="appVersion"></span> · 数据仅存本机与你的私有仓库</p>
 </aside>
 
-<div class="modal-mask" id="remindMask">
+<div class="modal-mask" id="remindMask" role="dialog" aria-modal="true">
   <div class="modal">
     <h3>设置提醒</h3>
     <p>到时间后，页面会轻轻提醒你。</p>
@@ -1008,7 +1012,7 @@
   </div>
 </div>
 
-<div class="modal-mask" id="pickerMask">
+<div class="modal-mask" id="pickerMask" role="dialog" aria-modal="true">
   <div class="modal no-anim">
     <h3>提醒时间</h3>
     <p>选一个时间，到点轻轻提醒你。</p>
@@ -1034,7 +1038,7 @@
   </div>
 </div>
 
-<div class="modal-mask" id="editMask">
+<div class="modal-mask" id="editMask" role="dialog" aria-modal="true">
   <div class="modal">
     <h3>修改笔记</h3>
     <p>随时可以修改过去的想法。</p>
@@ -1046,7 +1050,7 @@
   </div>
 </div>
 
-<div class="modal-mask" id="shareMask">
+<div class="modal-mask" id="shareMask" role="dialog" aria-modal="true">
   <div class="modal">
     <h3>寄出这段笔记</h3>
     <p>复制它，下载它，或是分享给别人。</p>
@@ -1061,7 +1065,7 @@
   </div>
 </div>
 
-<div class="modal-mask" id="askMask">
+<div class="modal-mask" id="askMask" role="dialog" aria-modal="true">
   <div class="modal">
     <h3>问一问</h3>
     <div class="ask-modes" id="askModes">
@@ -1078,7 +1082,7 @@
   </div>
 </div>
 
-<div class="modal-mask" id="timeMask">
+<div class="modal-mask" id="timeMask" role="dialog" aria-modal="true">
   <div class="modal">
     <h3>时光机</h3>
     <p>云端留着你每一次落笔的版本。</p>
@@ -1089,7 +1093,7 @@
   </div>
 </div>
 
-<div class="modal-mask" id="reportMask">
+<div class="modal-mask" id="reportMask" role="dialog" aria-modal="true">
   <div class="modal">
     <h3>本周回顾</h3>
     <p>把散落的一周，收成一页。可编辑后存为笔记。</p>
@@ -1102,7 +1106,7 @@
   </div>
 </div>
 
-<div class="modal-mask" id="imgMask">
+<div class="modal-mask" id="imgMask" role="dialog" aria-modal="true">
   <div class="modal">
     <h3>笔记卡片</h3>
     <div class="img-view-wrap">
@@ -1139,6 +1143,8 @@ window.onerror = function (msg, url, line) {
 (function () {
   'use strict';
 
+  // 版本号统一在此维护；localStorage 键沿用 v11 不变，切勿改名以免丢失用户数据
+  var APP_VERSION = '12.1';
   var LS_CONFIG = 'bamboo.v11.config';
   var LS_NOTES  = 'bamboo.v11.notes';
   var LS_THEME  = 'bamboo.v11.theme';
@@ -1174,7 +1180,8 @@ window.onerror = function (msg, url, line) {
     soulSeed: 0,
     listLimit: LIST_PAGE,
     shopMode: false,
-    askWeb: false
+    askWeb: false,
+    loadError: false
   };
 
   var recognition = null;
@@ -1379,9 +1386,8 @@ window.onerror = function (msg, url, line) {
   }
 
   function initPinchLock() {
-    document.addEventListener('touchmove', function (e) {
-      if (e.touches && e.touches.length > 1) e.preventDefault();
-    }, { passive: false });
+    // v12.1：放开双指缩放（无障碍 WCAG 1.4.4），不再全局拦截 touchmove
+    return;
   }
 
   function uid() { return Date.now().toString(36) + Math.random().toString(36).slice(2, 8); }
@@ -1393,28 +1399,56 @@ window.onerror = function (msg, url, line) {
     });
   }
 
+  function escapeRegExp(s) {
+    return String(s).replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+  }
+
+  // 高亮只作用于文本节点：先把干净 HTML 解析成 DOM 再逐节点包裹。
+  // 旧实现直接对已生成的标签串做 split，搜索 "span"/"br"/"md"/"class" 会拆碎标签与实体。
+  function highlightHTML(html, kw) {
+    if (!kw) return html;
+    try {
+      var box = document.createElement('div');
+      box.innerHTML = html;
+      var walker = document.createTreeWalker(box, NodeFilter.SHOW_TEXT, null);
+      var nodes = [], nd;
+      while ((nd = walker.nextNode())) nodes.push(nd);
+      var lower = String(kw).toLowerCase();
+      for (var i = 0; i < nodes.length; i++) {
+        var node = nodes[i], val = node.nodeValue;
+        if (!val || val.toLowerCase().indexOf(lower) === -1) continue;
+        var re = new RegExp(escapeRegExp(kw), 'gi');
+        var frag = document.createDocumentFragment();
+        var pos = 0, m;
+        while ((m = re.exec(val)) !== null) {
+          if (!m[0].length) { re.lastIndex++; continue; }
+          if (m.index > pos) frag.appendChild(document.createTextNode(val.slice(pos, m.index)));
+          var sp = document.createElement('span');
+          sp.className = 'md-highlight';
+          sp.textContent = m[0];
+          frag.appendChild(sp);
+          pos = m.index + m[0].length;
+        }
+        if (!pos) continue;
+        if (pos < val.length) frag.appendChild(document.createTextNode(val.slice(pos)));
+        node.parentNode.replaceChild(frag, node);
+      }
+      return box.innerHTML;
+    } catch (e) { return html; }
+  }
+
   function renderMarkdown(text, highlightKw) {
     var html = escapeHTML(text);
     
     html = html.replace(/\*\*(.*?)\*\*/g, '<span class="md-bold">$1</span>');
-    html = html.replace(/\*(.*?)\*/g, '<span class="md-italic">$1</span>');
+    html = html.replace(/(^|[\s(（])\*([^\s*][^*]*?)\*(?=$|[\s)）,，。！？;；:：])/g, '$1<span class="md-italic">$2</span>');
     html = html.replace(/`(.*?)`/g, '<span class="md-code">$1</span>');
     html = html.replace(/^> (.*)/gm, '<div class="md-quote">$1</div>');
     html = html.replace(/^[-*] (.*)/gm, '<div class="md-list-item">$1</div>');
     html = html.replace(/(^|\s)#([^\s#]+)/g, '$1<span class="chip-tag">#$2</span>');
     html = html.replace(/\n/g, '<br>');
 
-    if (highlightKw) {
-      var reg = new RegExp('(' + highlightKw.replace(/[.*+?^${}()|[\]\\]/g, '\\$&') + ')', 'gi');
-      html = html.split(reg).map(function(part, i) {
-        if (i % 2 === 1) {
-          return '<span class="md-highlight">' + part + '</span>';
-        }
-        return part;
-      }).join('');
-    }
-
-    return html;
+    return highlightKw ? highlightHTML(html, highlightKw) : html;
   }
 
   function fmtDate(iso) {
@@ -1935,6 +1969,7 @@ window.onerror = function (msg, url, line) {
     state.notes.unshift({
       id: uid(), text: text, createdAt: now, updatedAt: now,
       status: VIEW.ACTIVE, remindAt: null, repeat: 'none', reminded: false,
+      remindDay: null,
       doneAt: null, deletedAt: null, tags: ['店铺']
     });
     addOps('add', text);
@@ -2173,6 +2208,7 @@ window.onerror = function (msg, url, line) {
       updatedAt: n.updatedAt || n.createdAt || new Date().toISOString(),
       status: s,
       remindAt: n.remindAt || null,
+      remindDay: (typeof n.remindDay === 'number' && n.remindDay >= 1 && n.remindDay <= 31) ? n.remindDay : null,
       reminded: !!n.reminded,
       repeat: n.repeat || 'none',
       doneAt: n.doneAt || null,
@@ -2281,18 +2317,53 @@ window.onerror = function (msg, url, line) {
     if (state.ops.length > 100) state.ops.length = 100;
   }
 
-  function saveLocal() {
-    try { localStorage.setItem(LS_NOTES, JSON.stringify({ notes: state.notes, tombstones: state.tombstones, ops: state.ops })); } catch (e) {}
+  function showStorageError(msg) {
+    try {
+      var bar = document.getElementById('errBar');
+      var txt = document.getElementById('errMsg');
+      if (bar && txt) { txt.textContent = msg; bar.classList.add('show'); }
+    } catch (e) {}
   }
+
+  function saveLocal() {
+    if (state.loadError) { showStorageError('本地数据读取异常，已暂停写入以防覆盖，请先导出备份'); return false; }
+    try {
+      var payload = JSON.stringify({ notes: state.notes, tombstones: state.tombstones, ops: state.ops });
+      localStorage.setItem(LS_NOTES, payload);
+      if (localStorage.getItem(LS_NOTES) !== payload) {
+        showStorageError('本地数据写入校验失败，请到设置导出备份');
+        return false;
+      }
+      return true;
+    } catch (e) {
+      var quota = e && (e.name === 'QuotaExceededError' || e.name === 'NS_ERROR_DOM_QUOTA_REACHED' || e.code === 22);
+      showStorageError(quota
+        ? '浏览器存储空间已满，这条可能没保存！请到设置导出备份并清理旧数据'
+        : ('本地保存失败：' + (e && e.message ? e.message : '未知错误') + '，请导出备份'));
+      return false;
+    }
+  }
+
   function loadLocal() {
     try {
       var raw = localStorage.getItem(LS_NOTES);
-      if (!raw) { state.notes = []; state.tombstones = []; state.ops = []; return; }
+      if (!raw) { state.notes = []; state.tombstones = []; state.ops = []; state.loadError = false; return; }
       var data = JSON.parse(raw);
-      state.notes = cleanNotes(data && data.notes);
-      state.tombstones = cleanTombstones(data && data.tombstones);
-      state.ops = cleanOps(data && data.ops);
-    } catch (e) { state.notes = []; state.tombstones = []; state.ops = []; }
+      if (!data || typeof data !== 'object' || !Array.isArray(data.notes)) throw new Error('数据结构异常');
+      state.notes = cleanNotes(data.notes);
+      state.tombstones = cleanTombstones(data.tombstones);
+      state.ops = cleanOps(data.ops);
+      state.loadError = false;
+    } catch (e) {
+      // 绝不静默清空：先把原始串另存，再进入只读保护
+      state.loadError = true;
+      try {
+        var bad = localStorage.getItem(LS_NOTES);
+        if (bad) localStorage.setItem('bamboo.v11.notes.corrupt.' + Date.now(), bad);
+      } catch (e2) {}
+      state.notes = []; state.tombstones = []; state.ops = [];
+      showStorageError('本地笔记读取失败，已暂停写入以免覆盖（原始片段已另存）。请到设置导出或导入备份');
+    }
   }
   function loadCfg() {
     try {
@@ -2329,10 +2400,9 @@ window.onerror = function (msg, url, line) {
         if (String(n.tags[i]).indexOf('店铺') !== -1) return true;
       }
     }
+    // 单一 indexOf 已覆盖所有后缀写法；原先逐个枚举分隔符是冗余的
     var txt = String(n.text || '');
-    return txt.indexOf('#店铺') !== -1 || txt.indexOf('#店铺 ') !== -1 ||
-           txt.indexOf('#店铺\n') !== -1 || txt.indexOf('#店铺，') !== -1 ||
-           txt.indexOf('#店铺。') !== -1 || txt.indexOf('#店铺,') !== -1;
+    return txt.indexOf('#店铺') !== -1;
   }
 
   var ICON = {
@@ -2434,18 +2504,18 @@ window.onerror = function (msg, url, line) {
 
     var acts = '<div class="note-actions">';
     if (isTrash) {
-      acts += '<button type="button" class="act restore" data-act="restore" data-id="' + escapeHTML(n.id) + '">' + ICON.restore + '</button>';
-      acts += '<button type="button" class="act purge" data-act="purge" data-id="' + escapeHTML(n.id) + '">' + ICON.purge + '</button>';
+      acts += '<button type="button" class="act restore" data-act="restore" aria-label="恢复" data-id="' + escapeHTML(n.id) + '">' + ICON.restore + '</button>';
+      acts += '<button type="button" class="act purge" data-act="purge" aria-label="彻底删除" data-id="' + escapeHTML(n.id) + '">' + ICON.purge + '</button>';
     } else if (isDone) {
-      acts += '<button type="button" class="act reopen" data-act="reopen" data-id="' + escapeHTML(n.id) + '">' + ICON.reopen + '</button>';
-      acts += '<button type="button" class="act share" data-act="share" data-id="' + escapeHTML(n.id) + '">' + ICON.share + '</button>';
-      acts += '<button type="button" class="act del" data-act="del" data-id="' + escapeHTML(n.id) + '">' + ICON.trash + '</button>';
+      acts += '<button type="button" class="act reopen" data-act="reopen" aria-label="重新打开" data-id="' + escapeHTML(n.id) + '">' + ICON.reopen + '</button>';
+      acts += '<button type="button" class="act share" data-act="share" aria-label="分享" data-id="' + escapeHTML(n.id) + '">' + ICON.share + '</button>';
+      acts += '<button type="button" class="act del" data-act="del" aria-label="删除" data-id="' + escapeHTML(n.id) + '">' + ICON.trash + '</button>';
     } else {
-      acts += '<button type="button" class="act edit" data-act="edit" data-id="' + escapeHTML(n.id) + '">' + ICON.edit + '</button>';
-      acts += '<button type="button" class="act done" data-act="done" data-id="' + escapeHTML(n.id) + '">' + ICON.done + '</button>';
-      acts += '<button type="button" class="act remind" data-act="remind" data-id="' + escapeHTML(n.id) + '">' + ICON.bell + '</button>';
-      acts += '<button type="button" class="act share" data-act="share" data-id="' + escapeHTML(n.id) + '">' + ICON.share + '</button>';
-      acts += '<button type="button" class="act del" data-act="del" data-id="' + escapeHTML(n.id) + '">' + ICON.trash + '</button>';
+      acts += '<button type="button" class="act edit" data-act="edit" aria-label="修改" data-id="' + escapeHTML(n.id) + '">' + ICON.edit + '</button>';
+      acts += '<button type="button" class="act done" data-act="done" aria-label="标记完成" data-id="' + escapeHTML(n.id) + '">' + ICON.done + '</button>';
+      acts += '<button type="button" class="act remind" data-act="remind" aria-label="设置提醒" data-id="' + escapeHTML(n.id) + '">' + ICON.bell + '</button>';
+      acts += '<button type="button" class="act share" data-act="share" aria-label="分享" data-id="' + escapeHTML(n.id) + '">' + ICON.share + '</button>';
+      acts += '<button type="button" class="act del" data-act="del" aria-label="删除" data-id="' + escapeHTML(n.id) + '">' + ICON.trash + '</button>';
     }
     acts += '</div>';
 
@@ -2464,38 +2534,42 @@ window.onerror = function (msg, url, line) {
     return null;
   }
 
-  function calcNextRemind(iso, repeat) {
+  function calcNextRemind(iso, repeat, anchorDay) {
     var d = new Date(iso);
     if (isNaN(d.getTime())) return null;
-    
+    // 每月循环以「首次设定的日」为锚点，避免 1/31 → 2/28 → 3/28 的永久漂移
+    var wantDay = (typeof anchorDay === 'number' && anchorDay >= 1 && anchorDay <= 31)
+      ? anchorDay : d.getDate();
+
     if (repeat === 'daily') {
       d.setDate(d.getDate() + 1);
     } else if (repeat === 'weekly') {
       d.setDate(d.getDate() + 7);
     } else if (repeat === 'monthly') {
+      d.setDate(1);
       var targetMonth = d.getMonth() + 1;
       var targetYear = d.getFullYear() + Math.floor(targetMonth / 12);
       targetMonth = targetMonth % 12;
       var maxDay = new Date(targetYear, targetMonth + 1, 0).getDate();
-      var targetDay = Math.min(d.getDate(), maxDay);
-      d.setFullYear(targetYear, targetMonth, targetDay);
+      d.setFullYear(targetYear, targetMonth, Math.min(wantDay, maxDay));
     }
-    
+
     if (repeat !== 'none') {
-      while (d.getTime() <= Date.now()) {
+      var guard = 0;
+      while (d.getTime() <= Date.now() && guard++ < 2000) {
         if (repeat === 'daily') d.setDate(d.getDate() + 1);
         else if (repeat === 'weekly') d.setDate(d.getDate() + 7);
         else if (repeat === 'monthly') {
+          d.setDate(1);
           var tm = d.getMonth() + 1;
           var ty = d.getFullYear() + Math.floor(tm / 12);
           tm = tm % 12;
           var md = new Date(ty, tm + 1, 0).getDate();
-          var td = Math.min(d.getDate(), md);
-          d.setFullYear(ty, tm, td);
-        }
+          d.setFullYear(ty, tm, Math.min(wantDay, md));
+        } else break; // 未知循环类型：防止死循环
       }
     }
-    
+
     return d.toISOString();
   }
 
@@ -2565,6 +2639,7 @@ window.onerror = function (msg, url, line) {
     state.notes.unshift({
       id: uid(), text: text, createdAt: now, updatedAt: now,
       status: VIEW.ACTIVE, remindAt: remindAt, repeat: repeat, reminded: false,
+      remindDay: remindAt ? new Date(remindAt).getDate() : null,
       doneAt: null, deletedAt: null, tags: tagRes.tags
     });
     addOps('add', text);
@@ -3049,7 +3124,10 @@ window.onerror = function (msg, url, line) {
   }
 
   function exportData() {
-    var dataStr = JSON.stringify({ notes: state.notes }, null, 2);
+    var dataStr = JSON.stringify({
+      app: '竹间记', schema: 2, exportedAt: new Date().toISOString(),
+      notes: state.notes, tombstones: state.tombstones, ops: state.ops
+    }, null, 2);
     var blob = new Blob([dataStr], {type: 'application/json'});
     var url = URL.createObjectURL(blob);
     var a = document.createElement('a');
@@ -3070,16 +3148,20 @@ window.onerror = function (msg, url, line) {
       try {
         var data = JSON.parse(evt.target.result);
         if (data && Array.isArray(data.notes)) {
-          if (window.confirm('导入将覆盖当前本地记录，确定吗？')) {
-            state.notes = cleanNotes(data.notes);
-            state.tombstones = [];
-            state.ops = [];
-            saveLocal();
-            render();
-            toast('导入成功');
-            closeDrawer();
-            scheduleSync();
+          if (!window.confirm('导入将覆盖当前 ' + state.notes.length + ' 条本地记录，并同步覆盖云端。确定吗？')) {
+            $('importFile').value = '';
+            return;
           }
+          if (state.notes.length) exportData(); // 覆盖前自动留一份当前快照，误操作可回退
+          state.notes = cleanNotes(data.notes);
+          state.tombstones = cleanTombstones(data.tombstones || []);
+          state.ops = cleanOps(data.ops || []);
+          state.loadError = false;
+          saveLocal();
+          render();
+          toast('导入成功');
+          closeDrawer();
+          scheduleSync();
         } else {
           toast('文件格式不正确');
         }
@@ -3113,7 +3195,8 @@ window.onerror = function (msg, url, line) {
   function openDrawer() {
     var c = state.config || {};
     if ($('cfgAiUrl')) $('cfgAiUrl').value = c.aiUrl || '';
-    if ($('cfgAiKey')) $('cfgAiKey').value = c.aiKey || '';
+    // 凭据不回显：留空表示沿用已保存值，避免明文出现在输入框与截图里
+    if ($('cfgAiKey')) { $('cfgAiKey').value = ''; $('cfgAiKey').placeholder = c.aiKey ? '已保存（留空表示不修改）' : 'sk-...'; }
     if ($('cfgAiModel')) $('cfgAiModel').value = c.aiModel || '';
     
     if ($('cfgPushUrl')) $('cfgPushUrl').value = c.pushUrl || '';
@@ -3121,8 +3204,9 @@ window.onerror = function (msg, url, line) {
     if ($('cfgRepo'))   $('cfgRepo').value   = c.repo || '';
     if ($('cfgPath'))   $('cfgPath').value   = c.path || 'notes.json';
     if ($('cfgBranch')) $('cfgBranch').value = c.branch || 'main';
-    if ($('cfgToken'))  $('cfgToken').value  = c.token || '';
+    if ($('cfgToken'))  { $('cfgToken').value = ''; $('cfgToken').placeholder = c.token ? '已保存（留空表示不修改）' : 'github_pat_...'; }
     
+    if ($('appVersion')) $('appVersion').textContent = 'v' + APP_VERSION;
     if (els.drawer) els.drawer.classList.add('open');
     if (els.mask) els.mask.classList.add('open');
   }
@@ -3197,6 +3281,36 @@ window.onerror = function (msg, url, line) {
     return false;
   }
 
+  // 写入前确认目标仓库确实为私有；无法确认时不阻断（避免网络问题误伤同步）
+  function assertRepoPrivate() {
+    var cfg = state.config;
+    if (!cfg || !cfg.owner || !cfg.repo || !cfg.token) return Promise.resolve();
+    var url = 'https://api.github.com/repos/' + encodeURIComponent(cfg.owner) + '/' + encodeURIComponent(cfg.repo);
+    return fetch(url, { headers: ghHeaders(cfg.token), cache: 'no-store' }).then(function (res) {
+      if (!res.ok) return;
+      return res.json().then(function (repo) {
+        if (repo && repo.private === false) {
+          throw new Error('同步目标「' + cfg.repo + '」是公开仓库，已阻止写入，请改用私有仓库');
+        }
+      });
+    });
+  }
+
+  // 读取云端原始内容（不解析），用于写入前比对，避免产生无意义的新版本
+  function ghReadRaw() {
+    var cfg = state.config;
+    var url = 'https://api.github.com/repos/' +
+      encodeURIComponent(cfg.owner) + '/' + encodeURIComponent(cfg.repo) + '/contents/' +
+      encodePath(cfg.path) + '?ref=' + encodeURIComponent(cfg.branch || 'main') + '&t=' + Date.now();
+    return fetch(url, { headers: ghHeaders(cfg.token), cache: 'no-store' }).then(function (res) {
+      if (res.status === 404) return { sha: null, content: '' };
+      if (!res.ok) return null;
+      return res.json().then(function (d) {
+        return { sha: d.sha || null, content: String(d.content || '').replace(/\s/g, '') };
+      });
+    }).catch(function () { return null; });
+  }
+
   function ghSave() {
     var cfg = state.config;
     if (!cfg || !cfg.owner || !cfg.repo || !cfg.token) return Promise.reject(new Error('未配置云端'));
@@ -3206,28 +3320,36 @@ window.onerror = function (msg, url, line) {
       return Promise.reject(new Error('同步目标为公开仓库，已阻止'));
     }
     var payload = {
-      message: '竹间记 · ' + new Date().toLocaleString('zh-CN'),
+      message: '竹间记 v' + APP_VERSION + ' · ' + state.notes.length + ' 条 · ' + new Date().toLocaleString('zh-CN'),
       content: b64encode(JSON.stringify({ notes: state.notes, tombstones: state.tombstones }, null, 2)),
       branch: cfg.branch || 'main'
     };
-    if (state.sha) payload.sha = state.sha;
-    var url = 'https://api.github.com/repos/' +
-      encodeURIComponent(cfg.owner) + '/' +
-      encodeURIComponent(cfg.repo) + '/contents/' +
-      encodePath(cfg.path);
-    var headers = ghHeaders(cfg.token);
-    headers['Content-Type'] = 'application/json';
-    return fetch(url, {
-      method: 'PUT', headers: headers, body: JSON.stringify(payload)
-    }).then(function (res) {
-      if (!res.ok) {
-        return res.text().then(function () {
-          if (res.status === 409) { state.sha = null; throw new Error('云端有更新，稍后重试'); }
-          throw new Error('写入失败 (' + res.status + ')');
-        });
+    return Promise.all([ghReadRaw(), assertRepoPrivate()]).then(function (res) {
+      var raw = res[0];
+      if (raw && raw.content && raw.content === payload.content) {
+        if (raw.sha) state.sha = raw.sha;
+        return { skipped: true }; // 内容未变：不生成新 commit
       }
-      return res.json().then(function (data) {
-        if (data && data.content && data.content.sha) state.sha = data.content.sha;
+      if (raw && raw.sha) payload.sha = raw.sha;
+      else if (state.sha) payload.sha = state.sha;
+      var headers = ghHeaders(cfg.token);
+      headers['Content-Type'] = 'application/json';
+      var url = 'https://api.github.com/repos/' +
+        encodeURIComponent(cfg.owner) + '/' +
+        encodeURIComponent(cfg.repo) + '/contents/' +
+        encodePath(cfg.path);
+      return fetch(url, {
+        method: 'PUT', headers: headers, body: JSON.stringify(payload)
+      }).then(function (r) {
+        if (!r.ok) {
+          return r.text().then(function () {
+            if (r.status === 409) { state.sha = null; throw new Error('云端有更新，稍后重试'); }
+            throw new Error('写入失败 (' + r.status + ')');
+          });
+        }
+        return r.json().then(function (data) {
+          if (data && data.content && data.content.sha) state.sha = data.content.sha;
+        });
       });
     });
   }
@@ -3245,8 +3367,10 @@ window.onerror = function (msg, url, line) {
     ghSave().then(function () {
       setSync('已存于云端');
     }).catch(function (err) {
-      setSync(err.message || '写入失败', 'err');
+      var msg = err.message || '写入失败';
+      setSync(msg, 'err');
       clearTimeout(syncTimer);
+      if (/公开仓库/.test(msg)) return; // 目标为公开仓库时不再自动重试
       syncTimer = setTimeout(pushToGitHub, 15000);
     });
   }
@@ -3275,24 +3399,36 @@ window.onerror = function (msg, url, line) {
 
         if (state.config && state.config.pushUrl) {
           var pushUrl = state.config.pushUrl.trim();
+          // 按 URL 编码后的长度截断：中文每字约占 9 个字符，直接按字数截会把 Bark URL 撑得过长。
+          // 用 Array.from 按码点遍历，避免把 emoji 的代理对拆开导致 encodeURIComponent 抛错。
+          var pushBody = String(n.text || '');
+          if (encodeURIComponent(pushBody).length > 600) {
+            var pushChars = Array.from(pushBody), pushOut = '', pushUsed = 0;
+            for (var pci = 0; pci < pushChars.length && pushUsed < 600; pci++) {
+              var encCh = encodeURIComponent(pushChars[pci]);
+              if (pushUsed + encCh.length > 600) break;
+              pushOut += pushChars[pci]; pushUsed += encCh.length;
+            }
+            pushBody = pushOut + '…';
+          }
           if (pushUrl.indexOf('api.day.app') > -1) {
             var urlParts = pushUrl.split('api.day.app/');
             var keyPart = urlParts.length > 1 ? urlParts[1].split('/')[0] : '';
             if (keyPart) {
-              var finalUrl = 'https://api.day.app/' + keyPart + '/' + encodeURIComponent('竹间记提醒') + '/' + encodeURIComponent(n.text);
+              var finalUrl = 'https://api.day.app/' + keyPart + '/' + encodeURIComponent('竹间记提醒') + '/' + encodeURIComponent(pushBody);
               fetch(finalUrl).catch(function(){});
             }
           } else if (pushUrl.startsWith('http')) {
             fetch(pushUrl, {
               method: 'POST',
               headers: {'Content-Type': 'application/json'},
-              body: JSON.stringify({ title: '竹间记提醒', body: n.text })
+              body: JSON.stringify({ title: '竹间记提醒', body: pushBody })
             }).catch(function(){});
           }
         }
 
         if (n.repeat !== 'none') {
-          var nextTime = calcNextRemind(n.remindAt, n.repeat);
+          var nextTime = calcNextRemind(n.remindAt, n.repeat, n.remindDay);
           if (nextTime) {
             n.remindAt = nextTime;
             n.reminded = false; 
@@ -3324,6 +3460,14 @@ window.onerror = function (msg, url, line) {
     } catch (e) { return null; }
   }
 
+  // 只放行 http/https，避免第三方返回值被直接写进 a.href
+  function safeHttpUrl(u) {
+    try {
+      var x = new URL(String(u));
+      return (x.protocol === 'http:' || x.protocol === 'https:') ? x.href : '';
+    } catch (e) { return ''; }
+  }
+
   // DeepSeek 官方 Search API（联网降级路径）：返回 [{title,url,snippet,summary,site_name,date}]
   function webSearchApi(query) {
     var base = aiOrigin();
@@ -3341,7 +3485,9 @@ window.onerror = function (msg, url, line) {
         for (var i = 0; i < data.results.length; i++) {
           var r = data.results[i];
           if (r && r.url && (r.summary || r.snippet)) {
-            out.push({ title: r.title || r.url, url: r.url, summary: r.summary || r.snippet, site: r.site_name || '', date: r.date || '' });
+            var safe = safeHttpUrl(r.url);
+            if (!safe) continue;
+            out.push({ title: r.title || safe, url: safe, summary: r.summary || r.snippet, site: r.site_name || '', date: r.date || '' });
           }
         }
       }
@@ -3461,7 +3607,7 @@ window.onerror = function (msg, url, line) {
     for (i = 0; i < state.ops.length; i++) {
       var o = state.ops[i];
       if (o.type === 'purge' && o.txt) {
-        if (s.delSample.length < 5) s.delSample.push(o.txt.slice(0, 30));
+        // v12.1：已删除笔记的正文不外发给第三方模型，仅保留计数
         if (now - o.t < 7 * 86400000) s.purgedWeek++;
       }
     }
@@ -3568,9 +3714,10 @@ window.onerror = function (msg, url, line) {
 
   function buildAskContext() {
     var parts = [], i;
-    var sorted = state.notes.slice().sort(function (a, b) {
-      return new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime();
-    });
+    var sorted = state.notes.filter(function (n) { return n.status !== VIEW.TRASH; })
+      .sort(function (a, b) {
+        return new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime();
+      });
     var shown = Math.min(sorted.length, 80);
     for (i = 0; i < shown; i++) {
       var n = sorted[i];
@@ -3661,9 +3808,11 @@ window.onerror = function (msg, url, line) {
       refsEl.appendChild(title);
       for (var j = 0; j < refs.length; j++) {
         (function (r) {
+          var safeHref = safeHttpUrl(r.url);
+          if (!safeHref) return;
           var a = document.createElement('a');
           a.className = 'chip';
-          a.href = r.url;
+          a.href = safeHref;
           a.target = '_blank';
           a.rel = 'noopener noreferrer';
           a.textContent = '🔗 ' + (r.title || r.url).slice(0, 18);
@@ -3893,6 +4042,7 @@ window.onerror = function (msg, url, line) {
     state.notes.unshift({
       id: uid(), text: text, createdAt: now, updatedAt: now,
       status: VIEW.ACTIVE, remindAt: null, repeat: 'none', reminded: false,
+      remindDay: null,
       doneAt: null, deletedAt: null, tags: ['周报']
     });
     addOps('add', text);
@@ -3911,6 +4061,7 @@ window.onerror = function (msg, url, line) {
     var n = findNote(state.editingId);
     if (!n) { closeRemindModal(); return; }
     n.remindAt = new Date(Date.now() + mins * 60000).toISOString();
+    n.remindDay = new Date(n.remindAt).getDate();
     n.reminded = false;
     n.updatedAt = new Date().toISOString();
     addOps('snooze', n.text);
@@ -4134,14 +4285,14 @@ window.onerror = function (msg, url, line) {
     $('saveConfig').addEventListener('click', function () {
       var cfg = {
         aiUrl: $('cfgAiUrl').value.trim(),
-        aiKey: $('cfgAiKey').value.trim(),
+        aiKey: ($('cfgAiKey').value.trim() || (state.config && state.config.aiKey) || ''),
         aiModel: $('cfgAiModel').value.trim(),
         pushUrl: $('cfgPushUrl').value.trim(),
         owner: $('cfgOwner').value.trim(),
         repo: $('cfgRepo').value.trim(),
         path: ($('cfgPath').value.trim() || 'notes.json'),
         branch: ($('cfgBranch').value.trim() || 'main'),
-        token: $('cfgToken').value.trim()
+        token: ($('cfgToken').value.trim() || (state.config && state.config.token) || '')
       };
       
       state.config = cfg;
@@ -4161,10 +4312,14 @@ window.onerror = function (msg, url, line) {
       if (cfg.owner) {
         setSync('正在读取云端…', 'warn');
         ghLoad().then(function (remote) {
-          mergeRemote(remote);
+          var changed = mergeRemote(remote);
           setSync('已连上云端');
           toast('配置已保存，云端同步成功');
-          pushToGitHub();
+          if (changed) pushToGitHub(); // 内容无变化时不再产生新的云端版本
+          assertRepoPrivate().catch(function (e) {
+            setSync(e.message, 'err');
+            toast('⚠ ' + e.message);
+          });
         }).catch(function (err) {
           setSync(err.message || '连接失败', 'err');
           toast('配置已保存，但云端连接失败');
@@ -4197,6 +4352,7 @@ window.onerror = function (msg, url, line) {
       if (n) {
         var iso = fromLocalInput(els.modalInput.value);
         n.remindAt = iso; n.reminded = false;
+        n.remindDay = iso ? new Date(iso).getDate() : null;
         n.repeat = els.modalRepeatInput.value;
         if (iso) addOps('remind', n.text);
         n.updatedAt = new Date().toISOString();
@@ -4277,10 +4433,11 @@ window.onerror = function (msg, url, line) {
         toast('⚠ 同步仓库是公开的，笔记会全世界可见！点设置改成私有仓库');
       } else {
         setSync('正在读取云端…', 'warn');
-        ghLoad().then(function (remote) {
+          ghLoad().then(function (remote) {
           var changed = mergeRemote(remote);
           if (changed) scheduleSync();
           else setSync('已连上云端');
+          assertRepoPrivate().catch(function (e) { setSync(e.message, 'err'); });
         }).catch(function (err) {
           setSync(err.message || '读不到云端', 'err');
         });
@@ -4289,7 +4446,21 @@ window.onerror = function (msg, url, line) {
       setSync('本地记录中');
     }
 
-    console.log('[竹间记] 初始化完成');
+    // 多标签页：其它标签写入时重新载入并渲染；只读取、不回写，避免互相触发
+    window.addEventListener('storage', function (ev) {
+      if (ev.key !== LS_NOTES || !ev.newValue) return;
+      try {
+        var d = JSON.parse(ev.newValue);
+        if (!d || !Array.isArray(d.notes)) return;
+        state.notes = cleanNotes(d.notes);
+        state.tombstones = cleanTombstones(d.tombstones);
+        state.ops = cleanOps(d.ops);
+        state.loadError = false;
+        render();
+      } catch (e) {}
+    });
+
+    console.log('[竹间记] v' + APP_VERSION + ' 初始化完成');
   }
 
   if (document.readyState === 'loading') {
