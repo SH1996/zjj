@@ -682,6 +682,43 @@
   .shop-total-unit{font-size:12px;color:var(--ink-faint);}
   .shop-actions{display:flex;gap:8px;margin-top:14px;}
 
+  /* ===== 送货单拍照识别 ===== */
+  .shop-scan{
+    margin:0 0 14px;padding:12px;border:1px dashed var(--g300);border-radius:14px;
+    background:var(--g100);
+  }
+  .shop-scan-title{font-size:12px;letter-spacing:.08em;color:var(--g700);margin:0 0 9px;line-height:1.6;}
+  .shop-scan-btns{display:flex;gap:8px;flex-wrap:wrap;}
+  .shop-scan-btn{
+    flex:1 1 auto;min-width:132px;padding:10px 12px;border-radius:11px;
+    border:1px solid var(--g300);background:var(--card);color:var(--g700);
+    font:inherit;font-size:12.5px;cursor:pointer;letter-spacing:.03em;
+    -webkit-tap-highlight-color:transparent;
+  }
+  .shop-scan-btn:active{border-color:var(--g400);}
+  .shop-scan-btn.solid{
+    background:linear-gradient(135deg,#d4af5a,#a8873d);
+    color:#fff;border-color:transparent;
+  }
+  .shop-scan-btn:disabled{opacity:.55;cursor:default;}
+  .shop-scan-status{
+    font-size:11.5px;color:var(--ink-soft);line-height:1.75;margin-top:9px;
+    word-break:break-word;
+  }
+  .shop-scan-status.err{color:var(--danger);}
+  .shop-photos{display:flex;gap:8px;flex-wrap:wrap;margin-top:10px;}
+  .shop-photo{
+    position:relative;width:62px;height:62px;border-radius:10px;overflow:hidden;
+    border:1px solid var(--line);background:var(--card-hover);
+  }
+  .shop-photo img{width:100%;height:100%;object-fit:cover;display:block;}
+  .shop-photo-del{
+    position:absolute;top:2px;right:2px;width:19px;height:19px;padding:0;
+    border:none;border-radius:50%;background:rgba(0,0,0,.58);color:#fff;
+    font-size:11px;line-height:19px;cursor:pointer;
+    -webkit-tap-highlight-color:transparent;
+  }
+
   @media (max-width:540px){
     .page{padding:0 16px 150px;}
     .masthead{padding:44px 0 26px;}
@@ -914,6 +951,16 @@
         <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.4" stroke-linecap="round"><path d="M6 6l12 12M18 6L6 18"/></svg>
       </button>
     </div>
+    <div class="shop-scan">
+      <p class="shop-scan-title">拍照识别送货单 · 支持一次多张，AI 会合并成一份清单</p>
+      <div class="shop-scan-btns">
+        <button class="shop-scan-btn" id="shopPickBtn" type="button">选择 / 拍照图片</button>
+        <button class="shop-scan-btn solid" id="shopScanBtn" type="button">✨ AI 识别并填入表格</button>
+      </div>
+      <input type="file" id="shopPhotoFile" accept="image/*" multiple style="display:none;">
+      <div class="shop-photos" id="shopPhotos"></div>
+      <div class="shop-scan-status" id="shopScanStatus" role="status" aria-live="polite">选择送货单照片后点「AI 识别」，结果会填入下方表格，核对无误再保存。图片只发送给模型、不存本机。</div>
+    </div>
     <div class="shop-fields">
       <label class="field"><span>日期</span><input type="date" id="shopDate"></label>
       <label class="field"><span>客户</span><input type="text" id="shopCust" placeholder="客户名称（店铺/人名）" autocomplete="off"></label>
@@ -947,11 +994,15 @@
     填入模型接口（如 DeepSeek）。录音后点击“AI 提炼”，帮你把废话变成清爽的待办。
   </p>
   <p class="drawer-desc" style="font-size:11.5px;color:var(--ink-faint);border-left:2px solid var(--line);padding-left:10px;">
-    隐私提示：启用 AI 后，「AI 提炼」「竹语」「问一问」「本周回顾」会把相关笔记内容发送到你填写的模型服务；<strong>已删除的笔记不会外发</strong>。API 密钥与访问令牌以明文保存在本机浏览器，请只使用最小权限的密钥与细粒度令牌。
+    隐私提示：启用 AI 后，「AI 提炼」「竹语」「问一问」「本周回顾」会把相关笔记内容发送到你填写的模型服务；<strong>已删除的笔记不会外发</strong>。「拍照识别」会把送货单照片发送到视觉模型，照片只在内存中处理、不会保存或同步。API 密钥与访问令牌以明文保存在本机浏览器，请只使用最小权限的密钥与细粒度令牌。
   </p>
   <label class="field"><span>API 接口地址</span><input id="cfgAiUrl" placeholder="https://api.deepseek.com/chat/completions"></label>
   <label class="field"><span>API 密钥 (Key)</span><input id="cfgAiKey" type="password" placeholder="sk-..."></label>
   <label class="field"><span>模型名称 (Model)</span><input id="cfgAiModel" placeholder="deepseek-chat"></label>
+  <label class="field"><span>视觉模型 (Vision Model)</span><input id="cfgVisionModel" placeholder="deepseek-flash" autocomplete="off"></label>
+  <p class="drawer-desc" style="font-size:11.5px;color:var(--ink-faint);border-left:2px solid var(--line);padding-left:10px;margin-top:10px;">
+    拍照识别送货单需要<strong>支持图片输入的模型</strong>，与上面的文本模型分开配置。DeepSeek 官方当前为 <code>deepseek-flash</code>（旧名 <code>deepseek-v4-flash-vision-exp</code> 仍可用）；如使用中转服务，请填该服务提供的视觉模型名。识别时照片会发送到你填写的 AI 服务。
+  </p>
 
   <div style="border-bottom: 1px dashed var(--line); margin: 20px 0;"></div>
 
@@ -1144,7 +1195,15 @@ window.onerror = function (msg, url, line) {
   'use strict';
 
   // 版本号统一在此维护；localStorage 键沿用 v11 不变，切勿改名以免丢失用户数据
-  var APP_VERSION = '12.1';
+  var APP_VERSION = '12.2';
+  // 送货单拍照识别：视觉模型默认名、兼容别名与各项安全上限
+  var DEFAULT_VISION_MODEL = 'deepseek-flash';
+  var VISION_MODEL_FALLBACK = 'deepseek-v4-flash-vision-exp';
+  var MAX_BILL_IMAGES = 10;                    // 一次最多识别的图片张数
+  var MAX_BILL_ROWS = 120;                     // 回填表格的最大行数
+  var MAX_BILL_BODY_CHARS = 40 * 1024 * 1024;  // 请求体保守上限（官方 48 MiB）
+  var BILL_IMG_MAX_EDGE = 1600;                // 压缩后最长边（px）
+  var BILL_IMG_MAX_CHARS = 1.6 * 1024 * 1024;  // 单图压缩后 base64 上限
   var LS_CONFIG = 'bamboo.v11.config';
   var LS_NOTES  = 'bamboo.v11.notes';
   var LS_THEME  = 'bamboo.v11.theme';
@@ -1181,7 +1240,10 @@ window.onerror = function (msg, url, line) {
     listLimit: LIST_PAGE,
     shopMode: false,
     askWeb: false,
-    loadError: false
+    loadError: false,
+    shopPhotos: [],       // 仅存内存：压缩后的送货单照片，绝不写入 localStorage
+    shopScanning: false,
+    shopScanSeq: 0        // 递增序号，用于丢弃已关闭弹窗的过期识别结果
   };
 
   var recognition = null;
@@ -1224,6 +1286,11 @@ window.onerror = function (msg, url, line) {
     els.shopTotal = $('shopTotal');
     els.shopAdd = $('shopAdd');
     els.shopSave = $('shopSave');
+    els.shopPickBtn = $('shopPickBtn');
+    els.shopScanBtn = $('shopScanBtn');
+    els.shopPhotoFile = $('shopPhotoFile');
+    els.shopPhotos = $('shopPhotos');
+    els.shopScanStatus = $('shopScanStatus');
 
     els.searchInput = $('searchInput');
 
@@ -2026,6 +2093,7 @@ window.onerror = function (msg, url, line) {
   }
 
   function shopBillOpen() {
+    clearShopPhotos();
     els.shopDate.value = todayStr();
     els.shopCust.value = '';
     els.shopPhone.value = '';
@@ -2036,6 +2104,9 @@ window.onerror = function (msg, url, line) {
   }
 
   function closeShopBill() {
+    state.shopScanSeq++;          // 让进行中的识别结果失效，避免回填到已关闭的弹窗
+    setShopScanBusy(false);
+    clearShopPhotos();
     els.shopMask.classList.remove('open');
   }
 
@@ -2066,6 +2137,274 @@ window.onerror = function (msg, url, line) {
     var merged = saveShopBillMerged(date, customer, phone, rows, total);
     closeShopBill();
     toast(merged ? '已归集追加到当天该客户的送货清单' : '送货清单已存档');
+  }
+
+  /* =========================================================
+     送货单拍照识别（DeepSeek / OpenAI 兼容视觉模型）
+     设计要点：
+     - 图片只在内存里，压缩成 JPEG 后以 base64 发送，绝不落 localStorage / 云端
+     - 输出严格复用 parseShopBillJSON 的 JSON 契约（与语音整理一致）
+     - 结果先回填到现有表格，由用户核对后点原来的「保存清单」，
+       因此存档格式、店铺分类、同日同客户归集三条既有规则全部自动继承
+     ========================================================= */
+  function setShopScanStatus(msg, isErr) {
+    if (!els.shopScanStatus) return;
+    els.shopScanStatus.textContent = String(msg || '');
+    if (isErr) els.shopScanStatus.classList.add('err');
+    else els.shopScanStatus.classList.remove('err');
+  }
+
+  function setShopScanBusy(on) {
+    state.shopScanning = !!on;
+    if (els.shopScanBtn) {
+      els.shopScanBtn.disabled = !!on;
+      els.shopScanBtn.textContent = on ? '识别中…' : '✨ AI 识别并填入表格';
+    }
+    if (els.shopPickBtn) els.shopPickBtn.disabled = !!on;
+  }
+
+  function renderShopPhotos() {
+    if (!els.shopPhotos) return;
+    els.shopPhotos.innerHTML = '';
+    for (var i = 0; i < state.shopPhotos.length; i++) {
+      var ph = state.shopPhotos[i];
+      var box = document.createElement('div');
+      box.className = 'shop-photo';
+      var im = document.createElement('img');
+      im.src = ph.dataUrl;
+      im.alt = '送货单照片 ' + (i + 1);
+      var del = document.createElement('button');
+      del.type = 'button';
+      del.className = 'shop-photo-del';
+      del.setAttribute('data-id', ph.id);
+      del.setAttribute('aria-label', '移除这张照片');
+      del.textContent = '✕';
+      box.appendChild(im);
+      box.appendChild(del);
+      els.shopPhotos.appendChild(box);
+    }
+  }
+
+  function clearShopPhotos() {
+    state.shopPhotos = [];
+    renderShopPhotos();
+    setShopScanBusy(false);
+    setShopScanStatus('选择送货单照片后点「AI 识别」，结果会填入下方表格，核对无误再保存。图片只发送给模型、不存本机。');
+  }
+
+  // 手机原图动辄数 MB，iOS 还可能是 HEIC；统一压成 JPEG 可省流量、避开 48MiB 请求体上限，
+  // 也把不支持的图片格式挡在请求之前。透明区垫白底，避免深色背景干扰小字识别。
+  function compressBillImage(file) {
+    return new Promise(function (resolve, reject) {
+      if (!file || !/^image\//.test(String(file.type || ''))) {
+        reject(new Error('不是图片文件')); return;
+      }
+      var reader = new FileReader();
+      reader.onerror = function () { reject(new Error('图片读取失败')); };
+      reader.onload = function () {
+        var img = new Image();
+        img.onerror = function () { reject(new Error('图片无法解码，请改用 JPG/PNG')); };
+        img.onload = function () {
+          try {
+            var w = img.naturalWidth || img.width;
+            var h = img.naturalHeight || img.height;
+            if (!w || !h) { reject(new Error('图片尺寸无效')); return; }
+            var scale = Math.min(1, BILL_IMG_MAX_EDGE / Math.max(w, h));
+            var tw = Math.max(1, Math.round(w * scale));
+            var th = Math.max(1, Math.round(h * scale));
+            var cv = document.createElement('canvas');
+            cv.width = tw; cv.height = th;
+            var ctx = cv.getContext('2d');
+            if (!ctx) { reject(new Error('浏览器不支持图片处理')); return; }
+            ctx.fillStyle = '#ffffff';
+            ctx.fillRect(0, 0, tw, th);
+            ctx.drawImage(img, 0, 0, tw, th);
+            var q = 0.86;
+            var url = cv.toDataURL('image/jpeg', q);
+            var guard = 0;
+            while (url.length > BILL_IMG_MAX_CHARS && q > 0.45 && guard < 6) {
+              q -= 0.08;
+              url = cv.toDataURL('image/jpeg', q);
+              guard++;
+            }
+            resolve({ dataUrl: url, chars: url.length });
+          } catch (e) {
+            reject(new Error('图片压缩失败：' + (e && e.message ? e.message : '未知错误')));
+          }
+        };
+        img.src = String(reader.result || '');
+      };
+      reader.readAsDataURL(file);
+    });
+  }
+
+  function handleShopPhotoPick(e) {
+    var files = Array.prototype.slice.call(e.target.files || []);
+    e.target.value = '';                         // 允许重复选择同一个文件
+    if (!files.length) return;
+    var room = MAX_BILL_IMAGES - state.shopPhotos.length;
+    if (room <= 0) {
+      setShopScanStatus('一次最多 ' + MAX_BILL_IMAGES + ' 张，请先移除部分照片', true); return;
+    }
+    var picked = files.slice(0, room);
+    var skipped = 0;
+    var chain = Promise.resolve();
+    for (var i = 0; i < picked.length; i++) {
+      (function (f) {
+        chain = chain.then(function () {
+          return compressBillImage(f).then(function (r) {
+            state.shopPhotos.push({ id: uid(), name: String(f.name || '照片').slice(0, 40), dataUrl: r.dataUrl });
+            renderShopPhotos();
+          }).catch(function () { skipped++; });
+        });
+      })(picked[i]);
+    }
+    chain.then(function () {
+      if (!state.shopPhotos.length) {
+        setShopScanStatus('照片无法读取，请确认是 JPG / PNG 格式后重试', true); return;
+      }
+      var extra = '';
+      if (files.length > room) extra += '（一次最多 ' + MAX_BILL_IMAGES + ' 张，超出已忽略）';
+      if (skipped) extra += '（' + skipped + ' 张格式不支持已跳过）';
+      setShopScanStatus('已选 ' + state.shopPhotos.length + ' 张照片' + extra + '，点「AI 识别并填入表格」开始。');
+    });
+  }
+
+  function buildBillVisionPrompt(count) {
+    return '你是一名严谨的送货单录入员。下面共有 ' + count + ' 张送货单照片，请逐张仔细查看并整理成一份送货清单数据。\n' +
+      '要求：\n' +
+      '1. 逐张辨认印刷体与手写内容，重点读取：单据日期、客户（店铺名/人名）、联系方式、每行货品的名称 / 规格 / 单价 / 交货数量 / 金额小计，以及单据合计。\n' +
+      '2. 多张图片可能是同一张单据的不同部分或不同角度，也可能是多张不同单据。请把所有货品明细合并到同一个 items 数组，并对重复行去重：名称+规格+单价完全相同的一行只保留一行并把数量相加，不要重复计入。\n' +
+      '3. 严禁编造：看不清、被遮挡或单据上没有的字段填空字符串 ""；不要凭常识推测客户名或价格。若某张图不是送货单，忽略它。\n' +
+      '4. 日期统一成 YYYY-MM-DD；单据上没有日期就填 ""。\n' +
+      '5. price 与 count 保留单据上的单位写法（如 "100元/件"、"1件"、"2箱"）；subtotal 只填纯数字字符串（如 "100"），不要带"元"。\n' +
+      '6. total 为所有小计之和（纯数字）。\n\n' +
+      '严格只输出一个 JSON 对象，不要输出 JSON 以外的任何文字、解释或 Markdown 代码块标记：\n' +
+      '{\n' +
+      '  "date": "YYYY-MM-DD 或空字符串",\n' +
+      '  "customer": "客户名称",\n' +
+      '  "phone": "联系方式",\n' +
+      '  "items": [{"name":"货品名称","spec":"规格","price":"单价（含单位）","count":"交货数量（含单位）","subtotal":"小计（纯数字）"}],\n' +
+      '  "total": 总计金额（纯数字）\n' +
+      '}';
+  }
+
+  function stripCodeFence(s) {
+    return String(s || '').replace(/```[a-zA-Z0-9_-]*/g, '').trim();
+  }
+
+  function billVisionContent(promptText, photos) {
+    var content = [{ type: 'text', text: promptText }];
+    for (var i = 0; i < photos.length; i++) {
+      // 不传 detail：DeepSeek 默认按原图分辨率处理（利于读清单小字），
+      // 同时避免部分第三方兼容端点不认识 detail 字段而返回 400。
+      content.push({ type: 'image_url', image_url: { url: photos[i].dataUrl } });
+    }
+    return content;
+  }
+
+  function billVisionFetch(model, content) {
+    var cfg = state.config;
+    return fetch(cfg.aiUrl, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json', 'Authorization': 'Bearer ' + cfg.aiKey },
+      body: JSON.stringify({
+        model: model,
+        messages: [{ role: 'user', content: content }],
+        temperature: 0,
+        stream: false
+      })
+    }).then(function (res) {
+      if (!res.ok) {
+        return res.text().then(function (t) {
+          var err = new Error('模型请求失败(' + res.status + ')');
+          err.status = res.status;
+          err.body = String(t || '').slice(0, 300);
+          throw err;
+        });
+      }
+      return res.json();
+    }).then(function (data) {
+      var c = data && data.choices && data.choices[0] && data.choices[0].message && data.choices[0].message.content;
+      if (!c) throw new Error('模型返回格式不正确');
+      return String(c);
+    });
+  }
+
+  // 与语音整理共用 parseShopBillJSON 的输出契约，回填到当前弹窗表格供人工核对
+  function applyShopParsedToPanel(p) {
+    var date = String(p.date || '').trim();
+    var dm = date.match(/^(\d{4})[-/年](\d{1,2})[-/月](\d{1,2})/);
+    if (dm) date = dm[1] + '-' + pad2(+dm[2]) + '-' + pad2(+dm[3]);
+    else if (!/^\d{4}-\d{2}-\d{2}$/.test(date)) date = todayStr();
+    els.shopDate.value = date;
+    els.shopCust.value = String(p.customer || '').trim().slice(0, 80);
+    els.shopPhone.value = String(p.phone || '').trim().slice(0, 40);
+    var rows = (p.rows || []).slice(0, MAX_BILL_ROWS);
+    els.shopRows.innerHTML = '';
+    for (var i = 0; i < rows.length; i++) {
+      var r = rows[i];
+      addShopRow(
+        String(r.name == null ? '' : r.name).slice(0, 80),
+        String(r.spec == null ? '' : r.spec).slice(0, 80),
+        String(r.price == null ? '' : r.price).slice(0, 40),
+        String(r.count == null ? '' : r.count).slice(0, 40),
+        String(r.subtotal == null ? '' : r.subtotal).slice(0, 40)
+      );
+    }
+    if (!rows.length) addShopRow();
+    recalcShopTotal();
+    return rows.length;
+  }
+
+  function scanShopPhotos() {
+    if (state.shopScanning) return;
+    var cfg = state.config;
+    if (!cfg || !cfg.aiUrl || !cfg.aiKey) {
+      setShopScanStatus('请先在「设置」里填好 AI 接口地址与密钥', true); return;
+    }
+    if (!state.shopPhotos.length) {
+      setShopScanStatus('请先选择送货单照片', true); return;
+    }
+    var bodyChars = 0;
+    for (var i = 0; i < state.shopPhotos.length; i++) bodyChars += state.shopPhotos[i].dataUrl.length;
+    if (bodyChars > MAX_BILL_BODY_CHARS) {
+      setShopScanStatus('图片总量超过接口上限，请减少张数后重试', true); return;
+    }
+    var seq = ++state.shopScanSeq;
+    var photoCount = state.shopPhotos.length;
+    setShopScanBusy(true);
+    setShopScanStatus('正在让 AI 逐张读取 ' + photoCount + ' 张送货单并核对…');
+    var content = billVisionContent(buildBillVisionPrompt(photoCount), state.shopPhotos);
+    var model = String((cfg.visionModel || '').trim() || DEFAULT_VISION_MODEL);
+    billVisionFetch(model, content)
+      .catch(function (err) {
+        var raw = String((err && err.body ? err.body : '') + ' ' + (err && err.message ? err.message : ''));
+        var noVision = err && err.status === 400 &&
+          /does not support image|not support image|image input|不支持图片|不支持图像/i.test(raw);
+        if (noVision && model !== VISION_MODEL_FALLBACK) {
+          setShopScanStatus('当前模型不支持图片，正在用兼容视觉模型重试…');
+          return billVisionFetch(VISION_MODEL_FALLBACK, content);
+        }
+        throw err;
+      })
+      .then(function (raw) {
+        if (seq !== state.shopScanSeq) return;   // 弹窗已关或照片已改，丢弃过期结果
+        var parsed = parseShopBillJSON(stripCodeFence(raw));
+        if (!parsed) throw new Error('AI 返回的内容无法解析成清单，请重拍或手动填写');
+        var n = applyShopParsedToPanel(parsed);
+        var msg = '已识别 ' + n + ' 行货品（共 ' + photoCount + ' 张图）。请核对下方表格，确认无误后点「保存清单」存档到店铺。';
+        if (!els.shopCust.value) msg += ' 注意：客户未识别出来，请补填后再保存。';
+        setShopScanStatus(msg);
+      })
+      .catch(function (err) {
+        if (seq !== state.shopScanSeq) return;
+        var msg = err && err.message ? err.message : '识别失败';
+        setShopScanStatus(msg + '。原表格未被改动，可重试或手动填写。', true);
+      })
+      .then(function () {
+        if (seq === state.shopScanSeq) setShopScanBusy(false);
+      });
   }
 
   function buildAIPrompt(text) {
@@ -3198,6 +3537,7 @@ window.onerror = function (msg, url, line) {
     // 凭据不回显：留空表示沿用已保存值，避免明文出现在输入框与截图里
     if ($('cfgAiKey')) { $('cfgAiKey').value = ''; $('cfgAiKey').placeholder = c.aiKey ? '已保存（留空表示不修改）' : 'sk-...'; }
     if ($('cfgAiModel')) $('cfgAiModel').value = c.aiModel || '';
+    if ($('cfgVisionModel')) $('cfgVisionModel').value = c.visionModel || DEFAULT_VISION_MODEL;
     
     if ($('cfgPushUrl')) $('cfgPushUrl').value = c.pushUrl || '';
     if ($('cfgOwner'))  $('cfgOwner').value  = c.owner || '';
@@ -4191,6 +4531,30 @@ window.onerror = function (msg, url, line) {
     if ($('shopCancel')) $('shopCancel').addEventListener('click', closeShopBill);
     els.shopAdd.addEventListener('click', function () { addShopRow(); recalcShopTotal(); });
     els.shopSave.addEventListener('click', shopBillSave);
+
+    // 送货单拍照识别
+    if (els.shopPickBtn && els.shopPhotoFile) {
+      els.shopPickBtn.addEventListener('click', function () { els.shopPhotoFile.click(); });
+      els.shopPhotoFile.addEventListener('change', handleShopPhotoPick);
+    }
+    if (els.shopScanBtn) els.shopScanBtn.addEventListener('click', scanShopPhotos);
+    if (els.shopPhotos) {
+      els.shopPhotos.addEventListener('click', function (e) {
+        var t = e.target;
+        if (!t || !t.classList || !t.classList.contains('shop-photo-del')) return;
+        var id = t.getAttribute('data-id');
+        var kept = [];
+        for (var i = 0; i < state.shopPhotos.length; i++) {
+          if (state.shopPhotos[i].id !== id) kept.push(state.shopPhotos[i]);
+        }
+        state.shopPhotos = kept;
+        state.shopScanSeq++;       // 让进行中的识别结果失效
+        renderShopPhotos();
+        setShopScanStatus(state.shopPhotos.length
+          ? '已移除，共 ' + state.shopPhotos.length + ' 张照片。'
+          : '照片已清空。');
+      });
+    }
     if (els.shopMask) {
       els.shopMask.addEventListener('click', function (e) {
         if (e.target === els.shopMask) closeShopBill();
@@ -4287,6 +4651,7 @@ window.onerror = function (msg, url, line) {
         aiUrl: $('cfgAiUrl').value.trim(),
         aiKey: ($('cfgAiKey').value.trim() || (state.config && state.config.aiKey) || ''),
         aiModel: $('cfgAiModel').value.trim(),
+        visionModel: ($('cfgVisionModel') ? $('cfgVisionModel').value.trim() : ''),
         pushUrl: $('cfgPushUrl').value.trim(),
         owner: $('cfgOwner').value.trim(),
         repo: $('cfgRepo').value.trim(),
