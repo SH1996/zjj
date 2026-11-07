@@ -25,7 +25,9 @@
       mainMax: 35, mainPick: 5, subMax: 12, subPick: 2,
       sourceName: '中国体彩网', sourceUrl: 'https://www.lottery.gov.cn/kj/kjlb.html?dlt',
       ruleUrl: 'https://www.lottery.gov.cn/tzgg/20190202/72410.html',
-      directSync: true
+      // 实测：体彩网关（EdgeOne WAF）会拦截浏览器跨域 GET（567），故也走引导导入，
+      // 不使用任何第三方 CORS 代理，保证数据永远来自官方页面
+      directSync: false
     }
   };
 
@@ -552,7 +554,7 @@
       '<section id="ltImportPanel" class="lt-import" hidden><h3>导入真实开奖记录</h3><p>支持 JSON 或逐行文本。所有记录会校验期号、日期、号码数量、范围与重复；任何一行不合格都不会写入。</p>'+
       '<textarea id="ltImportText" rows="5" spellcheck="false" placeholder="2026127 2026-11-05 13 14 19 25 29 32 + 12"></textarea>'+
       '<div class="lt-import-actions"><input id="ltImportFile" type="file" accept=".json,.txt,text/plain,application/json"><button id="ltImportApply" type="button">校验并合并</button><button id="ltImportReset" type="button">恢复内置数据</button></div>'+
-      '<p class="lt-small">数据只保存在本浏览器独立键 bamboo.v13.lottery.data，不进入笔记、备份或 GitHub 同步。双色球官网不允许浏览器跨域读取，请从官方页面复制最新记录；本模块不使用第三方代理。</p></section>'+
+      '<p class="lt-small">数据只保存在本浏览器独立键 bamboo.v13.lottery.data，不进入笔记、备份或 GitHub 同步。两家官网均不允许浏览器跨域读取（体彩网关实测会拦截），请从官方页面复制最新记录后粘贴；本模块不使用第三方代理。</p></section>'+
       '<section class="lt-controls"><label>分析窗口<select id="ltWindow"><option value="30">近 30 期</option><option value="60" selected>近 60 期</option><option value="100">近 100 期</option><option value="0">全部数据</option></select></label>'+
       '<label>候选注数<select id="ltCount"><option value="3">3 注</option><option value="5" selected>5 注</option><option value="8">8 注</option></select></label>'+
       '<label>生成模式<select id="ltMode"><option value="statistical">统计画像</option><option value="uniform">纯随机对照</option></select></label>'+
@@ -651,7 +653,7 @@
     if(!g.directSync){
       $('ltImportPanel').hidden=false;
       $('ltImportText').focus();
-      notify('双色球官网未允许浏览器跨域读取。请从刚打开的官方数据源复制最新记录后粘贴；不会使用第三方代理。');
+      notify(g.name+'官网未允许浏览器跨域读取。请从刚打开的官方数据源复制最新记录后粘贴；不会使用第三方代理。');
       root.open(g.sourceUrl,'_blank','noopener,noreferrer');
       return;
     }
