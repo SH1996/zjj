@@ -963,8 +963,8 @@
     </div>
     <div class="shop-fields">
       <label class="field"><span>日期</span><input type="date" id="shopDate"></label>
-      <label class="field"><span>客户</span><input type="text" id="shopCust" placeholder="客户名称（店铺/人名）" autocomplete="off"></label>
-      <label class="field"><span>联系方式</span><input type="text" id="shopPhone" placeholder="手机号" autocomplete="off"></label>
+      <label class="field"><span>送货商</span><input type="text" id="shopCust" placeholder="送货商名称（公司/店铺/人名）" autocomplete="off"></label>
+      <label class="field"><span>送货商的联系方式</span><input type="text" id="shopPhone" placeholder="手机号 / 电话" autocomplete="off"></label>
     </div>
     <div class="shop-table-head">
       <span>货品名称</span><span>规格</span><span>单价</span><span>交货数量</span><span>小计</span><span></span>
@@ -1195,7 +1195,7 @@ window.onerror = function (msg, url, line) {
   'use strict';
 
   // 版本号统一在此维护；localStorage 键沿用 v11 不变，切勿改名以免丢失用户数据
-  var APP_VERSION = '12.2';
+  var APP_VERSION = '12.3';
   // 送货单拍照识别：视觉模型默认名、兼容别名与各项安全上限
   var DEFAULT_VISION_MODEL = 'deepseek-flash';
   var VISION_MODEL_FALLBACK = 'deepseek-v4-flash-vision-exp';
@@ -1892,8 +1892,8 @@ window.onerror = function (msg, url, line) {
     var L = [];
     L.push('【送货清单存档】');
     L.push('日期：' + (date || ''));
-    L.push('客户：' + (customer || ''));
-    L.push('联系方式：' + (phone || ''));
+    L.push('送货商：' + (customer || ''));
+    L.push('送货商的联系方式：' + (phone || ''));
     L.push('----------------------------------------');
     L.push('货品名称 | 规格 | 单价 | 交货数量 | 小计');
     for (var i = 0; i < rows.length; i++) {
@@ -1910,7 +1910,7 @@ window.onerror = function (msg, url, line) {
     return L.join('\n');
   }
 
-  // ===== 送货清单按日期 + 客户 + 联系方式归集 =====
+  // ===== 送货清单按日期 + 送货商 + 联系方式归集 =====
   function isShopBillText(text) {
     return String(text || '').indexOf('【送货清单存档】') !== -1;
   }
@@ -1924,8 +1924,12 @@ window.onerror = function (msg, url, line) {
     for (var i = 0; i < lines.length; i++) {
       var ln = lines[i].trim();
       if (ln.indexOf('日期') === 0) { date = ln.replace(/^日期[：:]\s*/, '').trim(); continue; }
-      if (ln.indexOf('客户') === 0) { customer = ln.replace(/^客户[：:]\s*/, '').trim(); continue; }
-      if (ln.indexOf('联系方式') === 0) { phone = ln.replace(/^联系方式[：:]\s*/, '').trim(); continue; }
+      // 兼容旧存档（客户：/联系方式：）与 v12.3 起的新存档（送货商：/送货商的联系方式：）。
+      // 要求行首字段后紧跟冒号：否则「送货商的联系方式：」会被误判成「送货商：」而破坏归集。
+      if (/^客户[：:]/.test(ln)) { customer = ln.replace(/^客户[：:]\s*/, '').trim(); continue; }
+      if (/^送货商[：:]/.test(ln)) { customer = ln.replace(/^送货商[：:]\s*/, '').trim(); continue; }
+      if (/^送货商的联系方式[：:]/.test(ln)) { phone = ln.replace(/^送货商的联系方式[：:]\s*/, '').trim(); continue; }
+      if (/^联系方式[：:]/.test(ln)) { phone = ln.replace(/^联系方式[：:]\s*/, '').trim(); continue; }
       if (ln.indexOf('总计金额') === 0) {
         var tm = ln.match(/[0-9.]+/);
         if (tm) total = parseFloat(tm[0]) || 0;
@@ -2016,7 +2020,7 @@ window.onerror = function (msg, url, line) {
     return -1;
   }
 
-  // 归集保存：同一天、同一客户、同一联系方式 → 追加合并到已有清单；否则新建
+  // 归集保存：同一天、同一送货商、同一联系方式 → 追加合并到已有清单；否则新建
   function saveShopBillMerged(date, customer, phone, rows, total) {
     var now = new Date().toISOString();
     var idx = findShopCell(state.notes, date, customer, phone);
@@ -2114,7 +2118,7 @@ window.onerror = function (msg, url, line) {
     var date = els.shopDate.value || todayStr();
     var customer = els.shopCust.value.trim();
     var phone = els.shopPhone.value.trim();
-    if (!customer) { toast('请填写客户'); els.shopCust.focus(); return; }
+    if (!customer) { toast('请填写送货商'); els.shopCust.focus(); return; }
     var rowEls = els.shopRows.querySelectorAll('.shop-tr');
     var rows = [];
     for (var i = 0; i < rowEls.length; i++) {
@@ -2136,7 +2140,7 @@ window.onerror = function (msg, url, line) {
     }
     var merged = saveShopBillMerged(date, customer, phone, rows, total);
     closeShopBill();
-    toast(merged ? '已归集追加到当天该客户的送货清单' : '送货清单已存档');
+    toast(merged ? '已归集追加到当天该送货商的送货清单' : '送货清单已存档');
   }
 
   /* =========================================================
@@ -2145,7 +2149,7 @@ window.onerror = function (msg, url, line) {
      - 图片只在内存里，压缩成 JPEG 后以 base64 发送，绝不落 localStorage / 云端
      - 输出严格复用 parseShopBillJSON 的 JSON 契约（与语音整理一致）
      - 结果先回填到现有表格，由用户核对后点原来的「保存清单」，
-       因此存档格式、店铺分类、同日同客户归集三条既有规则全部自动继承
+       因此存档格式、店铺分类、同日同送货商归集三条既有规则全部自动继承
      ========================================================= */
   function setShopScanStatus(msg, isErr) {
     if (!els.shopScanStatus) return;
@@ -2273,17 +2277,17 @@ window.onerror = function (msg, url, line) {
   function buildBillVisionPrompt(count) {
     return '你是一名严谨的送货单录入员。下面共有 ' + count + ' 张送货单照片，请逐张仔细查看并整理成一份送货清单数据。\n' +
       '要求：\n' +
-      '1. 逐张辨认印刷体与手写内容，重点读取：单据日期、客户（店铺名/人名）、联系方式、每行货品的名称 / 规格 / 单价 / 交货数量 / 金额小计，以及单据合计。\n' +
+      '1. 逐张辨认印刷体与手写内容，重点读取：单据日期、送货商（公司/店铺/人名）、送货商的联系方式、每行货品的名称 / 规格 / 单价 / 交货数量 / 金额小计，以及单据合计。\n' +
       '2. 多张图片可能是同一张单据的不同部分或不同角度，也可能是多张不同单据。请把所有货品明细合并到同一个 items 数组，并对重复行去重：名称+规格+单价完全相同的一行只保留一行并把数量相加，不要重复计入。\n' +
-      '3. 严禁编造：看不清、被遮挡或单据上没有的字段填空字符串 ""；不要凭常识推测客户名或价格。若某张图不是送货单，忽略它。\n' +
+      '3. 严禁编造：看不清、被遮挡或单据上没有的字段填空字符串 ""；不要凭常识推测送货商名或价格。若某张图不是送货单，忽略它。\n' +
       '4. 日期统一成 YYYY-MM-DD；单据上没有日期就填 ""。\n' +
       '5. price 与 count 保留单据上的单位写法（如 "100元/件"、"1件"、"2箱"）；subtotal 只填纯数字字符串（如 "100"），不要带"元"。\n' +
       '6. total 为所有小计之和（纯数字）。\n\n' +
       '严格只输出一个 JSON 对象，不要输出 JSON 以外的任何文字、解释或 Markdown 代码块标记：\n' +
       '{\n' +
       '  "date": "YYYY-MM-DD 或空字符串",\n' +
-      '  "customer": "客户名称",\n' +
-      '  "phone": "联系方式",\n' +
+      '  "customer": "送货商名称",\n' +
+      '  "phone": "送货商的联系方式",\n' +
       '  "items": [{"name":"货品名称","spec":"规格","price":"单价（含单位）","count":"交货数量（含单位）","subtotal":"小计（纯数字）"}],\n' +
       '  "total": 总计金额（纯数字）\n' +
       '}';
@@ -2394,7 +2398,7 @@ window.onerror = function (msg, url, line) {
         if (!parsed) throw new Error('AI 返回的内容无法解析成清单，请重拍或手动填写');
         var n = applyShopParsedToPanel(parsed);
         var msg = '已识别 ' + n + ' 行货品（共 ' + photoCount + ' 张图）。请核对下方表格，确认无误后点「保存清单」存档到店铺。';
-        if (!els.shopCust.value) msg += ' 注意：客户未识别出来，请补填后再保存。';
+        if (!els.shopCust.value) msg += ' 注意：送货商未识别出来，请补填后再保存。';
         setShopScanStatus(msg);
       })
       .catch(function (err) {
@@ -2417,8 +2421,8 @@ window.onerror = function (msg, url, line) {
         '请把下面这段口语化的语音/文字整理成送货清单存档，严格按 JSON 输出，不要输出 JSON 以外的任何内容：\n' +
         '{\n' +
         '  "date": "送货日期，格式 YYYY-MM-DD；原文没提就取今天",\n' +
-        '  "customer": "客户名称（店铺/人名）",\n' +
-        '  "phone": "联系方式；没有则为空字符串",\n' +
+        '  "customer": "送货商名称（公司/店铺/人名）",\n' +
+        '  "phone": "送货商的联系方式；没有则为空字符串",\n' +
         '  "items": [{"name":"货品名称","spec":"规格（如 1件18包(6个/包)）","price":"单价（含单位，如 100元/件）","count":"交货数量（含单位，如 1件）","subtotal":"小计金额（纯数字，如 100）"}],\n' +
         '  "total": 总计金额（纯数字，等于所有小计之和）\n' +
         '}\n\n' +
@@ -2949,7 +2953,7 @@ window.onerror = function (msg, url, line) {
       if (tagRes.tags.length > 3) tagRes.tags.length = 3;
     }
 
-    // 送货清单：按日期 + 客户 + 联系方式归集（同一天同一清单追加到对应小格）
+    // 送货清单：按日期 + 送货商 + 联系方式归集（同一天同一清单追加到对应小格）
     var shopBill = isShopBillText(text) ? parseShopBillText(text) : null;
     if (!shopBill && state.shopMode) {
       // 店铺模式口述：非标准清单文本，先交给 AI 自动整理成清单，不直接落库
@@ -2970,7 +2974,7 @@ window.onerror = function (msg, url, line) {
       if (state.view !== VIEW.SHOP) { state.view = VIEW.SHOP; syncTabs(); }
       state.listLimit = LIST_PAGE;
       render();
-      toast(merged ? '已追加到当天该客户的清单' : '送货清单已存档');
+      toast(merged ? '已追加到当天该送货商的清单' : '送货清单已存档');
       return;
     }
 
