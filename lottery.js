@@ -512,12 +512,12 @@
   }
 
   // ------------------------------ UI ------------------------------
-  var ui={inited:false,openFlag:false,game:'ssq',data:{ssq:[],dlt:[]},analysis:null,candidates:[],bt:null,lastFocus:null,opts:{}};
+  var ui={inited:false,openFlag:false,game:'ssq',data:{ssq:[],dlt:[]},analysis:null,candidates:[],bt:null,lastFocus:null,opts:{},simple:{count:5,seed:'竹间-001',analysis:null,candidates:[],bt:null,runId:0}};
   function $(id){return root&&root.document?root.document.getElementById(id):null;}
   function setText(id,text){var e=$(id);if(e)e.textContent=text;}
   function esc(s){return String(s==null?'':s).replace(/[&<>"']/g,function(c){return {'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c];});}
   function rowsOf(draws){return draws.map(function(d){return [d.issue,d.date,d.main.map(pad2).join(','),d.sub.map(pad2).join(',')];});}
-  function notify(msg){if(ui.opts.toast)ui.opts.toast(msg);setText('ltStatus',msg);}
+  function notify(msg){if(ui.opts.toast)ui.opts.toast(msg);setText('ltStatus',msg);setText('ltAdvanceStatus',msg);}
   function currentGame(){return GAMES[ui.game];}
   function currentDraws(){return ui.data[ui.game];}
   function selectedWindow(){return Number($('ltWindow').value)||0;}
@@ -544,23 +544,44 @@
   function markup() {
     return ''+
     '<div class="lt-shell">'+
-      '<header class="lt-header"><div class="lt-brand"><span class="lt-logo">◇</span><div><h2 id="lotteryTitle">数彩实验室</h2><p>真实数据 · 多维交叉 · 可复现回测</p></div></div>'+
-      '<div class="lt-header-actions"><button class="lt-icon" id="ltHelp" type="button" aria-label="使用指南" title="使用指南">？</button><button class="lt-icon" id="ltClose" type="button" aria-label="关闭彩票分析">✕</button></div></header>'+
+      '<header class="lt-header"><div class="lt-brand"><span class="lt-logo">◇</span><div><h2 id="lotteryTitle">数彩助手</h2><p>复杂分析帮你做，只留一看就懂的号码</p></div></div>'+
+      '<div class="lt-header-actions"><button class="lt-icon" id="ltHelp" type="button" aria-label="使用指南" title="使用指南">？</button><button class="lt-icon" id="ltClose" type="button" aria-label="关闭数彩助手">✕</button></div></header>'+
       '<div class="lt-body">'+
-      '<div class="lt-responsible"><b>娱乐统计，不是中奖承诺。</b> 公平开奖各期独立，任何合法单式组合的头奖概率都相同；历史冷热、遗漏和 AI 解读均不能改变概率。未满 18 岁请勿购彩，不借贷、不追损。</div>'+
-      '<section id="ltHelpPanel" class="lt-help" hidden><div class="lt-help-head"><h3>怎么使用「数彩实验室」</h3><button id="ltHelpClose" type="button" aria-label="收起使用指南">收起</button></div>'+
+      '<div class="lt-responsible lt-tiny">娱乐统计，不是中奖承诺：每注中奖概率相同，历史数据不能提高概率。理性娱乐、量力而行。</div>'+
+      '<section id="ltHelpPanel" class="lt-help" hidden><div class="lt-help-head"><h3>傻瓜式使用指南</h3><button id="ltHelpClose" type="button" aria-label="收起使用指南">收起</button></div>'+
       '<ol class="lt-steps">'+
-      '<li><b>选彩种</b>：顶部切换「双色球」或「超级大乐透」，两个彩种规则与数据独立。</li>'+
-      '<li><b>看数据</b>：界面内置官网真实历史开奖；点「更新数据」会打开官方页面，复制最新记录后到「导入 / 粘贴」里校验并合并即可补新。</li>'+
-      '<li><b>调参数</b>：分析窗口（近 30/60/100 期或全部）、候选注数、生成模式（统计画像 / 纯随机对照）、复现种子——同一组参数永远得到同一组候选。</li>'+
-      '<li><b>生成</b>：点「生成交叉分析」，下方依次给出数据指标、号码频率与遗漏、组合结构、娱乐候选、逐期回测。</li>'+
-      '<li><b>看候选</b>：每张候选下方「画像依据」说明它为什么被选出；点「复制完整报告」可把全部结果带走。</li>'+
-      '<li><b>AI 解读（可选）</b>：点「✨ DeepSeek 交叉解读」，让 AI 用文字解释上方统计，AI 只读结果、不参与选号、不接触笔记与凭据。</li>'+
-      '<li><b>回测怎么看</b>：对比「统计画像 / 纯随机对照 / 理论随机期望」三行，判断方法是否真比随机强——通常只是抽样波动。</li>'+
+      '<li><b>打开就有</b>：点首页「数彩」按钮，助手自动算好，屏幕扫过分析过程后直接给你号码。</li>'+
+      '<li><b>选彩种</b>：顶部切换「双色球」或「超级大乐透」，两个彩种互不影响。</li>'+
+      '<li><b>选几注</b>：点 3 / 5 / 8 注，再点「帮我选」或「换一组」都能重新出号。</li>'+
+      '<li><b>照着填</b>：红球在前、蓝球在后，点「复制号码」或每注右上角「复制这注」带走。</li>'+
+      '<li><b>想看门道</b>：点顶部「专业数据」，能看到频率、结构、回测等完整分析。</li>'+
+      '<li><b>更新开奖</b>：在「专业数据」页点「更新数据」，从官网复制最新记录粘贴导入。</li>'+
+      '<li><b>AI 解读</b>：在「专业数据」页点「✨ DeepSeek 解读」，用大白话解释（可选）。</li>'+
       '</ol>'+
       '<p class="lt-note">重要：这是<b>娱乐数据研究</b>。公平开奖各期独立，历史冷热、遗漏、AI 解读都不能改变中奖概率；任何合法单式组合的中奖概率完全相同。未满 18 岁请勿购彩，不借贷、不追损。</p></section>'+
       '<div class="lt-topline"><div class="lt-games" role="tablist" aria-label="彩种"><button id="ltGameSsq" data-game="ssq" role="tab" type="button">双色球</button><button id="ltGameDlt" data-game="dlt" role="tab" type="button">超级大乐透</button></div>'+
-      '<a id="ltSourceLink" class="lt-source" target="_blank" rel="noopener noreferrer">查看官方数据源 ↗</a></div>'+
+      '<div class="lt-top-actions"><a id="ltSourceLink" class="lt-source" target="_blank" rel="noopener noreferrer">官方数据源 ↗</a><button class="lt-mini" id="ltAdvanceToggle" type="button" aria-expanded="false">专业数据 ↗</button></div></div>'+
+      '<div id="ltSimpleView">'+
+        '<section class="lt-hero">'+
+          '<h3>帮你把复杂的概率分析，变成一注号码</h3>'+
+          '<p class="lt-hero-sub">选个注数，剩下的交给它。分析过程会一闪而过，你只看结果就好。</p>'+
+          '<div class="lt-count-choice" role="group" aria-label="选择注数">'+
+            '<button type="button" id="ltPick3" data-count="3">3 注</button>'+
+            '<button type="button" id="ltPick5" data-count="5" class="active">5 注</button>'+
+            '<button type="button" id="ltPick8" data-count="8">8 注</button>'+
+          '</div>'+
+          '<button class="lt-go" id="ltSimpleGo" type="button">✨ 帮我选一组号码</button>'+
+        '</section>'+
+        '<section id="ltScan" class="lt-scan" hidden><div class="lt-scan-inner"><div class="lt-spin"></div><div id="ltScanText" class="lt-scan-text">正在读取最近开奖数据…</div><div class="lt-scan-dots"><i>·</i><i>·</i><i>·</i></div></div></section>'+
+        '<section id="ltSimpleResult" hidden>'+
+          '<div class="lt-result-head"><div><span class="lt-eyebrow">YOUR PICKS</span><h3 id="ltResultTitle">帮你选好了，照着填就行</h3></div>'+
+          '<div class="lt-result-actions"><button id="ltSimpleCopy" type="button">复制号码</button><button id="ltSimpleReroll" class="lt-ai" type="button">换一组</button></div></div>'+
+          '<div class="lt-plain-note">红球在前、蓝球在后。号码经过多维统计，但<b>任何号码中奖概率都相同</b>，把它当娱乐就好。</div>'+
+          '<div id="ltSimpleTickets" class="lt-simple-tickets"></div>'+
+        '</section>'+
+        '<div id="ltStatus" class="lt-status" role="status" aria-live="polite"></div>'+
+      '</div>'+
+      '<div id="ltAdvanceView" hidden>'+
       '<section class="lt-data-card"><div><span class="lt-eyebrow">DATA HEALTH</span><h3 id="ltDataTitle"></h3><p id="ltDataMeta"></p></div><div class="lt-data-actions"><button id="ltSync" type="button">更新数据</button><button id="ltImportToggle" type="button">导入 / 粘贴</button></div></section>'+
       '<section id="ltImportPanel" class="lt-import" hidden><h3>导入真实开奖记录</h3><p>支持 JSON 或逐行文本。所有记录会校验期号、日期、号码数量、范围与重复；任何一行不合格都不会写入。</p>'+
       '<textarea id="ltImportText" rows="5" spellcheck="false" placeholder="2026127 2026-11-05 13 14 19 25 29 32 + 12"></textarea>'+
@@ -571,7 +592,7 @@
       '<label>生成模式<select id="ltMode"><option value="statistical">统计画像</option><option value="uniform">纯随机对照</option></select></label>'+
       '<label>复现种子<input id="ltSeed" value="竹间-001" maxlength="32" autocomplete="off"></label>'+
       '<button class="lt-primary" id="ltGenerate" type="button">生成交叉分析</button></section>'+
-      '<div id="ltStatus" class="lt-status" role="status" aria-live="polite"></div>'+
+      '<div id="ltAdvanceStatus" class="lt-status" role="status" aria-live="polite"></div>'+
       '<section class="lt-metrics" id="ltMetrics"></section>'+
       '<div class="lt-two-col"><section class="lt-panel"><div class="lt-panel-head"><div><span class="lt-eyebrow">DISTRIBUTION</span><h3 id="ltMainFreqTitle">号码频率与遗漏</h3></div><span class="lt-tag">点击号码看细节</span></div><div id="ltMainFreq" class="lt-ball-grid"></div><h4 id="ltSubFreqTitle" class="lt-subhead"></h4><div id="ltSubFreq" class="lt-ball-grid lt-sub-grid"></div><p class="lt-note">颜色表示近期标准化频率，数字下方为当前遗漏期数。遗漏只是距上次出现的距离，不代表“该出了”。</p></section>'+
       '<section class="lt-panel"><span class="lt-eyebrow">STRUCTURE</span><h3>组合结构画像</h3><div id="ltStructure" class="lt-structure"></div><h4 class="lt-subhead">高频共现号码对</h4><div id="ltPairs" class="lt-pairs"></div><p class="lt-note">共现经过支持度与期望频次对照；小样本的高提升度不等于稳定规律。</p></section></div>'+
@@ -580,6 +601,7 @@
       '<section class="lt-panel"><div class="lt-panel-head"><div><span class="lt-eyebrow">WALK-FORWARD TEST</span><h3>逐期回测 vs 纯随机</h3></div><span class="lt-tag">无前视偏差</span></div><p class="lt-note">每一个目标期只使用该期之前的数据训练，并与同数量随机组合、理论随机期望对照。回测用于检验方法，不用于挑选“最好使”的号码。</p><div id="ltBacktest"></div></section>'+
       '<section class="lt-panel"><div class="lt-panel-head"><div><span class="lt-eyebrow">SOURCE RECORDS</span><h3>最近开奖记录</h3></div><span id="ltHistoryCount" class="lt-tag"></span></div><div class="lt-table-wrap"><table><thead><tr><th>期号</th><th>日期</th><th id="ltHistoryMainHead">主区</th><th id="ltHistorySubHead">副区</th></tr></thead><tbody id="ltHistory"></tbody></table></div></section>'+
       '<details class="lt-method"><summary>方法、公式与科学性边界</summary><div><p><b>频率：</b>同时观察近期与长期频次，并用 Beta 先验收缩，降低小样本极端值；卡方 p 值只用于描述样本与均匀分布的一致程度，不能推出下一期倾向。</p><p><b>结构：</b>统计和值、跨度、奇偶、三区分区、连号和相邻期重复；候选的结构得分是与历史画像的相似度，不是概率。</p><p><b>共现：</b>号码对同时出现次数与支持度、独立期望并列展示，并使用平滑后的比值参与组合多样性计算。</p><p><b>回测：</b>滚动训练，绝不把目标期或未来数据喂给模型；同时展示纯随机模拟和超几何分布理论期望。若统计画像偶尔领先，也可能只是抽样波动。</p><p><b>AI：</b>点击后才把统计摘要和候选发给你配置的 DeepSeek；不发送笔记、凭据或完整历史数据。AI 只生成文字解读，核心结果不依赖 AI 也能完整使用。</p><p><b>规则来源：</b><a href="https://www.cwl.gov.cn/fcpz/yxjs/ssq" target="_blank" rel="noopener noreferrer">双色球官方规则</a> · <a href="https://www.lottery.gov.cn/tzgg/20190202/72410.html" target="_blank" rel="noopener noreferrer">大乐透官方规则</a>。历史接口属于官网内部接口，并非有 SLA 的开放 API。</p></div></details>'+
+      '</div>'+
       '<footer class="lt-footer">理性娱乐 · 量力而行 · 结果用于数据研究，不构成任何投注建议</footer>'+
       '</div></div>';
   }
@@ -656,7 +678,76 @@
     renderFrequency(ui.analysis.sub,'ltSubFreq',ui.analysis.game.subName);
     renderStructure();renderCandidates();renderBacktest();renderHistory();
     $('ltAiPanel').hidden=true;setText('ltAiText','');
-    setText('ltStatus','分析完成：'+ui.analysis.draws.length+' 期样本，'+ui.candidates.length+' 注'+(mode==='uniform'?'纯随机对照':'统计画像')+'候选；结果可用种子“'+seed+'”复现。');
+    setText('ltAdvanceStatus','分析完成：'+ui.analysis.draws.length+' 期样本，'+ui.candidates.length+' 注'+(mode==='uniform'?'纯随机对照':'统计画像')+'候选；结果可用种子“'+seed+'”复现。');
+  }
+
+  // ===== 傻瓜模式 =====
+  function plainReasons(c, a) {
+    var s=c.structure, g=a.game, out=[];
+    var sumLabel = s.sum>=a.sumQ[0]&&s.sum<=a.sumQ[2] ? '落在历史常见的中间区间' : (s.sum<a.sumQ[0]?'比多数历史偏小':'比多数历史偏大');
+    out.push('奇偶搭配是 '+s.odd+' 个奇数、'+(g.mainPick-s.odd)+' 个偶数，和值 '+s.sum+' '+sumLabel+'。');
+    if (s.consecutive>0) out.push('里面有 '+s.consecutive+' 组连号，和不少开奖常见的形态类似。');
+    else out.push('号码之间没有连号，分布比较均匀。');
+    var hot=c.hotCount, cold=c.coldCount;
+    if(hot>0&&cold>0) out.push('选了 '+hot+' 个近期偏热、'+cold+' 个久未出现的号码，冷热搭配。');
+    else if(hot>0) out.push('以近期偏热的号码为主，共 '+hot+' 个。');
+    else if(cold>0) out.push('偏向久未出现的冷号，共 '+cold+' 个。');
+    else out.push('号码冷热比较均衡。');
+    return out;
+  }
+  function renderSimpleTickets() {
+    var s=ui.simple;
+    $('ltSimpleTickets').innerHTML=s.candidates.map(function(c,i){
+      var balls=c.main.map(function(n){return '<b class="red">'+pad2(n)+'</b>';}).join('')+'<i>+</i>'+c.sub.map(function(n){return '<b class="blue">'+pad2(n)+'</b>';}).join('');
+      var reasons=plainReasons(c,s.analysis).map(function(r){return '<li>'+esc(r)+'</li>';}).join('');
+      return '<article class="lt-big-ticket"><div class="lt-big-top"><span>第 '+(i+1)+' 注</span><button class="lt-big-copy-one" type="button" data-idx="'+i+'">复制这注</button></div><div class="lt-big-balls">'+balls+'</div><ul class="lt-plain-reasons">'+reasons+'</ul></article>';
+    }).join('');
+    setText('ltResultTitle','帮你选好了 '+s.candidates.length+' 注，照着填就行');
+  }
+  function simpleNumbersText() {
+    return ui.simple.candidates.map(function(c,i){return (i+1)+'. '+c.main.map(pad2).join(' ')+' + '+c.sub.map(pad2).join(' ');}).join('\n');
+  }
+  function runSimple() {
+    var my=++ui.simple.runId;
+    var steps=['读取最近开奖数据…','统计每个号码出现频率…','识别冷号与热号…','检查奇偶 · 三区 · 连号…','和值 · 跨度结构画像…','号码组合交叉验证…','滚动回测对照随机…','生成候选组合 ✓'];
+    $('ltSimpleResult').hidden=true;
+    $('ltScan').hidden=false;
+    setText('ltScanText',steps[0]);
+    var draws=currentDraws(), count=ui.simple.count, seed=ui.simple.seed;
+    var analysis=analyze(draws,ui.game,60);
+    var candidates=generateCandidates(draws,ui.game,{analysis:analysis,count:count,mode:'statistical',seed:seed});
+    var bt=backtest(draws,ui.game,{windowSize:60,testCount:30,lines:3});
+    ui.simple.analysis=analysis;ui.simple.candidates=candidates;ui.simple.bt=bt;
+    var i=0;
+    var timer=setInterval(function(){
+      if(my!==ui.simple.runId){clearInterval(timer);return;}
+      i++;
+      if(i>=steps.length){
+        clearInterval(timer);
+        $('ltScan').hidden=true;
+        renderSimpleTickets();
+        $('ltSimpleResult').hidden=false;
+        setText('ltStatus','分析完成：基于 '+analysis.draws.length+' 期真实开奖，帮你生成了 '+candidates.length+' 注娱乐候选。');
+        return;
+      }
+      setText('ltScanText',steps[i]);
+    },185);
+  }
+  function rerollSimple() {
+    ui.simple.seed='竹间-'+Math.random().toString(36).slice(2,8);
+    runSimple();
+  }
+  function setSimpleCount(n) {
+    ui.simple.count=n;
+    [3,5,8].forEach(function(k){var b=$('ltPick'+k);if(b)b.classList.toggle('active',k===n);});
+    runSimple();
+  }
+  function setMode(simple) {
+    $('ltSimpleView').hidden=!simple;
+    $('ltAdvanceView').hidden=simple;
+    var btn=$('ltAdvanceToggle');
+    if(simple){btn.textContent='专业数据 ↗';btn.setAttribute('aria-expanded','false');runSimple();}
+    else{btn.textContent='← 回到傻瓜模式';btn.setAttribute('aria-expanded','true');renderAll();}
   }
 
   function syncOfficial() {
@@ -693,14 +784,23 @@
     ui.data[ui.game]=normalizeDraws(seed[ui.game]||[],ui.game);persist();renderAll();notify('已恢复当前彩种的内置数据。');
   }
   function copyReport() {
-    var text=buildReport(ui.analysis,ui.candidates,ui.bt,$('ltSeed').value.trim()||'竹间-001',$('ltMode').value);
-    function done(){notify('完整分析报告已复制。');}
-    if(root.navigator.clipboard&&root.isSecureContext){root.navigator.clipboard.writeText(text).then(done).catch(function(){fallbackCopy(text);});}
-    else fallbackCopy(text);
+    writeClipboard(buildReport(ui.analysis,ui.candidates,ui.bt,$('ltSeed').value.trim()||'竹间-001',$('ltMode').value),'完整分析报告已复制。');
   }
-  function fallbackCopy(text) {
+  function copySimple(idx) {
+    var text;
+    if(idx<0){text=simpleNumbersText();}
+    else{var c=ui.simple.candidates[idx];text=c?(c.main.map(pad2).join(' ')+' + '+c.sub.map(pad2).join(' ')):'';}
+    if(!text){notify('没有可复制的号码。');return;}
+    writeClipboard(text,'号码已复制。');
+  }
+  function writeClipboard(text,okMsg) {
+    function done(){notify(okMsg);}
+    if(root.navigator.clipboard&&root.isSecureContext){root.navigator.clipboard.writeText(text).then(done).catch(function(){fallbackCopy(text,okMsg);});}
+    else fallbackCopy(text,okMsg);
+  }
+  function fallbackCopy(text,okMsg) {
     var ta=root.document.createElement('textarea');ta.value=text;ta.style.position='fixed';ta.style.opacity='0';root.document.body.appendChild(ta);ta.select();
-    try{root.document.execCommand('copy');notify('完整分析报告已复制。');}catch(e){notify('复制失败，请使用浏览器允许剪贴板后重试。');}
+    try{root.document.execCommand('copy');notify(okMsg);}catch(e){notify('复制失败，请使用浏览器允许剪贴板后重试。');}
     ta.remove();
   }
   function aiExplain() {
@@ -716,7 +816,7 @@
     ui.openFlag=true;ui.lastFocus=root.document.activeElement;
     $('lotteryLab').classList.add('open');$('lotteryLab').removeAttribute('hidden');
     root.document.body.style.overflow='hidden';
-    renderAll();setTimeout(function(){$('ltClose').focus();},0);
+    setMode(true);setTimeout(function(){$('ltClose').focus();},0);
     return true;
   }
   function close() {
@@ -728,7 +828,7 @@
   function switchGame(game) {
     if(!GAMES[game])return;ui.game=game;
     ['ssq','dlt'].forEach(function(k){var b=$('ltGame'+k.charAt(0).toUpperCase()+k.slice(1));if(b){b.classList.toggle('active',k===game);b.setAttribute('aria-selected',k===game?'true':'false');}});
-    if(ui.openFlag)renderAll();
+    if(ui.openFlag){if(!$('ltAdvanceView').hidden)renderAll();runSimple();}
   }
   function bind(id,event,fn){var e=$(id);if(e)e.addEventListener(event,fn);}
   function init(opts) {
@@ -750,6 +850,14 @@
     bind('ltCopy','click',copyReport);bind('ltAi','click',aiExplain);
     bind('ltMainFreq','click',function(e){var b=e.target.closest('.lt-num');if(b)notify(currentGame().mainName+' '+pad2(Number(b.getAttribute('data-n')))+'：当前窗口出现 '+b.getAttribute('data-count')+' 次，标准化偏差 z='+b.getAttribute('data-z')+'，当前遗漏 '+b.getAttribute('data-gap')+' 期。');});
     bind('ltSubFreq','click',function(e){var b=e.target.closest('.lt-num');if(b)notify(currentGame().subName+' '+pad2(Number(b.getAttribute('data-n')))+'：当前窗口出现 '+b.getAttribute('data-count')+' 次，标准化偏差 z='+b.getAttribute('data-z')+'，当前遗漏 '+b.getAttribute('data-gap')+' 期。');});
+    bind('ltAdvanceToggle','click',function(){setMode(!$('ltAdvanceView').hidden);});
+    bind('ltSimpleGo','click',runSimple);
+    bind('ltSimpleReroll','click',rerollSimple);
+    bind('ltSimpleCopy','click',function(){copySimple(-1);});
+    bind('ltPick3','click',function(){setSimpleCount(3);});
+    bind('ltPick5','click',function(){setSimpleCount(5);});
+    bind('ltPick8','click',function(){setSimpleCount(8);});
+    bind('ltSimpleTickets','click',function(e){var t=e.target.closest('.lt-big-copy-one');if(t)copySimple(Number(t.getAttribute('data-idx')));});
     root.document.addEventListener('keydown',function(e){
       if(!ui.openFlag)return;
       if(e.key==='Escape'){e.preventDefault();close();return;}
