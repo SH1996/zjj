@@ -894,6 +894,20 @@
   .lt-plain-reasons{margin:0;padding:0;list-style:none;color:var(--lt-soft);font-size:12px;line-height:1.9}
   .lt-plain-reasons li{position:relative;padding-left:16px}
   .lt-plain-reasons li::before{content:'·';position:absolute;left:2px;color:var(--lt-accent);font-weight:800}
+  .lt-persona{max-width:520px;margin:16px auto 0;padding:12px 16px;border:1px dashed var(--lt-line);border-radius:14px;background:var(--lt-panel);text-align:left}
+  .lt-persona summary{cursor:pointer;color:var(--lt-accent);font-size:12px;font-weight:650}
+  .lt-persona-fields{display:flex;gap:10px;flex-wrap:wrap;margin-top:12px}
+  .lt-persona-fields label{display:flex;flex-direction:column;gap:5px;color:var(--lt-soft);font-size:11px}
+  .lt-persona-fields select{height:36px;min-width:96px;padding:0 8px;border:1px solid var(--lt-line);border-radius:9px;background:var(--lt-bg);color:var(--lt-ink)}
+  .lt-persona-note{margin:10px 0 0;color:var(--lt-soft);font-size:11px;line-height:1.6}
+  .lt-big-actions{display:flex;align-items:center;gap:8px}
+  .lt-reco{display:flex;align-items:center;gap:10px;flex-wrap:wrap;justify-content:center;margin:2px 0 10px}
+  .lt-reco-score{font-size:13px;font-weight:750;color:var(--lt-ink)}
+  .lt-reco-stars{color:#e6a23c;font-size:14px;letter-spacing:.06em}
+  .lt-reco-wx{padding:3px 9px;border-radius:8px;background:var(--lt-wash);color:var(--lt-accent);font-size:11px;font-weight:650}
+  .lt-fit-tag{text-align:center;color:var(--lt-soft);font-size:11px;line-height:1.6;margin-bottom:8px}
+  .lt-fit{border-color:var(--lt-accent)!important;box-shadow:0 0 0 3px color-mix(in srgb,var(--lt-accent) 14%,transparent)}
+  .lt-fit-badge{padding:3px 9px;border-radius:8px;background:var(--lt-accent);color:#fff;font-size:11px;font-weight:700;white-space:nowrap}
   .lottery-lab button,.lottery-lab select,.lottery-lab input,.lottery-lab textarea{font-family:inherit}.lottery-lab button{cursor:pointer}
   @media(max-width:900px){.lt-controls{grid-template-columns:repeat(2,1fr)}.lt-primary{grid-column:1/-1}.lt-metrics{grid-template-columns:repeat(2,1fr)}.lt-two-col{grid-template-columns:1fr}.lt-ball-grid{grid-template-columns:repeat(9,1fr)}}
   @media(max-width:560px){.lt-header{padding:14px}.lt-body{padding:14px 12px 28px}.lt-brand h2{font-size:19px}.lt-brand p{font-size:10px}
@@ -1332,7 +1346,7 @@ window.onerror = function (msg, url, line) {
   'use strict';
 
   // 版本号统一在此维护；localStorage 键沿用 v11 不变，切勿改名以免丢失用户数据
-  var APP_VERSION = '13.2';
+  var APP_VERSION = '13.3';
   // 送货单拍照识别：视觉模型默认名、兼容别名与各项安全上限
   var DEFAULT_VISION_MODEL = 'deepseek-flash';
   var VISION_MODEL_FALLBACK = 'deepseek-v4-flash-vision-exp';

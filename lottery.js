@@ -566,10 +566,17 @@
           '<h3>帮你把复杂的概率分析，变成一注号码</h3>'+
           '<p class="lt-hero-sub">选个注数，剩下的交给它。分析过程会一闪而过，你只看结果就好。</p>'+
           '<div class="lt-count-choice" role="group" aria-label="选择注数">'+
+            '<button type="button" id="ltPick1" data-count="1">1 注</button>'+
             '<button type="button" id="ltPick3" data-count="3">3 注</button>'+
             '<button type="button" id="ltPick5" data-count="5" class="active">5 注</button>'+
             '<button type="button" id="ltPick8" data-count="8">8 注</button>'+
           '</div>'+
+          '<details class="lt-persona" id="ltPersona"><summary>🎯 可选：告诉我你的星座 / 生肖 / 性别，帮你挑最配的一注</summary>'+
+          '<div class="lt-persona-fields">'+
+          '<label>星座<select id="ltSign"><option value="">不选</option><option>白羊座</option><option>金牛座</option><option>双子座</option><option>巨蟹座</option><option>狮子座</option><option>处女座</option><option>天秤座</option><option>天蝎座</option><option>射手座</option><option>摩羯座</option><option>水瓶座</option><option>双鱼座</option></select></label>'+
+          '<label>生肖<select id="ltZodiac"><option value="">不选</option><option>鼠</option><option>牛</option><option>虎</option><option>兔</option><option>龙</option><option>蛇</option><option>马</option><option>羊</option><option>猴</option><option>鸡</option><option>狗</option><option>猪</option></select></label>'+
+          '<label>性别<select id="ltGender"><option value="">不选</option><option>男</option><option>女</option></select></label>'+
+          '</div><p class="lt-persona-note">只是娱乐标签，用来区分每注的“气质”，不会提高中奖概率。</p></details>'+
           '<button class="lt-go" id="ltSimpleGo" type="button">✨ 帮我选一组号码</button>'+
         '</section>'+
         '<section id="ltScan" class="lt-scan" hidden><div class="lt-scan-inner"><div class="lt-spin"></div><div id="ltScanText" class="lt-scan-text">正在读取最近开奖数据…</div><div class="lt-scan-dots"><i>·</i><i>·</i><i>·</i></div></div></section>'+
@@ -682,6 +689,40 @@
   }
 
   // ===== 傻瓜模式 =====
+  // 娱乐个性化：五行 / 星座 / 生肖映射（只影响展示与推荐指数，不改号码生成、不改概率）
+  var WX_ORDER=['木','火','土','金','水'];
+  var SIGNS=[['白羊座','火'],['金牛座','土'],['双子座','金'],['巨蟹座','水'],['狮子座','火'],['处女座','土'],['天秤座','金'],['天蝎座','水'],['射手座','火'],['摩羯座','土'],['水瓶座','金'],['双鱼座','水']];
+  var ZODIAC=[['鼠','水'],['牛','土'],['虎','木'],['兔','木'],['龙','土'],['蛇','火'],['马','火'],['羊','土'],['猴','金'],['鸡','金'],['狗','土'],['猪','水']];
+  var WX_TAG={
+    '木':{who:'属虎、属兔', note:'春生 · 有冲劲、爱尝鲜'},
+    '火':{who:'白羊 / 狮子 / 射手', note:'热情、果断'},
+    '土':{who:'金牛 / 处女 / 摩羯', note:'稳重、踏实'},
+    '金':{who:'双子 / 天秤 / 水瓶', note:'理性、干脆'},
+    '水':{who:'巨蟹 / 天蝎 / 双鱼', note:'敏锐、细腻'}
+  };
+  function wuxingOfNumber(n){var t=n%10;if(t===1||t===6)return '水';if(t===2||t===7)return '火';if(t===3||t===8)return '木';if(t===4||t===9)return '金';return '土';}
+  function wuxingOfTicket(c){
+    var cnt={'木':0,'火':0,'土':0,'金':0,'水':0}, total=0, main='土', max=0;
+    c.main.concat(c.sub).forEach(function(n){var w=wuxingOfNumber(n);cnt[w]++;total++;});
+    WX_ORDER.forEach(function(k){if(cnt[k]>max){max=cnt[k];main=k;}});
+    return {main:main,count:max,total:total,cnt:cnt};
+  }
+  function ticketRecommend(c){
+    var s=clamp(-c.structureLog,0,2.5), p=clamp(-c.pairMeanLog,0,1.2);
+    var wx=wuxingOfTicket(c);
+    var wxScore=Math.round((wx.count/wx.total)*5);
+    var hc=(c.hotCount>0&&c.coldCount>0)?2:1;
+    return Math.round(clamp(60 + s*10 + p*9 + wxScore + hc, 60, 99));
+  }
+  function starsOf(idx){var n=Math.max(1,Math.min(5,Math.round(idx/20)));return '★★★★★'.slice(0,n)+'☆☆☆☆☆'.slice(0,5-n);}
+  function userTargetWx(){
+    var set={}, i, sv=($('ltSign')||{}).value, zv=($('ltZodiac')||{}).value, gv=($('ltGender')||{}).value;
+    for(i=0;i<SIGNS.length;i++)if(SIGNS[i][0]===sv)set[SIGNS[i][1]]=1;
+    for(i=0;i<ZODIAC.length;i++)if(ZODIAC[i][0]===zv)set[ZODIAC[i][1]]=1;
+    if(gv==='男'){set['火']=1;set['木']=1;}
+    if(gv==='女'){set['水']=1;set['金']=1;}
+    return Object.keys(set);
+  }
   function plainReasons(c, a) {
     var s=c.structure, g=a.game, out=[];
     var sumLabel = s.sum>=a.sumQ[0]&&s.sum<=a.sumQ[2] ? '落在历史常见的中间区间' : (s.sum<a.sumQ[0]?'比多数历史偏小':'比多数历史偏大');
@@ -697,12 +738,35 @@
   }
   function renderSimpleTickets() {
     var s=ui.simple;
-    $('ltSimpleTickets').innerHTML=s.candidates.map(function(c,i){
+    var target=userTargetWx();
+    var rows=s.candidates.map(function(c,i){
+      var wx=wuxingOfTicket(c);
+      return {i:i, c:c, wx:wx, rec:ticketRecommend(c), fit:(target.length>0 && target.indexOf(wx.main)>-1)};
+    });
+    // 选了标签却没有任何注的五行命中时，退而推荐指数最高的一注（保证总有“最适合你”）
+    if(target.length>0 && !rows.some(function(r){return r.fit;})){
+      rows.slice().sort(function(a,b){return b.rec-a.rec;})[0].fit=true;
+    }
+    var items=rows.map(function(r){
+      var i=r.i, c=r.c, wx=r.wx, fit=r.fit;
+      var finalRec=Math.min(99, r.rec + (fit?5:0));
       var balls=c.main.map(function(n){return '<b class="red">'+pad2(n)+'</b>';}).join('')+'<i>+</i>'+c.sub.map(function(n){return '<b class="blue">'+pad2(n)+'</b>';}).join('');
-      var reasons=plainReasons(c,s.analysis).map(function(r){return '<li>'+esc(r)+'</li>';}).join('');
-      return '<article class="lt-big-ticket"><div class="lt-big-top"><span>第 '+(i+1)+' 注</span><button class="lt-big-copy-one" type="button" data-idx="'+i+'">复制这注</button></div><div class="lt-big-balls">'+balls+'</div><ul class="lt-plain-reasons">'+reasons+'</ul></article>';
-    }).join('');
+      var reasons=plainReasons(c,s.analysis).map(function(x){return '<li>'+esc(x)+'</li>';}).join('');
+      var tag=WX_TAG[wx.main];
+      var fitBadge = fit ? '<span class="lt-fit-badge">⭐ 最适合你</span>' : '';
+      return '<article class="lt-big-ticket'+(fit?' lt-fit':'')+'">'+
+        '<div class="lt-big-top"><span>第 '+(i+1)+' 注</span><span class="lt-big-actions">'+fitBadge+'<button class="lt-big-copy-one" type="button" data-idx="'+i+'">复制这注</button></span></div>'+
+        '<div class="lt-big-balls">'+balls+'</div>'+
+        '<div class="lt-reco"><span class="lt-reco-score">推荐指数 '+finalRec+'</span><span class="lt-reco-stars" aria-label="'+starsOf(finalRec)+'">'+starsOf(finalRec)+'</span><span class="lt-reco-wx">五行属'+wx.main+'</span></div>'+
+        '<div class="lt-fit-tag">适合：'+esc(tag.who)+' · '+esc(tag.note)+'</div>'+
+        '<ul class="lt-plain-reasons">'+reasons+'</ul></article>';
+    });
+    $('ltSimpleTickets').innerHTML=items.join('');
     setText('ltResultTitle','帮你选好了 '+s.candidates.length+' 注，照着填就行');
+  }
+  function rerenderSimple() {
+    if(!ui.simple.candidates.length)return;
+    renderSimpleTickets();
   }
   function simpleNumbersText() {
     return ui.simple.candidates.map(function(c,i){return (i+1)+'. '+c.main.map(pad2).join(' ')+' + '+c.sub.map(pad2).join(' ');}).join('\n');
@@ -739,7 +803,7 @@
   }
   function setSimpleCount(n) {
     ui.simple.count=n;
-    [3,5,8].forEach(function(k){var b=$('ltPick'+k);if(b)b.classList.toggle('active',k===n);});
+    [1,3,5,8].forEach(function(k){var b=$('ltPick'+k);if(b)b.classList.toggle('active',k===n);});
     runSimple();
   }
   function setMode(simple) {
@@ -854,9 +918,13 @@
     bind('ltSimpleGo','click',runSimple);
     bind('ltSimpleReroll','click',rerollSimple);
     bind('ltSimpleCopy','click',function(){copySimple(-1);});
+    bind('ltPick1','click',function(){setSimpleCount(1);});
     bind('ltPick3','click',function(){setSimpleCount(3);});
     bind('ltPick5','click',function(){setSimpleCount(5);});
     bind('ltPick8','click',function(){setSimpleCount(8);});
+    bind('ltSign','change',rerenderSimple);
+    bind('ltZodiac','change',rerenderSimple);
+    bind('ltGender','change',rerenderSimple);
     bind('ltSimpleTickets','click',function(e){var t=e.target.closest('.lt-big-copy-one');if(t)copySimple(Number(t.getAttribute('data-idx')));});
     root.document.addEventListener('keydown',function(e){
       if(!ui.openFlag)return;
