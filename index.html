@@ -793,9 +793,13 @@
     padding:18px max(22px,calc((100vw - 1240px)/2));border-bottom:1px solid var(--lt-line);
     background:color-mix(in srgb,var(--lt-bg) 91%,transparent);backdrop-filter:blur(16px);}
   .lt-brand{display:flex;align-items:center;gap:12px}.lt-brand h2{margin:0;font-size:22px;letter-spacing:.04em}
-  .lt-brand p{margin:3px 0 0;color:var(--lt-soft);font-size:12px}.lt-logo{display:grid;place-items:center;width:42px;height:42px;
-    border-radius:14px;background:var(--lt-accent);color:#fff;font-size:27px;box-shadow:0 7px 18px rgba(99,87,200,.22)}
-  .lt-icon{width:40px;height:40px;border:1px solid var(--lt-line);border-radius:12px;background:var(--lt-panel);color:var(--lt-ink);font-size:19px}
+  .lt-brand p{margin:3px 0 0;color:var(--lt-soft);font-size:12px}  .lt-logo{display:grid;place-items:center;width:42px;height:42px;flex:0 0 auto;
+    border-radius:13px;background:linear-gradient(135deg,#6a5cf0,#907dff);color:#fff;
+    box-shadow:0 8px 20px rgba(99,87,200,.28),inset 0 1px 0 rgba(255,255,255,.35)}
+  .lt-logo svg{display:block}
+  .lt-icon{display:grid;place-items:center;width:40px;height:40px;padding:0;line-height:1;
+    border:1px solid var(--lt-line);border-radius:12px;background:var(--lt-panel);color:var(--lt-ink)}
+  .lt-icon svg{display:block}
   .lt-header-actions{display:flex;align-items:center;gap:8px}
   .lt-body{max-width:1240px;margin:0 auto;padding:22px 22px 36px}.lt-responsible{padding:14px 17px;border:1px solid #dfd3a9;
     border-radius:14px;background:#fff9e8;color:#66552b;font-size:13px;line-height:1.75}
@@ -1346,7 +1350,7 @@ window.onerror = function (msg, url, line) {
   'use strict';
 
   // 版本号统一在此维护；localStorage 键沿用 v11 不变，切勿改名以免丢失用户数据
-  var APP_VERSION = '13.3';
+  var APP_VERSION = '13.4';
   // 送货单拍照识别：视觉模型默认名、兼容别名与各项安全上限
   var DEFAULT_VISION_MODEL = 'deepseek-flash';
   var VISION_MODEL_FALLBACK = 'deepseek-v4-flash-vision-exp';

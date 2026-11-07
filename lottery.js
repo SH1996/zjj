@@ -544,8 +544,8 @@
   function markup() {
     return ''+
     '<div class="lt-shell">'+
-      '<header class="lt-header"><div class="lt-brand"><span class="lt-logo">◇</span><div><h2 id="lotteryTitle">数彩助手</h2><p>复杂分析帮你做，只留一看就懂的号码</p></div></div>'+
-      '<div class="lt-header-actions"><button class="lt-icon" id="ltHelp" type="button" aria-label="使用指南" title="使用指南">？</button><button class="lt-icon" id="ltClose" type="button" aria-label="关闭数彩助手">✕</button></div></header>'+
+      '<header class="lt-header"><div class="lt-brand"><span class="lt-logo"><svg viewBox="0 0 24 24" width="22" height="22" aria-hidden="true"><circle cx="9.6" cy="12" r="5.7" fill="#ff5f6d"/><circle cx="14.6" cy="12" r="5.7" fill="#4f86ff"/><circle cx="7.6" cy="9.7" r="1.9" fill="#ffffff" opacity=".55"/><circle cx="12.6" cy="9.7" r="1.9" fill="#ffffff" opacity=".55"/></svg></span><div><h2 id="lotteryTitle">数彩助手</h2><p>复杂分析帮你做，只留一看就懂的号码</p></div></div>'+
+      '<div class="lt-header-actions"><button class="lt-icon" id="ltHelp" type="button" aria-label="使用指南" title="使用指南"><svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M9.09 9a3 3 0 0 1 5.83 1c0 2-3 3-3 3"/><circle cx="12" cy="17" r="1" fill="currentColor" stroke="none"/></svg></button><button class="lt-icon" id="ltClose" type="button" aria-label="关闭数彩助手"><svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" aria-hidden="true"><path d="M6 6l12 12M18 6L6 18"/></svg></button></div></header>'+
       '<div class="lt-body">'+
       '<div class="lt-responsible lt-tiny">娱乐统计，不是中奖承诺：每注中奖概率相同，历史数据不能提高概率。理性娱乐、量力而行。</div>'+
       '<section id="ltHelpPanel" class="lt-help" hidden><div class="lt-help-head"><h3>傻瓜式使用指南</h3><button id="ltHelpClose" type="button" aria-label="收起使用指南">收起</button></div>'+
