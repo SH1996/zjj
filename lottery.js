@@ -545,9 +545,20 @@
     return ''+
     '<div class="lt-shell">'+
       '<header class="lt-header"><div class="lt-brand"><span class="lt-logo">◇</span><div><h2 id="lotteryTitle">数彩实验室</h2><p>真实数据 · 多维交叉 · 可复现回测</p></div></div>'+
-      '<button class="lt-icon" id="ltClose" type="button" aria-label="关闭彩票分析">✕</button></header>'+
+      '<div class="lt-header-actions"><button class="lt-icon" id="ltHelp" type="button" aria-label="使用指南" title="使用指南">？</button><button class="lt-icon" id="ltClose" type="button" aria-label="关闭彩票分析">✕</button></div></header>'+
       '<div class="lt-body">'+
       '<div class="lt-responsible"><b>娱乐统计，不是中奖承诺。</b> 公平开奖各期独立，任何合法单式组合的头奖概率都相同；历史冷热、遗漏和 AI 解读均不能改变概率。未满 18 岁请勿购彩，不借贷、不追损。</div>'+
+      '<section id="ltHelpPanel" class="lt-help" hidden><div class="lt-help-head"><h3>怎么使用「数彩实验室」</h3><button id="ltHelpClose" type="button" aria-label="收起使用指南">收起</button></div>'+
+      '<ol class="lt-steps">'+
+      '<li><b>选彩种</b>：顶部切换「双色球」或「超级大乐透」，两个彩种规则与数据独立。</li>'+
+      '<li><b>看数据</b>：界面内置官网真实历史开奖；点「更新数据」会打开官方页面，复制最新记录后到「导入 / 粘贴」里校验并合并即可补新。</li>'+
+      '<li><b>调参数</b>：分析窗口（近 30/60/100 期或全部）、候选注数、生成模式（统计画像 / 纯随机对照）、复现种子——同一组参数永远得到同一组候选。</li>'+
+      '<li><b>生成</b>：点「生成交叉分析」，下方依次给出数据指标、号码频率与遗漏、组合结构、娱乐候选、逐期回测。</li>'+
+      '<li><b>看候选</b>：每张候选下方「画像依据」说明它为什么被选出；点「复制完整报告」可把全部结果带走。</li>'+
+      '<li><b>AI 解读（可选）</b>：点「✨ DeepSeek 交叉解读」，让 AI 用文字解释上方统计，AI 只读结果、不参与选号、不接触笔记与凭据。</li>'+
+      '<li><b>回测怎么看</b>：对比「统计画像 / 纯随机对照 / 理论随机期望」三行，判断方法是否真比随机强——通常只是抽样波动。</li>'+
+      '</ol>'+
+      '<p class="lt-note">重要：这是<b>娱乐数据研究</b>。公平开奖各期独立，历史冷热、遗漏、AI 解读都不能改变中奖概率；任何合法单式组合的中奖概率完全相同。未满 18 岁请勿购彩，不借贷、不追损。</p></section>'+
       '<div class="lt-topline"><div class="lt-games" role="tablist" aria-label="彩种"><button id="ltGameSsq" data-game="ssq" role="tab" type="button">双色球</button><button id="ltGameDlt" data-game="dlt" role="tab" type="button">超级大乐透</button></div>'+
       '<a id="ltSourceLink" class="lt-source" target="_blank" rel="noopener noreferrer">查看官方数据源 ↗</a></div>'+
       '<section class="lt-data-card"><div><span class="lt-eyebrow">DATA HEALTH</span><h3 id="ltDataTitle"></h3><p id="ltDataMeta"></p></div><div class="lt-data-actions"><button id="ltSync" type="button">更新数据</button><button id="ltImportToggle" type="button">导入 / 粘贴</button></div></section>'+
@@ -726,6 +737,8 @@
     var host=$('lotteryLab');if(!host)throw new Error('缺少 lotteryLab 容器');
     host.innerHTML=markup();loadData();ui.inited=true;
     bind('ltClose','click',close);
+    bind('ltHelp','click',function(){var p=$('ltHelpPanel');p.hidden=!p.hidden;if(!p.hidden)p.scrollIntoView({block:'nearest'});});
+    bind('ltHelpClose','click',function(){$('ltHelpPanel').hidden=true;});
     bind('ltGameSsq','click',function(){switchGame('ssq');});
     bind('ltGameDlt','click',function(){switchGame('dlt');});
     bind('ltGenerate','click',renderAll);

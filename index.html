@@ -796,10 +796,19 @@
   .lt-brand p{margin:3px 0 0;color:var(--lt-soft);font-size:12px}.lt-logo{display:grid;place-items:center;width:42px;height:42px;
     border-radius:14px;background:var(--lt-accent);color:#fff;font-size:27px;box-shadow:0 7px 18px rgba(99,87,200,.22)}
   .lt-icon{width:40px;height:40px;border:1px solid var(--lt-line);border-radius:12px;background:var(--lt-panel);color:var(--lt-ink);font-size:19px}
+  .lt-header-actions{display:flex;align-items:center;gap:8px}
   .lt-body{max-width:1240px;margin:0 auto;padding:22px 22px 36px}.lt-responsible{padding:14px 17px;border:1px solid #dfd3a9;
     border-radius:14px;background:#fff9e8;color:#66552b;font-size:13px;line-height:1.75}
   [data-theme="dark"] .lt-responsible{border-color:#5b5030;background:#302b1d;color:#e4d6a8}
   .lt-responsible.lt-compact{padding:10px 13px;margin-bottom:15px;font-size:12px}
+  .lt-help{padding:18px;margin-bottom:14px;border:1px solid var(--lt-line);border-radius:16px;background:var(--lt-panel)}
+  .lt-help-head{display:flex;align-items:center;justify-content:space-between;margin-bottom:12px}
+  .lt-help h3{margin:0;font-size:16px}
+  .lt-help-head button{border:1px solid var(--lt-line);background:var(--lt-panel);color:var(--lt-soft);
+    padding:6px 12px;border-radius:9px;font-size:12px;cursor:pointer}
+  .lt-steps{margin:0;padding-left:20px;color:var(--lt-ink);font-size:13px;line-height:1.9}
+  .lt-steps li{margin:6px 0}.lt-steps b{color:var(--lt-accent)}
+  .lt-help .lt-note{color:var(--lt-soft);font-size:12px;line-height:1.8}
   .lt-topline{display:flex;align-items:center;justify-content:space-between;gap:14px;margin:20px 0 14px}
   .lt-games{display:flex;gap:6px;padding:5px;border-radius:14px;background:var(--lt-panel);border:1px solid var(--lt-line)}
   .lt-games button{border:0;border-radius:10px;background:transparent;color:var(--lt-soft);padding:10px 18px;font-weight:650}
@@ -1283,7 +1292,7 @@ window.onerror = function (msg, url, line) {
   'use strict';
 
   // 版本号统一在此维护；localStorage 键沿用 v11 不变，切勿改名以免丢失用户数据
-  var APP_VERSION = '13.0';
+  var APP_VERSION = '13.1';
   // 送货单拍照识别：视觉模型默认名、兼容别名与各项安全上限
   var DEFAULT_VISION_MODEL = 'deepseek-flash';
   var VISION_MODEL_FALLBACK = 'deepseek-v4-flash-vision-exp';
