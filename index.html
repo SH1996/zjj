@@ -773,6 +773,89 @@
     .m-btn{font-size:11.5px;padding:10px 2px;letter-spacing:.02em;}
     .tool-btn span { display: none; }
   }
+
+  /* ==================== 数彩实验室 ==================== */
+  .lottery-lab[hidden]{display:none!important;}
+  .lottery-lab{
+    --lt-bg:#f4f5fb;--lt-panel:#ffffff;--lt-ink:#24263a;--lt-soft:#676b85;
+    --lt-line:#e2e4ef;--lt-accent:#6357c8;--lt-accent2:#887ce0;--lt-wash:#eeecff;
+    position:fixed;inset:0;z-index:1400;display:none;overflow-y:auto;
+    background:var(--lt-bg);color:var(--lt-ink);font-family:inherit;
+  }
+  .lottery-lab.open{display:block;animation:ltIn .22s ease-out;}
+  @keyframes ltIn{from{opacity:0;transform:translateY(8px)}to{opacity:1;transform:none}}
+  [data-theme="dark"] .lottery-lab{
+    --lt-bg:#14151e;--lt-panel:#1e202c;--lt-ink:#e5e5ef;--lt-soft:#a2a4b8;
+    --lt-line:#343747;--lt-accent:#aaa0ff;--lt-accent2:#8175d7;--lt-wash:#29263f;
+  }
+  .lt-shell{min-height:100%;background:radial-gradient(circle at 10% 0,var(--lt-wash),transparent 34%),var(--lt-bg);}
+  .lt-header{position:sticky;top:0;z-index:10;display:flex;align-items:center;justify-content:space-between;
+    padding:18px max(22px,calc((100vw - 1240px)/2));border-bottom:1px solid var(--lt-line);
+    background:color-mix(in srgb,var(--lt-bg) 91%,transparent);backdrop-filter:blur(16px);}
+  .lt-brand{display:flex;align-items:center;gap:12px}.lt-brand h2{margin:0;font-size:22px;letter-spacing:.04em}
+  .lt-brand p{margin:3px 0 0;color:var(--lt-soft);font-size:12px}.lt-logo{display:grid;place-items:center;width:42px;height:42px;
+    border-radius:14px;background:var(--lt-accent);color:#fff;font-size:27px;box-shadow:0 7px 18px rgba(99,87,200,.22)}
+  .lt-icon{width:40px;height:40px;border:1px solid var(--lt-line);border-radius:12px;background:var(--lt-panel);color:var(--lt-ink);font-size:19px}
+  .lt-body{max-width:1240px;margin:0 auto;padding:22px 22px 36px}.lt-responsible{padding:14px 17px;border:1px solid #dfd3a9;
+    border-radius:14px;background:#fff9e8;color:#66552b;font-size:13px;line-height:1.75}
+  [data-theme="dark"] .lt-responsible{border-color:#5b5030;background:#302b1d;color:#e4d6a8}
+  .lt-responsible.lt-compact{padding:10px 13px;margin-bottom:15px;font-size:12px}
+  .lt-topline{display:flex;align-items:center;justify-content:space-between;gap:14px;margin:20px 0 14px}
+  .lt-games{display:flex;gap:6px;padding:5px;border-radius:14px;background:var(--lt-panel);border:1px solid var(--lt-line)}
+  .lt-games button{border:0;border-radius:10px;background:transparent;color:var(--lt-soft);padding:10px 18px;font-weight:650}
+  .lt-games button.active{background:var(--lt-accent);color:#fff}.lt-source{color:var(--lt-accent);font-size:13px;text-decoration:none}
+  .lt-data-card{display:flex;justify-content:space-between;align-items:center;gap:16px;padding:20px 22px;margin-bottom:14px;
+    border-radius:18px;background:linear-gradient(120deg,var(--lt-panel),var(--lt-wash));border:1px solid var(--lt-line)}
+  .lt-data-card h3{margin:4px 0 6px;font-size:19px}.lt-data-card p{margin:0;color:var(--lt-soft);font-size:12px;line-height:1.6}
+  .lt-eyebrow{font-size:10px;letter-spacing:.17em;color:var(--lt-accent);font-weight:800}
+  .lt-data-actions,.lt-import-actions{display:flex;gap:8px;flex-wrap:wrap}.lt-data-actions button,.lt-import-actions button,
+  .lt-panel-head button,.lt-import-actions input::file-selector-button{border:1px solid var(--lt-line);background:var(--lt-panel);
+    color:var(--lt-ink);padding:9px 12px;border-radius:10px;font-size:12px}
+  .lt-import{padding:18px;margin-bottom:14px;border:1px solid var(--lt-line);border-radius:16px;background:var(--lt-panel)}
+  .lt-import h3{margin:0 0 8px}.lt-import p{color:var(--lt-soft);font-size:12px;line-height:1.7}.lt-import textarea{width:100%;resize:vertical;
+    margin:8px 0 12px;padding:12px;border:1px solid var(--lt-line);border-radius:11px;background:var(--lt-bg);color:var(--lt-ink);font:12px/1.7 monospace}
+  .lt-import-actions{align-items:center}.lt-import-actions input{max-width:250px;color:var(--lt-soft);font-size:11px}.lt-small{font-size:11px!important}
+  .lt-controls{display:grid;grid-template-columns:repeat(4,minmax(120px,1fr)) auto;gap:10px;align-items:end;margin:14px 0}
+  .lt-controls label{display:flex;flex-direction:column;gap:6px;color:var(--lt-soft);font-size:11px}.lt-controls select,.lt-controls input{
+    width:100%;height:40px;padding:0 10px;border:1px solid var(--lt-line);border-radius:10px;background:var(--lt-panel);color:var(--lt-ink)}
+  .lt-primary{height:40px;border:0;border-radius:11px;padding:0 18px;background:var(--lt-accent);color:#fff;font-weight:700;white-space:nowrap}
+  .lt-primary:disabled,.lt-ai:disabled{opacity:.55}.lt-status{min-height:22px;color:var(--lt-soft);font-size:12px;line-height:1.65;padding:3px 2px 10px}
+  .lt-metrics{display:grid;grid-template-columns:repeat(4,1fr);gap:12px;margin-bottom:14px}.lt-metric{padding:17px 18px;border:1px solid var(--lt-line);
+    border-radius:15px;background:var(--lt-panel)}.lt-metric span,.lt-metric small{display:block;color:var(--lt-soft);font-size:11px}
+  .lt-metric b{display:block;margin:7px 0;font-size:19px;letter-spacing:-.02em}.lt-two-col{display:grid;grid-template-columns:1.25fr 1fr;gap:14px}
+  .lt-panel{padding:20px;margin-bottom:14px;border:1px solid var(--lt-line);border-radius:18px;background:var(--lt-panel)}
+  .lt-panel h3{margin:4px 0 15px;font-size:18px}.lt-panel h4{margin:16px 0 10px}.lt-panel-head{display:flex;align-items:flex-start;justify-content:space-between;gap:12px}
+  .lt-panel-head>div:last-child{display:flex;gap:7px;flex-wrap:wrap}.lt-tag{padding:5px 8px;border-radius:8px;background:var(--lt-wash);color:var(--lt-accent);font-size:10px;white-space:nowrap}
+  .lt-ball-grid{display:grid;grid-template-columns:repeat(11,1fr);gap:7px}.lt-sub-grid{grid-template-columns:repeat(8,1fr)}
+  .lt-num{position:relative;min-width:0;padding:7px 2px 5px;border:1px solid transparent;border-radius:10px;background:var(--lt-bg);color:var(--lt-ink)}
+  .lt-num b{display:grid;place-items:center;width:28px;height:28px;margin:auto;border-radius:50%;font-size:12px;background:rgba(99,87,200,var(--heat));color:var(--lt-ink)}
+  .lt-num.cold b{background:rgba(70,139,180,var(--heat))}.lt-num small{display:block;margin-top:3px;color:var(--lt-soft);font-size:9px}.lt-num:focus{border-color:var(--lt-accent)}
+  .lt-subhead{color:var(--lt-soft);font-size:12px}.lt-note{color:var(--lt-soft);font-size:11px;line-height:1.75;margin:12px 0 0}
+  .lt-structure{display:grid;grid-template-columns:repeat(2,1fr);gap:9px}.lt-structure>div{padding:11px;border-radius:11px;background:var(--lt-bg)}
+  .lt-structure span,.lt-structure small{display:block;color:var(--lt-soft);font-size:10px}.lt-structure b{display:block;margin:5px 0;font-size:14px}
+  .lt-pairs{display:grid;grid-template-columns:repeat(2,1fr);gap:7px}.lt-pairs>span{display:flex;justify-content:space-between;align-items:center;gap:6px;padding:8px;border:1px solid var(--lt-line);border-radius:9px}
+  .lt-pairs b{font-size:11px}.lt-pairs small{color:var(--lt-soft);font-size:9px}.lt-ai{background:var(--lt-wash)!important;color:var(--lt-accent)!important;border-color:transparent!important}
+  .lt-candidates{display:grid;grid-template-columns:repeat(2,1fr);gap:11px}.lt-ticket{padding:15px;border:1px dashed var(--lt-line);border-radius:14px;background:var(--lt-bg)}
+  .lt-ticket-top{display:flex;justify-content:space-between;color:var(--lt-soft);font-size:10px}.lt-ticket-balls{display:flex;align-items:center;gap:6px;flex-wrap:wrap;margin:13px 0}
+  .lt-ticket-balls b{display:grid;place-items:center;width:34px;height:34px;border-radius:50%;color:#fff;font-size:13px;box-shadow:inset 0 -2px 4px rgba(0,0,0,.15)}
+  .lt-ticket-balls b.red,.lt-table-balls.red{color:#d94c5c}.lt-ticket-balls b.blue,.lt-table-balls.blue{color:#3985c6}
+  .lt-ticket-balls b.red,.lt-ticket-balls b.blue{color:#fff}.lt-ticket-balls b.red{background:#d94c5c}.lt-ticket-balls b.blue{background:#3985c6}
+  .lt-ticket-balls i{color:var(--lt-soft);font-style:normal}.lt-ticket ul{margin:0;padding-left:16px;color:var(--lt-soft);font-size:10px;line-height:1.8}
+  .lt-ai-panel{margin-top:16px;padding:16px;border-radius:13px;background:var(--lt-wash)}.lt-ai-panel h4{margin:0 0 10px;color:var(--lt-accent)}
+  #ltAiText{white-space:pre-wrap;font-size:13px;line-height:1.9}.lt-table-wrap{overflow-x:auto}table{width:100%;border-collapse:collapse;font-size:12px}
+  th,td{padding:10px 9px;border-bottom:1px solid var(--lt-line);text-align:left;white-space:nowrap}th{color:var(--lt-soft);font-size:10px;font-weight:600}
+  .lt-table-balls{font-weight:750;letter-spacing:.08em}.lt-bt-table td:not(:first-child){font-variant-numeric:tabular-nums}.lt-bt-detail{margin-top:12px;color:var(--lt-accent);font-size:12px}
+  .lt-method{padding:18px 20px;border:1px solid var(--lt-line);border-radius:16px;background:var(--lt-panel)}.lt-method summary{cursor:pointer;font-weight:700}
+  .lt-method div{color:var(--lt-soft);font-size:12px;line-height:1.9}.lt-method a{color:var(--lt-accent)}.lt-footer{text-align:center;color:var(--lt-soft);font-size:11px;padding:25px 0 5px}
+  .lottery-lab button,.lottery-lab select,.lottery-lab input,.lottery-lab textarea{font-family:inherit}.lottery-lab button{cursor:pointer}
+  @media(max-width:900px){.lt-controls{grid-template-columns:repeat(2,1fr)}.lt-primary{grid-column:1/-1}.lt-metrics{grid-template-columns:repeat(2,1fr)}.lt-two-col{grid-template-columns:1fr}.lt-ball-grid{grid-template-columns:repeat(9,1fr)}}
+  @media(max-width:560px){.lt-header{padding:14px}.lt-body{padding:14px 12px 28px}.lt-brand h2{font-size:19px}.lt-brand p{font-size:10px}
+    .lt-topline{align-items:flex-start;flex-direction:column}.lt-data-card{align-items:flex-start;flex-direction:column;padding:17px}.lt-data-actions{width:100%}.lt-data-actions button{flex:1}
+    .lt-controls{grid-template-columns:repeat(2,1fr);gap:8px}.lt-panel{padding:15px}.lt-metrics{gap:8px}.lt-metric{padding:13px}.lt-metric b{font-size:15px}
+    .lt-ball-grid{grid-template-columns:repeat(6,1fr)}.lt-sub-grid{grid-template-columns:repeat(6,1fr)}.lt-candidates{grid-template-columns:1fr}.lt-ticket-balls b{width:32px;height:32px}
+    .lt-panel-head{flex-direction:column}.lt-pairs{grid-template-columns:1fr}.lt-import-actions input{max-width:100%;width:100%}.lt-source{font-size:12px}}
+  @media(prefers-reduced-motion:reduce){.lottery-lab.open{animation:none}}
+
 </style>
 </head>
 <body>
@@ -870,12 +953,13 @@
           <span>送货单</span>
         </button>
 
-        <!-- 店铺模式开关 -->
-        <button class="tool-btn shop-mode-btn" id="shopModeBtn" type="button">
+        <!-- 数彩实验室（原“店铺”开关位置；旧店铺分类与清单保留） -->
+        <button class="tool-btn lottery-btn" id="lotteryBtn" type="button" aria-label="打开数彩实验室">
           <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round">
-            <path d="M3 9l1.5-5h15L21 9"/><path d="M3 9a3 3 0 006 0 3 3 0 006 0 3 3 0 006 0"/><path d="M5 11v9M19 11v9M9 20h6"/>
+            <path d="M4 5h16v14H4z"/><path d="M8 5v14M16 5v14M4 9h4M4 15h4M16 9h4M16 15h4"/>
+            <path d="M12 8.8l.9 1.8 2 .3-1.45 1.4.35 2-1.8-.95-1.8.95.35-2L9.1 10.9l2-.3z"/>
           </svg>
-          <span>店铺</span>
+          <span>彩票</span>
         </button>
       </div>
     </div>
@@ -1177,8 +1261,12 @@
   <div class="focus-content md-render" id="focusContent"></div>
 </div>
 
+<div class="lottery-lab" id="lotteryLab" role="dialog" aria-modal="true" aria-labelledby="lotteryTitle" hidden></div>
+
 <div class="toast" id="toast"></div>
 
+<script src="lottery-data.js"></script>
+<script src="lottery.js"></script>
 <script>
 
 window.onerror = function (msg, url, line) {
@@ -1195,7 +1283,7 @@ window.onerror = function (msg, url, line) {
   'use strict';
 
   // 版本号统一在此维护；localStorage 键沿用 v11 不变，切勿改名以免丢失用户数据
-  var APP_VERSION = '12.3';
+  var APP_VERSION = '13.0';
   // 送货单拍照识别：视觉模型默认名、兼容别名与各项安全上限
   var DEFAULT_VISION_MODEL = 'deepseek-flash';
   var VISION_MODEL_FALLBACK = 'deepseek-v4-flash-vision-exp';
@@ -1277,7 +1365,7 @@ window.onerror = function (msg, url, line) {
     els.aiBtn = $('aiBtn');
 
     els.shopBillBtn = $('shopBillBtn');
-    els.shopModeBtn = $('shopModeBtn');
+    els.lotteryBtn = $('lotteryBtn');
     els.shopMask = $('shopMask');
     els.shopDate = $('shopDate');
     els.shopCust = $('shopCust');
@@ -4529,7 +4617,20 @@ window.onerror = function (msg, url, line) {
     els.aiBtn.addEventListener('click', function () { processWithAI(false); });
 
     // 店铺模式 & 送货单
-    els.shopModeBtn.addEventListener('click', function () { setShopMode(!state.shopMode); });
+    els.lotteryBtn.addEventListener('click', function () {
+      if (!window.LotteryLab || !window.LotteryLab.open()) toast('彩票模块未能加载，请刷新后重试');
+    });
+    if (window.LotteryLab) {
+      try {
+        window.LotteryLab.init({
+          hasAI: hasAI,
+          explain: function (prompt) { return aiPlain(prompt, 0.2); },
+          toast: toast
+        });
+      } catch (e) {
+        console.error('彩票模块初始化失败', e);
+      }
+    }
     els.shopBillBtn.addEventListener('click', shopBillOpen);
     if ($('shopClose')) $('shopClose').addEventListener('click', closeShopBill);
     if ($('shopCancel')) $('shopCancel').addEventListener('click', closeShopBill);
