@@ -834,6 +834,12 @@
     background:var(--gold-bg);color:var(--gold);border:1px solid rgba(168,135,61,.32);white-space:nowrap;}
   .lo-tag.net{background:transparent;color:var(--g600);border-color:var(--g200);}
   .lo-why{font-size:11.5px;color:var(--ink-faint);letter-spacing:.04em;}
+  .lo-heart{margin:9px 20px 0;padding:9px 13px;border-radius:10px;background:var(--gold-bg);
+    border:1px dashed rgba(168,135,61,.3);font-size:12.5px;line-height:1.85;
+    color:var(--ink-soft);letter-spacing:.02em;}
+  .lo-heart b{display:block;margin:0 0 3px;font-size:10.5px;font-weight:600;
+    letter-spacing:.12em;color:var(--gold);}
+  .lo-heart:empty{display:none;}
   .lo-body{flex:1;overflow-y:auto;overscroll-behavior:contain;-webkit-overflow-scrolling:touch;
     padding:14px 22px 2px;font-size:15px;line-height:2.05;letter-spacing:.02em;color:var(--ink);}
   .lo-body:empty{display:none;}
@@ -878,6 +884,7 @@
     .lo-quote{margin:10px 16px 0;}
     .lo-badge{padding:10px 16px 0;}
     .lo-body{padding:12px 17px 2px;font-size:14.7px;line-height:2;}
+    .lo-heart{margin:8px 16px 0;padding:8px 11px;font-size:12px;}
     .lo-refs{padding:0 16px 2px;}
     .lo-acts{padding:10px 14px calc(12px + env(safe-area-inset-bottom));gap:6px;}
     .lo-btn2{flex:1 1 auto;padding:9px 6px;font-size:11.5px;}
@@ -1474,8 +1481,8 @@
     拍照识别送货单需要<strong>支持图片输入的模型</strong>，与上面的文本模型分开配置。DeepSeek 官方当前为 <code>deepseek-flash</code>（旧名 <code>deepseek-v4-flash-vision-exp</code> 仍可用）；如使用中转服务，请填该服务提供的视觉模型名。识别时照片会发送到你填写的 AI 服务。
   </p>
   <p class="drawer-desc" style="font-size:11.5px;color:var(--ink-faint);border-left:2px solid var(--g300);padding-left:10px;margin-top:10px;">
-    <strong>老铁有话说</strong>：每条「笔记」下面都有这个入口。他会先判断这条适合怎么讲（故事 / 新闻 / 书信 / 寓言 / 顺口溜等九种），
-    碰上新闻和硬知识会<strong>联网检索</strong>（DeepSeek 官方会自动调用搜索接口，检索与对话都会计入费用）；其余说法只用模型本身的见识，不联网。
+    <strong>老铁有话说</strong>：每条「笔记」下面都有这个入口。他先读一遍，把你这句话<strong>真正在说什么</strong>说出来（心境 + 一句大白话），
+    再拿这个意思去网上找对得上的真人真事，最后揉进那段话里。每次都会<strong>联网检索</strong>（DeepSeek 官方自动调用搜索接口，检索与对话都计入费用）。
     写出来的这段只留在本机，不进笔记也不同步，点「存进笔记」才会留下。你的服务要是不提供检索，他会如实说「没联上」，不会编新闻。
   </p>
 
@@ -1672,11 +1679,12 @@
     </div>
     <div class="lo-quote" id="loQuote"></div>
     <div class="lo-badge" id="loBadge"></div>
+    <div class="lo-heart" id="loHeart"></div>
     <div class="lo-body md-render" id="loBody" aria-live="polite"></div>
     <div class="lo-refs" id="loRefs"></div>
     <div class="lo-acts">
-      <button class="lo-btn2" id="loNetSay" type="button">上网说</button>
-      <button class="lo-btn2" id="loLocalSay" type="button">单机说</button>
+      <button class="lo-btn2" id="loNetSay" type="button"
+        aria-label="重新读一遍这条笔记，上网查了再说一版">上网重说</button>
       <button class="lo-btn2" id="loSave" type="button">存进笔记</button>
       <button class="lo-btn2" id="loCopy" type="button">复制</button>
       <button class="lo-btn2 primary" id="loSetup" type="button" style="display:none;">去设置 AI</button>
@@ -1750,7 +1758,7 @@ window.onerror = function (msg, url, line) {
   'use strict';
 
   // 版本号统一在此维护；localStorage 键沿用 v11 不变，切勿改名以免丢失用户数据
-  var APP_VERSION = '14.5';
+  var APP_VERSION = '14.6';
   // 送货单拍照识别：视觉模型默认名、兼容别名与各项安全上限
   var DEFAULT_VISION_MODEL = 'deepseek-flash';
   var VISION_MODEL_FALLBACK = 'deepseek-v4-flash-vision-exp';
@@ -1805,11 +1813,12 @@ window.onerror = function (msg, url, line) {
     loNoteId: null,       // 老铁当前对着哪条笔记说话
     loMode: null,         // 当前用的说法（story / news / ...）
     loWhy: '',            // 老铁为什么选这个说法
+    loHeart: '',          // 老铁读出来的意思（这句话真正在说什么）
     loRec: null,          // 当前展示的这一段
     loBusy: false,        // 正在生成
     loTimer: null,
     loSeq: 0,             // 递增序号，丢弃换了笔记之后才回来的旧结果
-    loCache: null,        // 本机缓存：{ noteId: {m,w,t,r,at,h} }
+    loCache: null,        // 本机缓存：{ noteId: {m,w,ht,md,t,r,at,h} }
     loadError: false,
     shopPhotos: [],       // 仅存内存：压缩后的送货单照片，绝不写入 localStorage
     shopScanning: false,
@@ -1879,6 +1888,7 @@ window.onerror = function (msg, url, line) {
     els.loMask = $('loMask');
     els.loQuote = $('loQuote');
     els.loBadge = $('loBadge');
+    els.loHeart = $('loHeart');
     els.loBody = $('loBody');
     els.loRefs = $('loRefs');
     els.loSetup = $('loSetup');
@@ -5675,11 +5685,14 @@ window.onerror = function (msg, url, line) {
 
     var q = cleanQuery(opts.query);
     var hint = (opts && opts.hint) || '请基于以上资料回答，保留关键数字与时间。';
+    // 开头这句决定模型怎么对待资料：素材，还是唯一依据
+    var lead = (opts && opts.lead) ||
+      '以下是刚刚联网搜到的真实资料（请只根据它们说，并在句末用 [1][2] 标注来源序号）：\n';
 
     function viaSearch(prefix) {
       return webSearchApi(q).then(function (results) {
         if (!results.length) throw new Error('搜索引擎没有返回结果');
-        var ctx = '以下是刚刚联网搜到的真实资料（请只根据它们说，并在句末用 [1][2] 标注来源序号）：\n';
+        var ctx = lead;
         for (var i = 0; i < results.length; i++) {
           ctx += '[' + (i + 1) + '] ' + results[i].title +
             (results[i].site ? '（' + results[i].site + '）' : '') +
@@ -5862,8 +5875,9 @@ window.onerror = function (msg, url, line) {
   }
 
   /* =========================================
-     老铁有话说 · v14.3
+     老铁有话说 · v14.6
      不是问答，是有人接着你的话往下说
+     先读懂这条笔记真正在说什么，再顺着这个意思上网找真事
   ========================================= */
 
   var LS_LO = 'bamboo.v11.laoyou';
@@ -5927,63 +5941,81 @@ window.onerror = function (msg, url, line) {
     try { localStorage.setItem(LS_LO, JSON.stringify(c)); } catch (e) {}
   }
 
-  // ---- 第一步：先判断这条笔记该怎么说 ----
-  function loRoute(note) {
+  // ---- 第一步：先读懂这句话，不是先抓关键词 ----
+  // 嘴上写的是事，心里想的是另一回事。读懂了才动手
+  function loRead(note) {
     var list = '', i;
     for (i = 0; i < LO_ORDER.length; i++) {
       list += '- ' + LO_ORDER[i] + '（' + LO_MODES[LO_ORDER[i]].name + '）\n';
     }
     var tg = (note.tags || []).filter(function (t) { return String(t) !== '置顶'; });
-    var p = '你是一个在街上混了半辈子、看人很准的老铁。有人把一条自己写的笔记递给你，先别急着回——判断一下：这条，最该用哪种方式跟他说。\n\n' +
+    var p = '你是个在街上混了半辈子、看人很准的老铁。有人把一条自己写的笔记递给你。\n' +
+      '别急着回。先把这句话底下那层意思读出来——他嘴上写的是这件事，心里其实在说什么。\n\n' +
       '笔记：「' + String(note.text || '').slice(0, 500) + '」\n' +
       '（写于 ' + fmtDate(note.createdAt) + (tg.length ? '，标了 #' + tg.join(' #') : '') + '）\n\n' +
-      '可选的说法（只能选一个）：\n' + list + '\n' +
-      '判断标准：看这条里最重的是什么——是情绪、是人、是钱、是社会、是身体，还是一个没说清的想法。选那个最能让对方「哎」一声的说法。\n\n' +
+      '按这个顺序想，别跳步：\n' +
+      '一、他真正想说的是什么？用一句大白话，像跟旁人转述那样，不超过 22 个字。' +
+      '不许用「表达了」「体现了」「反映出」这种词，直接说内容本身。\n' +
+      '二、这是种什么心境？两到四个字：舍不得 / 硬撑 / 松口气 / 咽不下 / 认了 / 惦记 / 寒心 / 不出声 ……挑最准的那个。\n' +
+      '三、要跟他说这段，最该用哪种方式？只能选一个：\n' + list + '\n' +
+      '四、检索词：拿**上面那句意思**去网上找真实的人和事，不要拿原话里的物件名去搜。\n' +
+      '    - 搜「跟这个心境对得上的人怎么过日子」，2 到 4 个词，8 到 14 个字，不要标点\n' +
+      '    - 反例：笔记写「手套织了一半」，别搜「手套 织法」——那是壳；该搜「老伴走了 一个人 过日子」\n' +
+      '    - 反例：笔记写「铺子关着门」，别搜「卷帘门 价格」；该搜「小店关门 老板 歇业」\n\n' +
       '只输出严格 JSON，不要解释、不要代码块：\n' +
-      '{"mode":"九个英文代号之一","search":"要去网上查的关键词，20字内；不需要联网就填空字符串","why":"20字以内的判断，说明你为什么选这个说法"}';
-    return aiPlain(p, 0.35).then(loParseRoute).catch(function () {
-      return { mode: 'talk', search: '', why: '这条适合慢慢聊' };
+      '{"heart":"他其实在说……","mood":"两到四个字","mode":"英文代号","query":"8到14个字的检索词","why":"20字内，为什么选这个说法"}';
+    return aiPlain(p, 0.4).then(loParseRead).catch(function () {
+      return { mode: 'talk', heart: '', mood: '', query: '', why: '这条适合慢慢聊' };
     });
   }
 
-  function loParseRoute(raw) {
+  function loParseRead(raw) {
     var s = String(raw || '').replace(/```json/gi, '').replace(/```/g, '');
     var a = s.indexOf('{'), b = s.lastIndexOf('}');
     if (a >= 0 && b > a) {
       try {
         var o = JSON.parse(s.slice(a, b + 1));
         var m = String(o.mode || '').trim();
+        var heart = String(o.heart || '').replace(/^他其实在说[：:]?\s*/, '').replace(/^「|」$/g, '').trim().slice(0, 40);
+        var mood = String(o.mood || '').trim().slice(0, 8);
         if (LO_MODES[m]) {
-          return { mode: m, search: cleanQuery(o.search), why: String(o.why || '').slice(0, 40) };
+          return { mode: m, heart: heart, mood: mood, query: cleanQuery(o.query), why: String(o.why || '').slice(0, 40) };
         }
+        if (heart) return { mode: 'talk', heart: heart, mood: mood, query: cleanQuery(o.query), why: '' };
       } catch (e) {}
     }
-    for (var k in LO_MODES) if (s.indexOf(k) > -1) return { mode: k, search: '', why: '' };
-    return { mode: 'talk', search: '', why: '' };
+    for (var k in LO_MODES) if (s.indexOf(k) > -1) return { mode: k, heart: '', mood: '', query: '', why: '' };
+    return { mode: 'talk', heart: '', mood: '', query: '', why: '' };
   }
 
   // ---- 第二步：按定好的说法写正文 ----
-  // 联网 / 单机两种口径下，同一种说法要守的规矩不一样
-  function loRule(mode, net) {
-    var m = LO_MODES[mode] || LO_MODES.talk;
-    if (net === false) {
-      if (mode === 'news') return '就当今天没看新闻，凭你平时的见闻就这件事说两句。不引用任何具体报道、日期、数字，也不要[1]这种标注。';
-      if (mode === 'fact') return '讲一个你有把握的常识或经验，别编具体数字、别说出处。';
-      return m.rule;
+  // 只有一种口径了：一定是查过再说的。区别只在于体裁要不要带出处
+  function loRule(mode) {
+    if (mode === 'news') {
+      return '你刚翻过新闻。可以提报道里的时间、地点、数字，句末用[1][2]标出处。但别写成新闻播报，要落到人身上：谁在哪、那天怎么样。';
     }
-    if (net === true && !m.net) {
-      return m.rule + ' 下面会给你一些刚查到的真实资料，可以用里面的真实细节（人名、地点、数字），但别写成新闻播报。';
+    if (mode === 'fact') {
+      return '讲一件真事或一条靠得住的常识，可以用资料里的时间、数字，句末用[1][2]标出处。别堆概念。';
     }
-    return m.rule;
+    return '可以用资料里真实的人名、地点、数字、时间，但别写成新闻播报，也不许出现「据报道」「有网友说」这种话。';
   }
 
-  function loWritePrompt(note, mode, net) {
+  function loWritePrompt(note, mode, heart, mood) {
     var m = LO_MODES[mode] || LO_MODES.talk;
     var tg = (note.tags || []).filter(function (t) { return String(t) !== '置顶'; });
+    var heard = heart
+      ? '—— 他其实在说：' + heart + (mood ? '（' + mood + '）' : '') + '\n'
+      : '—— 就是字面上那件事，没有更绕的意思。\n';
     return '你就是「老铁」——四十来岁，走南闯北，做过小生意，见过人情冷暖。你不是 AI 助手，不写公文，不说教，不用「首先/其次/总之/让我们一起」。\n\n' +
       '有人在自己的本子上写了这么一句：\n「' + String(note.text || '').slice(0, 600) + '」\n' +
       '（写于 ' + fmtDate(note.createdAt) + (tg.length ? '，标了 #' + tg.join(' #') : '') + '）\n\n' +
-      '现在你要用【' + m.name + '】的方式跟他说一段话。' + loRule(mode, net) + '\n\n' +
+      '你先读了一遍，读出来的是这个：\n' + heard + '\n' +
+      '现在你要用【' + m.name + '】的方式跟他说一段话。' + loRule(mode) + '\n\n' +
+      '下面会给你一些刚从网上翻到的真事：别人的经历、报道、身边人的故事。用它们的规矩，这条最要紧：\n' +
+      'A. 只挑跟「' + (heart || '他这句的意思') + '」真正对得上的那一个细节用。一个就够，别铺开\n' +
+      'B. 对不上就别用。宁可讲你自己见过的事，也不许为了用资料硬塞一个不相干的故事\n' +
+      'C. 别整段搬，别写「据报道」「资料显示」「有网友说」，把事揉进你自己的话里，像你亲耳听来的\n' +
+      'D. 你写的是他心里那点东西，不是那批资料。资料是调料，不是主料\n\n' +
       '不管用哪种方式，下面几条是死的：\n' +
       '1. 第一句就进正题。不要「看到你这条笔记」这种开场，不要复述他写的话\n' +
       '2. 必须有具体的东西：人名、地名、数字、动作、对话、天气、价钱。禁用「人生」「成长」「内耗」「情绪价值」「治愈」「格局」这类空词\n' +
@@ -6024,85 +6056,74 @@ window.onerror = function (msg, url, line) {
     return { text: text, refs: refs };
   }
 
-  function loCompose(note, mode, search, forceNet) {
+  function loCompose(note, mode, heart, mood, search) {
     var m = LO_MODES[mode] || LO_MODES.talk;
-    var prompt = loWritePrompt(note, mode, forceNet);
-    // forceNet: true=上网说，false=单机说，null/undefined=按体裁自己定
-    var wantNet;
-    if (forceNet === true) wantNet = true;
-    else if (forceNet === false) wantNet = false;
-    else wantNet = m.net || !!search;
-
-    if (!wantNet) {
-      var extra = (forceNet === false && m.net) ? '\n\n（今天不查网，就凭你知道的说，别编新闻、别报具体数字。）' : '';
-      return aiPlain(prompt + extra, 0.82).then(function (t) {
-        var r = loSplitRefs(t); r.net = false; return r;
-      });
-    }
-    // 搜索词必须短。没有就现取一个，绝不把整段提示词丢给搜索接口
+    var prompt = loWritePrompt(note, mode, heart, mood);
+    // 检索词从「意思」来，不从原话的物件来。实在是空的，再让模型从意思里缩一句
     var q = cleanQuery(search);
-    var ready = q ? Promise.resolve(q) : loSearchTerm(note, mode);
+    var ready = q ? Promise.resolve(q) : loSearchTerm(note, mode, heart);
     var hint = m.net
-      ? '请基于以上资料，用老铁的口吻写完这段话，450 到 650 字，保留关键数字与时间，并在句末用[1][2]标出处。'
-      : '请基于以上资料，用老铁的口吻写完这段话，450 到 650 字。资料里的真实细节可以用，但别写成新闻播报。';
+      ? '先用一两句话把查到的那件真事点出来，再落到他的处境上。通篇 450 到 650 字，保留关键时间与数字，句末用[1][2]标出处。'
+      : '只挑跟「' + (heart || '他这句的意思') + '」对得上的用一个细节，对不上就别用，别硬塞。通篇 450 到 650 字。';
+    var usedKey = '';
     return ready.then(function (term) {
-      var key = cleanQuery(term) || loLocalKeywords(note.text);
-      return aiChat(prompt, 0.82, { webSearch: true, query: key, hint: hint });
+      var key = cleanQuery(term) || cleanQuery(heart) || loLocalKeywords(note.text);
+      usedKey = key;
+      return aiChat(prompt, 0.82, {
+        webSearch: true, query: key, hint: hint,
+        lead: '下面是刚从网上翻到的真事，别人的经历和报道。它们只是素材，不是主料——\n' +
+              '挑跟他的处境对得上的用，对不上的别用，别为了用资料硬塞一个不相干的故事。\n'
+      });
     }).then(function (t) {
-      var r = loSplitRefs(t); r.net = true; return r;
+      var r = loSplitRefs(t); r.net = true; r.qy = usedKey; return r;
     }).catch(function (err) {
       // 联网没成，退回不联网写作；但把原因记住，界面上如实说明
-      return aiPlain(prompt + '\n\n（今天网线不好，查不到新闻。别引用具体报道、日期和数字，就凭你的见识说。）', 0.8).then(function (t) {
+      return aiPlain(prompt + '\n\n（今天网线不好，查不到东西。别引用具体报道、日期和数字，就凭你的见识说，也别说「我刚才查了」。）', 0.8).then(function (t) {
         var r = loSplitRefs(t); r.net = true; r.netFail = true;
+        r.qy = usedKey;
         r.nm = (err && err.message) ? String(err.message).slice(0, 120) : '联网没成功';
         return r;
       });
     });
   }
 
-  // 现取搜索词：只给 6~14 个字，别让接口因为超长直接 400
-  function loSearchTerm(note, mode) {
-    var p = '把下面这条笔记缩成一句搜索词，用来检索' + (mode === 'fact' ? '相关的可靠知识或数据' : '最近的新闻') + '。\n' +
-      '要求：6 到 14 个字，只给关键词，不要标点、不要引号、不要解释、不要「搜索词：」。\n' +
-      '笔记：「' + String(note.text || '').slice(0, 300) + '」';
+  // 现取检索词：从「意思」里缩，不截原话的碎片
+  function loSearchTerm(note, mode, heart) {
+    var p = '把下面这句话的**意思**缩成一句检索词，用来在网上找真实的人和事。\n' +
+      '不是找新闻标题，也不是找原话里提到的物件。\n' +
+      '要求：2 到 4 个词，8 到 14 个字，只给词，不要标点、引号、解释，不要「搜索词：」。\n' +
+      '这句话的意思是：' + (heart || String(note.text || '').slice(0, 80)) + '\n' +
+      '原话（只作参考，别照抄里面的东西名）：「' + String(note.text || '').slice(0, 200) + '」';
     return aiPlain(p, 0.2).then(function (t) {
       return cleanQuery(String(t).split('\n')[0]);
     }).catch(function () { return ''; });
   }
 
-  // 本地兜底关键词：模型也不可用时，至少给搜索接口一段短词
+  // 本地兜底检索词：模型也不可用时，至少给搜索接口一段短词
   function loLocalKeywords(text) {
     var s = String(text || '').replace(/[#*`>\-_—、，。！？；：""''（）()\[\]【】…\s]+/g, ' ').trim();
     var arr = Array.from(s);
-    return arr.slice(0, 40).join('');
-  }
-
-  // 单机说时，「就着新闻说两句」这个名字就不合适了——没看新闻，别装
-  function loName(mode, net) {
-    if (net === false) {
-      if (mode === 'news') return '就这事儿说两句';
-      if (mode === 'fact') return '讲个常识';
-    }
-    return (LO_MODES[mode] || LO_MODES.talk).name;
+    return arr.slice(0, 24).join('');
   }
 
   // ---- 界面 ----
-  var LO_THINK_LOCAL = ['老铁把手上的活停了停…', '老铁又看了一遍你写的这句…', '老铁琢磨着这话该怎么说…'];
-  var LO_THINK_NET = ['老铁翻起了最近的新闻…', '老铁在核对这事儿的来龙去脉…', '老铁查了查，怕说错…'];
+  var LO_THINK_READ = ['老铁把手上的活停了停，先读了一遍你的话…', '老铁又看了一遍，琢磨你真正想说的是什么…', '老铁把这句话在心里翻了个个儿…'];
+  var LO_THINK_NET = ['读明白了，老铁去翻别人的真事…', '老铁在找跟这心境对得上的人和事…', '老铁查了查，怕说错…'];
 
   function loStopTimer() {
     if (state.loTimer) { clearInterval(state.loTimer); state.loTimer = null; }
   }
 
-  function loThinking(withNet) {
-    var pool = withNet ? LO_THINK_NET : LO_THINK_LOCAL;
+  function loThinking(stage) {
+    // stage: 'read' = 正在读意思；'net' = 已经读懂，正在上网找真事
+    var pool = stage === 'net' ? LO_THINK_NET : LO_THINK_READ;
     var i = 0;
     els.loBadge.innerHTML = '';
-    var nb = $('loNetSay'), lb = $('loLocalSay');
-    if (nb) nb.classList.toggle('on', !!withNet);
-    if (lb) lb.classList.toggle('on', !withNet);
+    els.loHeart.innerHTML = '';
     els.loBody.innerHTML = '<div class="lo-loading"><div class="lo-dots"><i></i><i></i><i></i></div>' +
-      '<p id="loThinkText"></p><small>' + (withNet ? '正在联网检索真实新闻' : '不联网，凭老铁的见识说') + '</small></div>';
+      '<p id="loThinkText"></p><small>' +
+      (stage === 'net' ? '顺着这句话的意思，去找真实的人和事' : '先把这句话读懂，再去查') +
+      '</small></div>';
     els.loRefs.innerHTML = '';
     var step = function () {
       var t = $('loThinkText');
@@ -6116,10 +6137,13 @@ window.onerror = function (msg, url, line) {
 
   function loRender(rec) {
     var m = LO_MODES[rec.m] || LO_MODES.talk;
-    var badge = '<span class="lo-tag">' + escapeHTML(loName(rec.m, !!rec.net)) + '</span>';
+    var badge = '<span class="lo-tag">' + escapeHTML(m.name) + '</span>';
     if (rec.net) badge += '<span class="lo-tag net">' + (rec.netFail ? '这次没联上' : '已联网') + '</span>';
     if (rec.w) badge += '<span class="lo-why">' + escapeHTML(rec.w) + '</span>';
     els.loBadge.innerHTML = badge;
+    els.loHeart.innerHTML = rec.ht
+      ? '<b>老铁读到的是</b>' + escapeHTML(rec.ht) + (rec.md ? '（' + escapeHTML(rec.md) + '）' : '')
+      : '';
 
     els.loBody.innerHTML = renderMarkdown(rec.t) + '<div class="lo-sign">—— 老铁</div>';
 
@@ -6129,7 +6153,9 @@ window.onerror = function (msg, url, line) {
     if (refs.length) {
       var title = document.createElement('span');
       title.className = 'lo-refs-title';
-      title.textContent = '老铁查过的地方（点开看）';
+      title.textContent = rec.qy
+        ? '他按「' + rec.qy + '」查的，点开看'
+        : '老铁查过的地方（点开看）';
       els.loRefs.appendChild(title);
       for (var i = 0; i < refs.length; i++) {
         var href = safeHttpUrl(refs[i].url);
@@ -6149,14 +6175,11 @@ window.onerror = function (msg, url, line) {
       tip.textContent = '这次没联上：' + (rec.nm || '搜索服务没响应') + '。下面这段是凭见识说的，没有引用任何报道。';
       els.loRefs.appendChild(tip);
     }
-    var nb = $('loNetSay'), lb = $('loLocalSay');
-    if (nb) nb.classList.toggle('on', !!rec.net);
-    if (lb) lb.classList.toggle('on', !rec.net);
     els.loBody.scrollTop = 0;
   }
 
   function loBusy(on) {
-    var ids = ['loNetSay', 'loLocalSay', 'loSave', 'loCopy'];
+    var ids = ['loNetSay', 'loSave', 'loCopy'];
     for (var i = 0; i < ids.length; i++) {
       var b = $(ids[i]);
       if (b) b.disabled = !!on;
@@ -6165,7 +6188,7 @@ window.onerror = function (msg, url, line) {
 
   function loReady() {
     if (els.loSetup) els.loSetup.style.display = 'none';
-    var ids = ['loNetSay', 'loLocalSay', 'loSave', 'loCopy'];
+    var ids = ['loNetSay', 'loSave', 'loCopy'];
     for (var i = 0; i < ids.length; i++) {
       var b = $(ids[i]);
       if (b) { b.style.display = ''; b.disabled = false; }
@@ -6179,7 +6202,7 @@ window.onerror = function (msg, url, line) {
       '他得接上 DeepSeek 才能开口——不是他不想说，是线还没插上。<br>' +
       '<span>在设置里填好 API 地址（<code>https://api.deepseek.com/chat/completions</code>）、密钥和模型名（<code>deepseek-chat</code>），回来再点一次。</span></div>';
     els.loRefs.innerHTML = '';
-    var hide = ['loNetSay', 'loLocalSay', 'loSave', 'loCopy'];
+    var hide = ['loNetSay', 'loSave', 'loCopy'];
     for (var i = 0; i < hide.length; i++) {
       var b = $(hide[i]);
       if (b) b.style.display = 'none';
@@ -6206,6 +6229,7 @@ window.onerror = function (msg, url, line) {
     loStopTimer();
     els.loQuote.textContent = '「' + String(n.text || '').replace(/\s+/g, ' ').slice(0, 62) + '」';
     els.loBadge.innerHTML = '';
+    els.loHeart.innerHTML = '';
     els.loBody.innerHTML = '';
     els.loRefs.innerHTML = '';
     els.loMask.classList.add('open');
@@ -6221,7 +6245,7 @@ window.onerror = function (msg, url, line) {
     } else {
       if (rec && rec.t) toast('这条笔记改过了，让老铁重新说');
       loReady();
-      loStart(n, null, null);   // 首次不指定联网口径，让体裁自己定
+      loStart(n);
     }
   }
 
@@ -6231,7 +6255,8 @@ window.onerror = function (msg, url, line) {
     if (els.loMask) els.loMask.classList.remove('open');
   }
 
-  function loStart(note, mode, forceNet) {
+  // 每次都是：先读懂 -> 顺着意思上网找真事 -> 揉进去写
+  function loStart(note) {
     if (!note || state.loBusy) return;
     var seq = ++state.loSeq;
     var nid = note.id;
@@ -6239,35 +6264,37 @@ window.onerror = function (msg, url, line) {
     state.loBusy = true;
     state.loWhy = '';
     loBusy(true);
-    // 不知道体裁时先按单机转；按了按钮的，直接照按钮来
-    loThinking(forceNet === true || (forceNet == null && mode ? !!LO_MODES[mode].net : false));
+    loThinking('read');
 
-    var route = mode
-      ? Promise.resolve({ mode: mode, search: '', why: '' })
-      : loRoute(note);
-    var curMode = mode || 'talk', curWhy = '';
+    var curMode = 'talk', curWhy = '', curHeart = '', curMood = '';
 
-    route.then(function (r) {
+    loRead(note).then(function (r) {
       if (seq !== state.loSeq) return null;
       var m = LO_MODES[r.mode] ? r.mode : 'talk';
       curMode = m;
       curWhy = r.why || '';
+      curHeart = r.heart || '';
+      curMood = r.mood || '';
       state.loMode = m;
       state.loWhy = curWhy;
-      // 先说清楚他打算怎么讲，让人有个准备
-      var willNet = forceNet === true ? true : (forceNet === false ? false : (!!LO_MODES[m].net || !!r.search));
-      els.loBadge.innerHTML = '<span class="lo-tag">' + escapeHTML(loName(m, willNet)) + '</span>' +
+      state.loHeart = curHeart;
+      // 先说清楚读到了什么——读岔了，人一眼就能看出来
+      loThinking('net');
+      if (curHeart) {
+        els.loHeart.innerHTML = '<b>老铁读到的是</b>' + escapeHTML(curHeart) +
+          (curMood ? '（' + escapeHTML(curMood) + '）' : '');
+      }
+      els.loBadge.innerHTML = '<span class="lo-tag">' + escapeHTML(LO_MODES[m].name) + '</span>' +
         (curWhy ? '<span class="lo-why">' + escapeHTML(curWhy) + '</span>' : '');
-      loThinking(willNet);
-      return loCompose(note, m, r.search, forceNet);
+      return loCompose(note, m, curHeart, curMood, r.query);
     }).then(function (res) {
       if (seq !== state.loSeq || !res) return;
       state.loBusy = false;
       loStopTimer();
       var rec = {
-        m: curMode, w: curWhy, t: res.text,
+        m: curMode, w: curWhy, ht: curHeart, md: curMood, t: res.text,
         r: res.refs || [], net: !!res.net, netFail: !!res.netFail,
-        nm: res.nm || '', f: forceNet === true ? 'net' : (forceNet === false ? 'local' : ''), h: fp, at: Date.now()
+        nm: res.nm || '', qy: res.qy || '', h: fp, at: Date.now()
       };
       state.loRec = rec;
       loStore(nid, rec);
@@ -6286,18 +6313,11 @@ window.onerror = function (msg, url, line) {
     });
   }
 
-  // 上网说：不管什么体裁，都去查一遍真实资料再说
+  // 重新读一遍、重新查、重新说一版
   function loNetSay() {
     var n = findNote(state.loNoteId);
     if (!n || state.loBusy) return;
-    loStart(n, state.loMode || 'talk', true);
-  }
-
-  // 单机说：不查网，就凭老铁的见识
-  function loLocalSay() {
-    var n = findNote(state.loNoteId);
-    if (!n || state.loBusy) return;
-    loStart(n, state.loMode || 'talk', false);
+    loStart(n);
   }
 
   function loCopyText(t) {
@@ -6799,7 +6819,6 @@ window.onerror = function (msg, url, line) {
     // 老铁有话说
     if ($('loClose')) $('loClose').addEventListener('click', closeLaoyou);
     if ($('loNetSay')) $('loNetSay').addEventListener('click', loNetSay);
-    if ($('loLocalSay')) $('loLocalSay').addEventListener('click', loLocalSay);
     if ($('loSave')) $('loSave').addEventListener('click', loSaveNote);
     if ($('loCopy')) $('loCopy').addEventListener('click', loCopy);
     if (els.loSetup) els.loSetup.addEventListener('click', function () {
