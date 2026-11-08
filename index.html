@@ -1384,7 +1384,7 @@ window.onerror = function (msg, url, line) {
   'use strict';
 
   // 版本号统一在此维护；localStorage 键沿用 v11 不变，切勿改名以免丢失用户数据
-  var APP_VERSION = '13.9';
+  var APP_VERSION = '13.10';
   // 送货单拍照识别：视觉模型默认名、兼容别名与各项安全上限
   var DEFAULT_VISION_MODEL = 'deepseek-flash';
   var VISION_MODEL_FALLBACK = 'deepseek-v4-flash-vision-exp';
@@ -3085,9 +3085,16 @@ window.onerror = function (msg, url, line) {
       acts += '<button type="button" class="act share" data-act="share" aria-label="分享" data-id="' + escapeHTML(n.id) + '">' + ICON.share + '</button>';
       acts += '<button type="button" class="act del" data-act="del" aria-label="删除" data-id="' + escapeHTML(n.id) + '">' + ICON.trash + '</button>';
     } else {
+      // 「笔记」「店铺」不是待办：不给完成 / 提醒按钮，只保留修改、分享、删除
+      // 例外：店铺条目若带历史提醒，仍保留提醒按钮，否则用户无法清除它
+      var cat = noteCategory(n);
       acts += '<button type="button" class="act edit" data-act="edit" aria-label="修改" data-id="' + escapeHTML(n.id) + '">' + ICON.edit + '</button>';
-      acts += '<button type="button" class="act done" data-act="done" aria-label="标记完成" data-id="' + escapeHTML(n.id) + '">' + ICON.done + '</button>';
-      acts += '<button type="button" class="act remind" data-act="remind" aria-label="设置提醒" data-id="' + escapeHTML(n.id) + '">' + ICON.bell + '</button>';
+      if (cat === VIEW.ACTIVE) {
+        acts += '<button type="button" class="act done" data-act="done" aria-label="标记完成" data-id="' + escapeHTML(n.id) + '">' + ICON.done + '</button>';
+      }
+      if (cat === VIEW.ACTIVE || n.remindAt) {
+        acts += '<button type="button" class="act remind" data-act="remind" aria-label="设置提醒" data-id="' + escapeHTML(n.id) + '">' + ICON.bell + '</button>';
+      }
       acts += '<button type="button" class="act share" data-act="share" aria-label="分享" data-id="' + escapeHTML(n.id) + '">' + ICON.share + '</button>';
       acts += '<button type="button" class="act del" data-act="del" aria-label="删除" data-id="' + escapeHTML(n.id) + '">' + ICON.trash + '</button>';
     }
