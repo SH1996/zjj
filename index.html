@@ -921,14 +921,15 @@
   #ltSimpleResult{max-width:860px;margin:14px auto 0}
   .lt-result-head{display:flex;align-items:flex-start;justify-content:space-between;gap:14px;flex-wrap:wrap}
   .lt-result-head h3{margin:6px 0 0;font-size:20px}
-  .lt-result-actions{display:flex;gap:8px}
+  .lt-result-actions{display:flex;gap:8px;flex-wrap:wrap;justify-content:flex-end}
   .lt-result-actions button{border:1px solid var(--lt-line);background:var(--lt-panel);color:var(--lt-ink);padding:9px 13px;border-radius:10px;font-size:12px}
   .lt-result-actions button.lt-ai{background:var(--lt-wash)!important;color:var(--lt-accent)!important;border-color:transparent!important}
   .lt-plain-note{color:var(--lt-soft);font-size:12px;line-height:1.8;margin:12px 0;padding:11px 14px;border:1px solid var(--lt-line);border-radius:12px;background:var(--lt-panel)}
   .lt-simple-tickets{display:grid;grid-template-columns:1fr;gap:12px}
   .lt-big-ticket{padding:20px;border:1px dashed var(--lt-line);border-radius:16px;background:var(--lt-panel)}
   .lt-big-top{display:flex;align-items:center;justify-content:space-between;color:var(--lt-soft);font-size:12px}
-  .lt-big-copy-one{border:0;background:var(--lt-wash);color:var(--lt-accent);padding:5px 10px;border-radius:8px;font-size:11px}
+  .lt-big-copy-one{border:1px solid var(--lt-line);background:var(--lt-panel);color:var(--lt-soft);padding:6px 11px;border-radius:9px;font-size:12px;font-weight:650;cursor:pointer;white-space:nowrap;transition:all .2s ease}
+  .lt-big-copy-one:hover{border-color:var(--lt-accent);color:var(--lt-accent)}
   .lt-big-balls{display:flex;align-items:center;justify-content:center;gap:9px;flex-wrap:wrap;margin:18px 0}
   .lt-big-balls b{display:grid;place-items:center;width:48px;height:48px;border-radius:50%;color:#fff;font-size:20px;font-weight:800;box-shadow:inset 0 -3px 6px rgba(0,0,0,.16)}
   .lt-big-balls b.red{background:#d94c5c}.lt-big-balls b.blue{background:#3985c6}
@@ -942,7 +943,7 @@
   .lt-persona-fields label{display:flex;flex-direction:column;gap:5px;color:var(--lt-soft);font-size:11px}
   .lt-persona-fields select{height:36px;min-width:96px;padding:0 8px;border:1px solid var(--lt-line);border-radius:9px;background:var(--lt-bg);color:var(--lt-ink)}
   .lt-persona-note{margin:10px 0 0;color:var(--lt-soft);font-size:11px;line-height:1.6}
-  .lt-big-actions{display:flex;align-items:center;gap:8px}
+  .lt-big-actions{display:flex;align-items:center;gap:6px;flex-wrap:wrap;justify-content:flex-end}
   .lt-big-pending{padding:6px 12px;border-radius:9px;border:1px solid var(--lt-line);background:var(--lt-panel);color:var(--lt-accent);font-size:12px;font-weight:650;cursor:pointer;white-space:nowrap;transition:all .2s ease}
   .lt-big-pending:hover{border-color:var(--lt-accent);background:var(--lt-wash)}
   .lt-big-pending.added{border-color:var(--lt-accent);background:var(--lt-wash);color:var(--lt-soft);cursor:default}
@@ -961,7 +962,8 @@
     .lt-ball-grid{grid-template-columns:repeat(6,1fr)}.lt-sub-grid{grid-template-columns:repeat(6,1fr)}.lt-candidates{grid-template-columns:1fr}.lt-ticket-balls b{width:32px;height:32px}
     .lt-panel-head{flex-direction:column}.lt-pairs{grid-template-columns:1fr}.lt-import-actions input{max-width:100%;width:100%}.lt-source{font-size:12px}
     .lt-hero{padding:28px 16px}.lt-hero h3{font-size:21px}.lt-count-choice button{min-width:70px}.lt-go{width:100%;justify-content:center}
-    .lt-big-balls b{width:40px;height:40px;font-size:17px}.lt-result-head{flex-direction:column}.lt-top-actions{flex-wrap:wrap}}
+    .lt-big-balls{gap:7px;margin:15px 0}.lt-big-balls b{width:36px;height:36px;font-size:15px}.lt-big-balls i{font-size:15px}.lt-result-head{flex-direction:column}.lt-top-actions{flex-wrap:wrap}}
+  @media(max-width:360px){.lt-big-balls{gap:5px}.lt-big-balls b{width:32px;height:32px;font-size:14px}}
   @media(prefers-reduced-motion:reduce){.lottery-lab.open{animation:none}}
 
 </style>
@@ -1386,7 +1388,7 @@ window.onerror = function (msg, url, line) {
   'use strict';
 
   // 版本号统一在此维护；localStorage 键沿用 v11 不变，切勿改名以免丢失用户数据
-  var APP_VERSION = '13.6';
+  var APP_VERSION = '13.7';
   // 送货单拍照识别：视觉模型默认名、兼容别名与各项安全上限
   var DEFAULT_VISION_MODEL = 'deepseek-flash';
   var VISION_MODEL_FALLBACK = 'deepseek-v4-flash-vision-exp';
@@ -3208,7 +3210,7 @@ window.onerror = function (msg, url, line) {
     toast(remindAt ? '已记下，到时会提醒你' : '已记下');
   }
 
-  // ===== 彩票「加入待定」：把号码写入待定分类（记录彩种与日期） =====
+  // ===== 彩票「加入待定」：彩种 + 号码 + 开奖前一天提醒，写入待定分类 =====
   function lotteryPendingSig(item) {
     var name = String((item && item.name) || '');
     var main = ((item && item.main) || []).map(pad2).join(' ');
@@ -3217,11 +3219,16 @@ window.onerror = function (msg, url, line) {
   }
   function hasLotteryPending(item) {
     var sig = lotteryPendingSig(item);
+    var slot = String((item && item.slot) || '');
     for (var i = 0; i < state.notes.length; i++) {
       var n = state.notes[i];
       if (n.status === VIEW.TRASH) continue;
       if ((n.tags || []).indexOf('待定') === -1) continue;
-      if (String(n.text || '').indexOf(sig) === 0) return true;
+      var t = String(n.text || '');
+      if (t.indexOf(sig) !== 0) continue;
+      // 同一期同一注只存一次；换期（提醒日期变化）允许再存
+      if (slot && t.indexOf(slot) === -1) continue;
+      return true;
     }
     return false;
   }
@@ -3230,12 +3237,18 @@ window.onerror = function (msg, url, line) {
     if (hasLotteryPending(item)) return 'duplicate';
     var d = new Date();
     var dateStr = pad2(d.getMonth() + 1) + '-' + pad2(d.getDate());
-    var text = lotteryPendingSig(item) + ' · ' + dateStr;
+    var tail = item.remindLabel ? (' · ' + String(item.remindLabel)) : (' · ' + dateStr);
+    var text = lotteryPendingSig(item) + tail;
+    var remindAt = null;
+    if (typeof item.remindAt === 'string' && /^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}$/.test(item.remindAt)) {
+      remindAt = fromLocalInput(item.remindAt);
+    }
     var now = d.toISOString();
     state.notes.unshift({
       id: uid(), text: text, createdAt: now, updatedAt: now,
-      status: VIEW.ACTIVE, remindAt: null, repeat: 'none', reminded: false,
-      remindDay: null, doneAt: null, deletedAt: null, tags: ['待定']
+      status: VIEW.ACTIVE, remindAt: remindAt, repeat: 'none', reminded: false,
+      remindDay: remindAt ? new Date(remindAt).getDate() : null,
+      doneAt: null, deletedAt: null, tags: ['待定']
     });
     addOps('add', text);
     saveLocal();
