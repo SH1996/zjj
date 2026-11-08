@@ -574,7 +574,7 @@
     };
   }
 
-  // ===== 加入待定：把号码写入主应用「待定」分类（彩种 + 号码 + 开奖前一天提醒） =====
+  // ===== 加入待办：把号码写入主应用「待办」分类（彩种 + 号码 + 开奖前一天提醒） =====
   function pendingItem(c){
     var g=GAMES[ui.game]||GAMES.ssq;
     var slot=nextDrawSlot(ui.game);
@@ -586,15 +586,15 @@
     try{return !!ui.opts.hasPending(pendingItem(c));}catch(e){return false;}
   }
   function addPending(c){
-    if(!ui.opts.addPending){notify('加入待定暂不可用，请刷新页面后重试。');return 'error';}
+    if(!ui.opts.addPending){notify('加入待办暂不可用，请刷新页面后重试。');return 'error';}
     if(isPending(c))return 'duplicate';
-    try{return ui.opts.addPending(pendingItem(c));}catch(e){notify('加入待定失败：'+e.message);return 'error';}
+    try{return ui.opts.addPending(pendingItem(c));}catch(e){notify('加入待办失败：'+e.message);return 'error';}
   }
   function addPendingFromIdx(idx){
     var c=ui.simple.candidates[idx];if(!c)return;
     var r=addPending(c);
-    if(r==='duplicate')notify('这注已经在「待定」里了。');
-    else if(r==='ok')notify('已加入「待定」，并设好开奖前一天 20:00 的提醒。');
+    if(r==='duplicate')notify('这注已经在「待办」里了。');
+    else if(r==='ok')notify('已加入「待办」，并设好开奖前一天 20:00 的提醒。');
     rerenderSimple();
   }
   function addAllPending(){
@@ -605,8 +605,8 @@
       if(r==='ok')added++;else if(r==='duplicate')dup++;
     }
     rerenderSimple();
-    if(added)notify('已把 '+added+' 注加入「待定」，并设好开奖前一天 20:00 的提醒'+(dup?('；另有 '+dup+' 注之前已加过'):'')+';去首页「待定」分类查看。');
-    else notify('这些号码都已经在「待定」里了。');
+    if(added)notify('已把 '+added+' 注加入「待办」，并设好开奖前一天 20:00 的提醒'+(dup?('；另有 '+dup+' 注之前已加过'):'')+';去首页「待办」分类查看。');
+    else notify('这些号码都已经在「待办」里了。');
   }
 
   function markup() {
@@ -621,7 +621,7 @@
       '<li><b>打开就有</b>：点首页「数彩」按钮，助手自动算好，屏幕扫过分析过程后直接给你号码。</li>'+
       '<li><b>选彩种</b>：顶部切换「双色球」或「超级大乐透」，两个彩种互不影响。</li>'+
       '<li><b>选几注</b>：点 3 / 5 / 8 注，再点「帮我选」或「换一组」都能重新出号。</li>'+
-      '<li><b>存起来</b>：看中哪注点「＋ 加入待定」，号码会连同彩种、开奖日一起存进首页「待定」分类，并自动设好<b>开奖前一天 20:00</b> 的提醒；只想拿走号码就点「复制这注」。</li>'+
+      '<li><b>存起来</b>：看中哪注点「＋ 加入待办」，号码会连同彩种、开奖日一起存进首页「待办」分类，并自动设好<b>开奖前一天 20:00</b> 的提醒；只想拿走号码就点「复制这注」。</li>'+
       '<li><b>想看门道</b>：点顶部「专业数据」，能看到频率、结构、回测等完整分析。</li>'+
       '<li><b>更新开奖</b>：在「专业数据」页点「更新数据」，从官网复制最新记录粘贴导入。</li>'+
       '<li><b>AI 解读</b>：在「专业数据」页点「✨ DeepSeek 解读」，用大白话解释（可选）。</li>'+
@@ -650,7 +650,7 @@
         '<section id="ltScan" class="lt-scan" hidden><div class="lt-scan-inner"><div class="lt-spin"></div><div id="ltScanText" class="lt-scan-text">正在读取最近开奖数据…</div><div class="lt-scan-dots"><i>·</i><i>·</i><i>·</i></div></div></section>'+
         '<section id="ltSimpleResult" hidden>'+
           '<div class="lt-result-head"><div><span class="lt-eyebrow">YOUR PICKS</span><h3 id="ltResultTitle">帮你选好了，照着填就行</h3></div>'+
-          '<div class="lt-result-actions"><button id="ltSimpleCopy" type="button">复制号码</button><button id="ltSimplePendAll" type="button">＋ 全部加入待定</button><button id="ltSimpleReroll" class="lt-ai" type="button">换一组</button></div></div>'+
+          '<div class="lt-result-actions"><button id="ltSimpleCopy" type="button">复制号码</button><button id="ltSimplePendAll" type="button">＋ 全部加入待办</button><button id="ltSimpleReroll" class="lt-ai" type="button">换一组</button></div></div>'+
           '<div class="lt-plain-note">红球在前、蓝球在后。号码经过多维统计，但<b>任何号码中奖概率都相同</b>，把它当娱乐就好。</div>'+
           '<div id="ltSimpleTickets" class="lt-simple-tickets"></div>'+
         '</section>'+
@@ -824,8 +824,8 @@
       var fitBadge = fit ? '<span class="lt-fit-badge">⭐ 最适合你</span>' : '';
       var inPending = isPending(c);
       var copyBtn = '<button class="lt-big-copy-one" type="button" data-idx="'+i+'">复制这注</button>';
-      var pendBtn = inPending ? '<button class="lt-big-pending added" type="button" data-idx="'+i+'" disabled>已加入待定 ✓</button>'
-                              : '<button class="lt-big-pending" type="button" data-idx="'+i+'">＋ 加入待定</button>';
+      var pendBtn = inPending ? '<button class="lt-big-pending added" type="button" data-idx="'+i+'" disabled>已加入待办 ✓</button>'
+                              : '<button class="lt-big-pending" type="button" data-idx="'+i+'">＋ 加入待办</button>';
       return '<article class="lt-big-ticket'+(fit?' lt-fit':'')+'">'+
         '<div class="lt-big-top"><span>第 '+(i+1)+' 注</span><span class="lt-big-actions">'+fitBadge+copyBtn+pendBtn+'</span></div>'+
         '<div class="lt-big-balls">'+balls+'</div>'+
