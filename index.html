@@ -169,7 +169,7 @@
   .composer textarea::placeholder{color:var(--ink-faint);letter-spacing:.05em;}
   .composer textarea:focus{border-color:var(--g400);}
 
-  .remind-row{display:none;gap:10px;align-items:center;padding:0 0 14px;flex-wrap:wrap;}
+  .remind-row{display:none;gap:10px;align-items:center;margin-top:12px;padding:0 0 2px;flex-wrap:wrap;}
   .remind-row.show{display:flex;}
   .remind-row .time-field{
     flex:1 1 140px;min-width:0;max-width:100%;
@@ -245,6 +245,18 @@
   @keyframes spin { 100% { transform: rotate(360deg); } }
 
   .input-wrap{display:flex;align-items:flex-end;gap:8px;}
+  .input-actions{display:flex;align-items:center;gap:6px;flex:none;}
+  .inline-btn{
+    flex:none;width:44px;height:44px;border-radius:13px;border:1px solid var(--line);
+    background:var(--card-hover);color:var(--ink-soft);
+    display:grid;place-items:center;cursor:pointer;transition:all .3s ease;
+    -webkit-tap-highlight-color:transparent;
+  }
+  .inline-btn svg{width:19px;height:19px;}
+  .inline-btn:hover{border-color:var(--g400);color:var(--g600);background:var(--g100);}
+  .inline-btn:active{transform:scale(.94);}
+  .inline-btn.on{color:var(--gold);border-color:rgba(168,135,61,.5);background:var(--gold-bg);}
+  .inline-btn.recording{color:var(--mic-active);border-color:var(--mic-active);background:rgba(224,94,94,.08);animation:micPulse 1.5s infinite;}
   .send-btn{
     flex:none;width:44px;height:44px;border-radius:50%;
     background:linear-gradient(135deg,var(--g500),var(--g600));color:#fff;
@@ -259,7 +271,7 @@
   .toolbar { display: flex; flex-direction: column; gap: 14px; margin-top: 36px; }
 
   /* ===== 首页：底部分类导航 ===== */
-  .home-nav{display:grid;grid-template-columns:repeat(6,1fr);gap:4px;margin-top:22px;
+  .home-nav{display:grid;grid-template-columns:repeat(7,1fr);gap:4px;margin-top:22px;
     background:var(--card);border:1px solid var(--line);border-radius:18px;padding:8px;
     box-shadow:var(--card-edge),var(--shadow-1);}
   .hn-item{display:flex;flex-direction:column;align-items:center;gap:2px;border:none;
@@ -754,6 +766,8 @@
 
     .composer{padding:14px 14px 12px;border-radius:20px;}
     .composer textarea{font-size:16px;min-height:48px;padding:11px 13px;}
+    .inline-btn{width:40px;height:40px;border-radius:12px;}
+    .inline-btn svg{width:18px;height:18px;}
     .remind-row .time-field{font-size:15px;padding:10px;}
     .remind-row select{font-size:13px;padding:10px;}
 
@@ -929,6 +943,9 @@
   .lt-persona-fields select{height:36px;min-width:96px;padding:0 8px;border:1px solid var(--lt-line);border-radius:9px;background:var(--lt-bg);color:var(--lt-ink)}
   .lt-persona-note{margin:10px 0 0;color:var(--lt-soft);font-size:11px;line-height:1.6}
   .lt-big-actions{display:flex;align-items:center;gap:8px}
+  .lt-big-pending{padding:6px 12px;border-radius:9px;border:1px solid var(--lt-line);background:var(--lt-panel);color:var(--lt-accent);font-size:12px;font-weight:650;cursor:pointer;white-space:nowrap;transition:all .2s ease}
+  .lt-big-pending:hover{border-color:var(--lt-accent);background:var(--lt-wash)}
+  .lt-big-pending.added{border-color:var(--lt-accent);background:var(--lt-wash);color:var(--lt-soft);cursor:default}
   .lt-reco{display:flex;align-items:center;gap:10px;flex-wrap:wrap;justify-content:center;margin:2px 0 10px}
   .lt-reco-score{font-size:13px;font-weight:750;color:var(--lt-ink)}
   .lt-reco-stars{color:#e6a23c;font-size:14px;letter-spacing:.06em}
@@ -993,9 +1010,17 @@
   <section class="composer" id="composerBox">
     <div class="input-wrap">
       <textarea id="input" rows="1" placeholder="此刻，想记下点什么…"></textarea>
-      <button class="send-btn" id="saveBtn" type="button" aria-label="记下">
-        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M22 2L11 13"/><path d="M22 2l-7 20-4-9-9-4z"/></svg>
-      </button>
+      <div class="input-actions">
+        <button class="inline-btn remind-toggle" id="remindToggle" type="button" aria-label="设置提醒" title="提醒">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><path d="M18 8a6 6 0 10-12 0c0 7-3 9-3 9h18s-3-2-3-9"/><path d="M13.7 21a2 2 0 01-3.4 0"/></svg>
+        </button>
+        <button class="inline-btn mic-btn" id="micBtn" type="button" aria-label="语音输入" title="语音">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M12 2a3 3 0 0 0-3 3v7a3 3 0 0 0 6 0V5a3 3 0 0 0-3-3z"/><path d="M19 10v2a7 7 0 0 1-14 0v-2"/><line x1="12" y1="19" x2="12" y2="22"/></svg>
+        </button>
+        <button class="send-btn" id="saveBtn" type="button" aria-label="记下">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M22 2L11 13"/><path d="M22 2l-7 20-4-9-9-4z"/></svg>
+        </button>
+      </div>
     </div>
     
     <div class="remind-row" id="remindRow">
@@ -1011,23 +1036,6 @@
     
     <div class="composer-bar">
       <div class="bar-left">
-        <button class="tool-btn" id="remindToggle" type="button">
-          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.4" stroke-linecap="round" stroke-linejoin="round">
-            <path d="M18 8a6 6 0 10-12 0c0 7-3 9-3 9h18s-3-2-3-9"/><path d="M13.7 21a2 2 0 01-3.4 0"/>
-          </svg>
-          <span id="remindLabel">提醒</span>
-        </button>
-        
-        <!-- 语音按钮 -->
-        <button class="tool-btn mic-btn" id="micBtn" type="button">
-          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round">
-            <path d="M12 2a3 3 0 0 0-3 3v7a3 3 0 0 0 6 0V5a3 3 0 0 0-3-3z"/>
-            <path d="M19 10v2a7 7 0 0 1-14 0v-2"/>
-            <line x1="12" y1="19" x2="12" y2="22"/>
-          </svg>
-          <span id="micLabel">语音</span>
-        </button>
-
         <!-- AI 整理按钮 -->
         <button class="tool-btn ai-btn" id="aiBtn" type="button" style="display:none;">
           <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round">
@@ -1065,6 +1073,9 @@
     </button>
     <button class="hn-item" data-view="active" type="button">
       <span class="hn-name">待办</span><b class="hn-count" id="neActive">0</b>
+    </button>
+    <button class="hn-item" data-view="pending" type="button">
+      <span class="hn-name">待定</span><b class="hn-count" id="nePending">0</b>
     </button>
     <button class="hn-item" data-view="done" type="button">
       <span class="hn-name">完成</span><b class="hn-count" id="neDone">0</b>
@@ -1110,6 +1121,7 @@
       <button class="tab" data-view="pin" type="button">置顶 <span class="num" id="numPin">0</span></button>
       <button class="tab" data-view="note" type="button">笔记 <span class="num" id="numNote">0</span></button>
       <button class="tab active" data-view="active" type="button">待办 <span class="num" id="numActive">0</span></button>
+      <button class="tab" data-view="pending" type="button">待定 <span class="num" id="numPending">0</span></button>
       <button class="tab" data-view="done" type="button">已完成 <span class="num" id="numDone">0</span></button>
       <button class="tab" data-view="shop" type="button">店铺 <span class="num" id="numShop">0</span></button>
       <button class="tab" data-view="trash" type="button">垃圾桶 <span class="num" id="numTrash">0</span></button>
@@ -1374,7 +1386,7 @@ window.onerror = function (msg, url, line) {
   'use strict';
 
   // 版本号统一在此维护；localStorage 键沿用 v11 不变，切勿改名以免丢失用户数据
-  var APP_VERSION = '13.5';
+  var APP_VERSION = '13.6';
   // 送货单拍照识别：视觉模型默认名、兼容别名与各项安全上限
   var DEFAULT_VISION_MODEL = 'deepseek-flash';
   var VISION_MODEL_FALLBACK = 'deepseek-v4-flash-vision-exp';
@@ -1386,9 +1398,9 @@ window.onerror = function (msg, url, line) {
   var LS_CONFIG = 'bamboo.v11.config';
   var LS_NOTES  = 'bamboo.v11.notes';
   var LS_THEME  = 'bamboo.v11.theme';
-  var VIEW = { ACTIVE: 'active', DONE: 'done', TRASH: 'trash', SHOP: 'shop', PIN: 'pin', NOTE: 'note' };
+  var VIEW = { ACTIVE: 'active', DONE: 'done', TRASH: 'trash', SHOP: 'shop', PIN: 'pin', NOTE: 'note', PENDING: 'pending' };
 
-  // 六分类归属（互斥，优先级：置顶 > 店铺 > 待办(带提醒) > 笔记）
+  // 七分类归属（互斥，优先级：置顶 > 店铺 > 待定 > 待办(带提醒) > 笔记）
   function noteCategory(n) {
     if (!n) return 'note';
     if (n.status === VIEW.TRASH) return 'trash';
@@ -1399,6 +1411,7 @@ window.onerror = function (msg, url, line) {
     for (var i = 0; i < tags.length; i++) {
       if (String(tags[i]).trim() === '置顶') return 'pin';
     }
+    if (hasPendingTag(n)) return 'pending';
     return n.remindAt ? 'active' : 'note';
   }
   var LIST_PAGE = 15;
@@ -1440,19 +1453,18 @@ window.onerror = function (msg, url, line) {
     els.numDone = $('numDone');
     els.numTrash = $('numTrash');
     els.numShop = $('numShop');
+    els.numPending = $('numPending');
     els.remindToggle = $('remindToggle');
     els.remindRow = $('remindRow');
     els.remindInput = $('remindInput');
     els.remindField = $('remindField');
     els.repeatInput = $('repeatInput');
-    els.remindLabel = $('remindLabel');
     els.saveBtn = $('saveBtn');
     els.toast = $('toast');
     els.drawer = $('drawer');
     els.mask = $('mask');
     
     els.micBtn = $('micBtn');
-    els.micLabel = $('micLabel');
     els.aiBtn = $('aiBtn');
 
     els.shopBillBtn = $('shopBillBtn');
@@ -1528,6 +1540,7 @@ window.onerror = function (msg, url, line) {
     els.neDone = $('neDone');
     els.neTrash = $('neTrash');
     els.neShop = $('neShop');
+    els.nePending = $('nePending');
     els.numPin = $('numPin');
     els.numNote = $('numNote');
   }
@@ -1612,7 +1625,7 @@ window.onerror = function (msg, url, line) {
       }
       if (!moving || Math.abs(dx) < 64 || Math.abs(dx) < Math.abs(dy)) { moving = false; return; }
       moving = false;
-      var views = [VIEW.PIN, VIEW.NOTE, VIEW.ACTIVE, VIEW.DONE, VIEW.SHOP, VIEW.TRASH];
+      var views = [VIEW.PIN, VIEW.NOTE, VIEW.ACTIVE, VIEW.PENDING, VIEW.DONE, VIEW.SHOP, VIEW.TRASH];
       var idx = views.indexOf(state.view);
       if (idx < 0) return;
       var next;
@@ -2897,7 +2910,7 @@ window.onerror = function (msg, url, line) {
   }
 
   function updateCounts() {
-    var c = { pin: 0, note: 0, active: 0, done: 0, shop: 0, trash: 0 };
+    var c = { pin: 0, note: 0, active: 0, done: 0, shop: 0, trash: 0, pending: 0 };
     for (var i = 0; i < state.notes.length; i++) {
       c[noteCategory(state.notes[i])]++;
     }
@@ -2907,12 +2920,14 @@ window.onerror = function (msg, url, line) {
     if (els.numDone)   els.numDone.textContent = c.done;
     if (els.numShop)   els.numShop.textContent = c.shop;
     if (els.numTrash)  els.numTrash.textContent = c.trash;
+    if (els.numPending) els.numPending.textContent = c.pending;
     if (els.nePin)     els.nePin.textContent = c.pin;
     if (els.neNote)    els.neNote.textContent = c.note;
     if (els.neActive)  els.neActive.textContent = c.active;
     if (els.neDone)    els.neDone.textContent = c.done;
     if (els.neShop)    els.neShop.textContent = c.shop;
     if (els.neTrash)   els.neTrash.textContent = c.trash;
+    if (els.nePending) els.nePending.textContent = c.pending;
   }
 
   function hasShopTag(n) {
@@ -2925,6 +2940,16 @@ window.onerror = function (msg, url, line) {
     // 单一 indexOf 已覆盖所有后缀写法；原先逐个枚举分隔符是冗余的
     var txt = String(n.text || '');
     return txt.indexOf('#店铺') !== -1;
+  }
+
+  function hasPendingTag(n) {
+    if (!n) return false;
+    if (Array.isArray(n.tags)) {
+      for (var i = 0; i < n.tags.length; i++) {
+        if (String(n.tags[i]).indexOf('待定') !== -1) return true;
+      }
+    }
+    return String(n.text || '').indexOf('#待定') !== -1;
   }
 
   var ICON = {
@@ -2967,6 +2992,7 @@ window.onerror = function (msg, url, line) {
           pin:    '<span class="big">' + I('<path d="M12 2v14M9 3h6M6 16h12M12 16v6"/>') + '</span>还没有置顶的记录。<br><span class="small">打上 #置顶 标签的笔记会进这里</span>',
           note:   '<span class="big">' + I('<path d="M12 21c-4.5 0-7.5-3-7.5-7.5C4.5 8 9 4.5 12 2c0 0 2 6.5 7.5 6.5C19.5 14 16.5 21 12 21z"/><path d="M9.5 14c2.5-3 5.5-5 8.5-6"/>') + '</span>这里还空着。<br><span class="small">随手记的句子，会安静地躺在这里</span>',
           active: '<span class="big">' + I('<circle cx="12" cy="12" r="8"/><path d="M12 7.5V12l3 2"/>') + '</span>没有待办。<br><span class="small">说明了时间的笔记，会在这里等你</span>',
+          pending: '<span class="big">' + I('<circle cx="9" cy="12" r="4.4"/><circle cx="15" cy="12" r="4.4"/><path d="M12 8.4v7.2"/>') + '</span>待定里还空着。<br><span class="small">彩票看中的号码点「加入待定」，就会存到这里</span>',
           done:   '<span class="big">' + I('<path d="M4 20C4 10.5 9.5 4.5 20 4c0 10-5.5 16-16 16z"/><path d="M4 20c4.5-6 8.5-10 12.5-12.5"/>') + '</span>还没有完成的事。<br><span class="small">做完了，就放到这里</span>',
           shop:   '<span class="big">' + I('<path d="M4 9h16l-1.2-5H5.2z"/><path d="M5 9v11h14V9"/><path d="M9.5 20v-6h5v6"/>') + '</span>店铺里还空着。<br><span class="small">打上 #店铺 标签的笔记会进这里</span>',
           trash:  '<span class="big">' + I('<path d="M4 7h16"/><path d="M9 7V4h6v3"/><path d="M6.5 7l.8 13h9.4l.8-13"/>') + '</span>垃圾桶是空的。<br><span class="small">删掉的东西会先在这里</span>'
@@ -3182,6 +3208,42 @@ window.onerror = function (msg, url, line) {
     toast(remindAt ? '已记下，到时会提醒你' : '已记下');
   }
 
+  // ===== 彩票「加入待定」：把号码写入待定分类（记录彩种与日期） =====
+  function lotteryPendingSig(item) {
+    var name = String((item && item.name) || '');
+    var main = ((item && item.main) || []).map(pad2).join(' ');
+    var sub = ((item && item.sub) || []).map(pad2).join(' ');
+    return name + ' ' + main + ' + ' + sub;
+  }
+  function hasLotteryPending(item) {
+    var sig = lotteryPendingSig(item);
+    for (var i = 0; i < state.notes.length; i++) {
+      var n = state.notes[i];
+      if (n.status === VIEW.TRASH) continue;
+      if ((n.tags || []).indexOf('待定') === -1) continue;
+      if (String(n.text || '').indexOf(sig) === 0) return true;
+    }
+    return false;
+  }
+  function addLotteryPending(item) {
+    if (!item || !Array.isArray(item.main) || !Array.isArray(item.sub)) return 'error';
+    if (hasLotteryPending(item)) return 'duplicate';
+    var d = new Date();
+    var dateStr = pad2(d.getMonth() + 1) + '-' + pad2(d.getDate());
+    var text = lotteryPendingSig(item) + ' · ' + dateStr;
+    var now = d.toISOString();
+    state.notes.unshift({
+      id: uid(), text: text, createdAt: now, updatedAt: now,
+      status: VIEW.ACTIVE, remindAt: null, repeat: 'none', reminded: false,
+      remindDay: null, doneAt: null, deletedAt: null, tags: ['待定']
+    });
+    addOps('add', text);
+    saveLocal();
+    scheduleSync();
+    render();
+    return 'ok';
+  }
+
   function setStatus(id, status) {
     var n = findNote(id);
     if (!n) return;
@@ -3299,7 +3361,6 @@ window.onerror = function (msg, url, line) {
     state.remindOn = on;
     if (els.remindToggle) els.remindToggle.classList.toggle('on', on);
     if (els.remindRow) els.remindRow.classList.toggle('show', on);
-    if (els.remindLabel) els.remindLabel.textContent = on ? '已设' : '提醒';
     if (on) {
       if (els.remindInput && !els.remindInput.value) {
         els.remindInput.value = defaultRemindVal();
@@ -3334,7 +3395,6 @@ window.onerror = function (msg, url, line) {
       state.isRecording = true;
       els.micBtn.classList.add('recording');
       els.composerBox.classList.add('recording');
-      els.micLabel.textContent = '录音中...';
       initialText = els.input.value;
     };
 
@@ -3401,7 +3461,6 @@ window.onerror = function (msg, url, line) {
     state.isRecording = false;
     els.micBtn.classList.remove('recording');
     els.composerBox.classList.remove('recording');
-    els.micLabel.textContent = '语音';
   }
 
   function processWithAI(silent) {
@@ -4717,7 +4776,9 @@ window.onerror = function (msg, url, line) {
         window.LotteryLab.init({
           hasAI: hasAI,
           explain: function (prompt) { return aiPlain(prompt, 0.2); },
-          toast: toast
+          toast: toast,
+          addPending: addLotteryPending,
+          hasPending: hasLotteryPending
         });
       } catch (e) {
         console.error('彩票模块初始化失败', e);

@@ -541,6 +541,39 @@
     } catch(e) { notify('本机彩票数据读取失败，已使用内置数据；原始彩票数据未被清除：'+e.message); }
   }
 
+  // ===== 加入待定：把号码写入主应用「待定」分类（记录彩种与日期） =====
+  function pendingItem(c){
+    var g=GAMES[ui.game]||GAMES.ssq;
+    return {game:ui.game,name:g.name,main:c.main.slice(),sub:c.sub.slice()};
+  }
+  function isPending(c){
+    if(!ui.opts.hasPending)return false;
+    try{return !!ui.opts.hasPending(pendingItem(c));}catch(e){return false;}
+  }
+  function addPending(c){
+    if(!ui.opts.addPending){notify('加入待定暂不可用，请刷新页面后重试。');return 'error';}
+    if(isPending(c))return 'duplicate';
+    try{return ui.opts.addPending(pendingItem(c));}catch(e){notify('加入待定失败：'+e.message);return 'error';}
+  }
+  function addPendingFromIdx(idx){
+    var c=ui.simple.candidates[idx];if(!c)return;
+    var r=addPending(c);
+    if(r==='duplicate')notify('这注已经在「待定」里了。');
+    else if(r==='ok')notify('已加入「待定」：去首页「待定」分类就能看到这注。');
+    rerenderSimple();
+  }
+  function addAllPending(){
+    var cs=ui.simple.candidates||[];if(!cs.length){notify('先帮我选一组号码吧。');return;}
+    var added=0,dup=0;
+    for(var i=0;i<cs.length;i++){
+      var r=addPending(cs[i]);
+      if(r==='ok')added++;else if(r==='duplicate')dup++;
+    }
+    rerenderSimple();
+    if(added)notify('已把 '+added+' 注加入「待定」'+(dup?('，另有 '+dup+' 注之前已加过'):'')+'；去首页「待定」分类查看。');
+    else notify('这些号码都已经在「待定」里了。');
+  }
+
   function markup() {
     return ''+
     '<div class="lt-shell">'+
@@ -553,7 +586,7 @@
       '<li><b>打开就有</b>：点首页「数彩」按钮，助手自动算好，屏幕扫过分析过程后直接给你号码。</li>'+
       '<li><b>选彩种</b>：顶部切换「双色球」或「超级大乐透」，两个彩种互不影响。</li>'+
       '<li><b>选几注</b>：点 3 / 5 / 8 注，再点「帮我选」或「换一组」都能重新出号。</li>'+
-      '<li><b>照着填</b>：红球在前、蓝球在后，点「复制号码」或每注右上角「复制这注」带走。</li>'+
+      '<li><b>存起来</b>：看中哪注就点「＋ 加入待定」或顶部「加入待定」，号码会存进首页「待定」分类，记好彩种和日期，去彩票店照着买就行。</li>'+
       '<li><b>想看门道</b>：点顶部「专业数据」，能看到频率、结构、回测等完整分析。</li>'+
       '<li><b>更新开奖</b>：在「专业数据」页点「更新数据」，从官网复制最新记录粘贴导入。</li>'+
       '<li><b>AI 解读</b>：在「专业数据」页点「✨ DeepSeek 解读」，用大白话解释（可选）。</li>'+
@@ -582,7 +615,7 @@
         '<section id="ltScan" class="lt-scan" hidden><div class="lt-scan-inner"><div class="lt-spin"></div><div id="ltScanText" class="lt-scan-text">正在读取最近开奖数据…</div><div class="lt-scan-dots"><i>·</i><i>·</i><i>·</i></div></div></section>'+
         '<section id="ltSimpleResult" hidden>'+
           '<div class="lt-result-head"><div><span class="lt-eyebrow">YOUR PICKS</span><h3 id="ltResultTitle">帮你选好了，照着填就行</h3></div>'+
-          '<div class="lt-result-actions"><button id="ltSimpleCopy" type="button">复制号码</button><button id="ltSimpleReroll" class="lt-ai" type="button">换一组</button></div></div>'+
+          '<div class="lt-result-actions"><button id="ltSimpleCopy" type="button">＋ 加入待定</button><button id="ltSimpleReroll" class="lt-ai" type="button">换一组</button></div></div>'+
           '<div class="lt-plain-note">红球在前、蓝球在后。号码经过多维统计，但<b>任何号码中奖概率都相同</b>，把它当娱乐就好。</div>'+
           '<div id="ltSimpleTickets" class="lt-simple-tickets"></div>'+
         '</section>'+
@@ -754,8 +787,11 @@
       var reasons=plainReasons(c,s.analysis).map(function(x){return '<li>'+esc(x)+'</li>';}).join('');
       var tag=WX_TAG[wx.main];
       var fitBadge = fit ? '<span class="lt-fit-badge">⭐ 最适合你</span>' : '';
+      var inPending = isPending(c);
+      var cartBtn = inPending ? '<button class="lt-big-pending added" type="button" data-idx="'+i+'" disabled>已加入待定 ✓</button>'
+                              : '<button class="lt-big-pending" type="button" data-idx="'+i+'">＋ 加入待定</button>';
       return '<article class="lt-big-ticket'+(fit?' lt-fit':'')+'">'+
-        '<div class="lt-big-top"><span>第 '+(i+1)+' 注</span><span class="lt-big-actions">'+fitBadge+'<button class="lt-big-copy-one" type="button" data-idx="'+i+'">复制这注</button></span></div>'+
+        '<div class="lt-big-top"><span>第 '+(i+1)+' 注</span><span class="lt-big-actions">'+fitBadge+cartBtn+'</span></div>'+
         '<div class="lt-big-balls">'+balls+'</div>'+
         '<div class="lt-reco"><span class="lt-reco-score">推荐指数 '+finalRec+'</span><span class="lt-reco-stars" aria-label="'+starsOf(finalRec)+'">'+starsOf(finalRec)+'</span><span class="lt-reco-wx">五行属'+wx.main+'</span></div>'+
         '<div class="lt-fit-tag">适合：'+esc(tag.who)+' · '+esc(tag.note)+'</div>'+
@@ -917,7 +953,7 @@
     bind('ltAdvanceToggle','click',function(){setMode(!$('ltAdvanceView').hidden);});
     bind('ltSimpleGo','click',runSimple);
     bind('ltSimpleReroll','click',rerollSimple);
-    bind('ltSimpleCopy','click',function(){copySimple(-1);});
+    bind('ltSimpleCopy','click',addAllPending);
     bind('ltPick1','click',function(){setSimpleCount(1);});
     bind('ltPick3','click',function(){setSimpleCount(3);});
     bind('ltPick5','click',function(){setSimpleCount(5);});
@@ -925,7 +961,7 @@
     bind('ltSign','change',rerenderSimple);
     bind('ltZodiac','change',rerenderSimple);
     bind('ltGender','change',rerenderSimple);
-    bind('ltSimpleTickets','click',function(e){var t=e.target.closest('.lt-big-copy-one');if(t)copySimple(Number(t.getAttribute('data-idx')));});
+    bind('ltSimpleTickets','click',function(e){var t=e.target.closest('.lt-big-pending');if(t&&!t.disabled)addPendingFromIdx(Number(t.getAttribute('data-idx')));});
     root.document.addEventListener('keydown',function(e){
       if(!ui.openFlag)return;
       if(e.key==='Escape'){e.preventDefault();close();return;}
