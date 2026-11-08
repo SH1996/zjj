@@ -271,7 +271,7 @@
   .toolbar { display: flex; flex-direction: column; gap: 14px; margin-top: 36px; }
 
   /* ===== 首页：底部分类导航 ===== */
-  .home-nav{display:grid;grid-template-columns:repeat(6,1fr);gap:4px;margin-top:22px;
+  .home-nav{display:grid;grid-template-columns:repeat(5,1fr);gap:4px;margin-top:22px;
     background:var(--card);border:1px solid var(--line);border-radius:18px;padding:8px;
     box-shadow:var(--card-edge),var(--shadow-1);}
   .hn-item{display:flex;flex-direction:column;align-items:center;gap:2px;border:none;
@@ -354,6 +354,9 @@
   .note.is-done::before{background:var(--g300);opacity:.7;}
   .note.is-trash{background:var(--line-soft);border-color:var(--line);}
   .note.is-trash::before{background:var(--ink-faint);opacity:.4;}
+  .note.is-pinned{border-color:rgba(168,135,61,.26);
+    background:linear-gradient(180deg,rgba(168,135,61,.055),var(--card) 46%);}
+  .note.is-pinned::before{background:linear-gradient(to bottom,var(--gold),rgba(168,135,61,.5));opacity:1;}
   .note.is-alert{border-color:rgba(168,135,61,.6);
     box-shadow:0 0 0 3px rgba(168,135,61,.13),0 12px 32px -20px rgba(168,135,61,.55);}
   
@@ -396,6 +399,7 @@
     background:var(--card);line-height:1.6;white-space:nowrap;max-width:100%;}
   .chip svg{width:11px;height:11px;flex:none;}
   .chip.gold{color:var(--gold);border-color:rgba(168,135,61,.4);background:var(--gold-bg);}
+  .chip.pin{color:var(--gold);border-color:rgba(168,135,61,.42);background:var(--gold-bg);font-weight:600;}
   .chip.ring{color:var(--danger);border-color:rgba(168,101,82,.4); background:var(--danger-bg);animation:ringPulse 2s ease-in-out infinite;}
   @keyframes ringPulse{0%,100%{box-shadow:0 0 0 0 rgba(168,101,82,.3);}50%{box-shadow:0 0 0 5px rgba(168,101,82,0);}}
   .chip.green{color:var(--g600);border-color:var(--g200);background:var(--g100);}
@@ -1067,9 +1071,6 @@
   </section>
 
   <nav class="home-nav" id="homeNav" aria-label="分类">
-    <button class="hn-item" data-view="pin" type="button">
-      <span class="hn-name">置顶</span><b class="hn-count" id="nePin">0</b>
-    </button>
     <button class="hn-item" data-view="note" type="button">
       <span class="hn-name">笔记</span><b class="hn-count" id="neNote">0</b>
     </button>
@@ -1117,7 +1118,6 @@
       <input type="text" id="searchInput" placeholder="搜索记录、标签..." autocomplete="off">
     </div>
     <nav class="tabs" id="tabs">
-      <button class="tab" data-view="pin" type="button">置顶 <span class="num" id="numPin">0</span></button>
       <button class="tab" data-view="note" type="button">笔记 <span class="num" id="numNote">0</span></button>
       <button class="tab active" data-view="active" type="button">待办 <span class="num" id="numActive">0</span></button>
       <button class="tab" data-view="done" type="button">已完成 <span class="num" id="numDone">0</span></button>
@@ -1384,7 +1384,7 @@ window.onerror = function (msg, url, line) {
   'use strict';
 
   // 版本号统一在此维护；localStorage 键沿用 v11 不变，切勿改名以免丢失用户数据
-  var APP_VERSION = '13.8';
+  var APP_VERSION = '13.9';
   // 送货单拍照识别：视觉模型默认名、兼容别名与各项安全上限
   var DEFAULT_VISION_MODEL = 'deepseek-flash';
   var VISION_MODEL_FALLBACK = 'deepseek-v4-flash-vision-exp';
@@ -1396,19 +1396,24 @@ window.onerror = function (msg, url, line) {
   var LS_CONFIG = 'bamboo.v11.config';
   var LS_NOTES  = 'bamboo.v11.notes';
   var LS_THEME  = 'bamboo.v11.theme';
-  var VIEW = { ACTIVE: 'active', DONE: 'done', TRASH: 'trash', SHOP: 'shop', PIN: 'pin', NOTE: 'note' };
+  var VIEW = { ACTIVE: 'active', DONE: 'done', TRASH: 'trash', SHOP: 'shop', NOTE: 'note' };
 
-  // 六分类归属（互斥，优先级：置顶 > 店铺 > 待办(彩票号码 / 带提醒) > 笔记）
+  // 置顶不是独立分类，而是笔记内部的一个排序标记：带 #置顶 的笔记归入「笔记」，并排在最前
+  function isPinned(n) {
+    var tags = (n && n.tags) || [];
+    for (var i = 0; i < tags.length; i++) {
+      if (String(tags[i]).trim() === '置顶') return true;
+    }
+    return false;
+  }
+
+  // 五分类归属（互斥，优先级：店铺 > 待办(彩票号码 / 带提醒) > 笔记）
   function noteCategory(n) {
     if (!n) return 'note';
     if (n.status === VIEW.TRASH) return 'trash';
     var isShop = hasShopTag(n);
     if (n.status === VIEW.DONE) return isShop ? 'shop' : 'done';
     if (isShop) return 'shop';
-    var tags = n.tags || [];
-    for (var i = 0; i < tags.length; i++) {
-      if (String(tags[i]).trim() === '置顶') return 'pin';
-    }
     if (hasLotteryTag(n) || n.remindAt) return 'active';
     return 'note';
   }
@@ -1531,14 +1536,16 @@ window.onerror = function (msg, url, line) {
     els.notesPage = $('notesPage');
     els.npBack = $('npBack');
 
-    els.nePin = $('nePin');
     els.neNote = $('neNote');
     els.neActive = $('neActive');
     els.neDone = $('neDone');
     els.neTrash = $('neTrash');
     els.neShop = $('neShop');
-    els.numPin = $('numPin');
     els.numNote = $('numNote');
+    els.numActive = $('numActive');
+    els.numDone = $('numDone');
+    els.numShop = $('numShop');
+    els.numTrash = $('numTrash');
   }
 
   function openNotesPage() {
@@ -1621,7 +1628,7 @@ window.onerror = function (msg, url, line) {
       }
       if (!moving || Math.abs(dx) < 64 || Math.abs(dx) < Math.abs(dy)) { moving = false; return; }
       moving = false;
-      var views = [VIEW.PIN, VIEW.NOTE, VIEW.ACTIVE, VIEW.DONE, VIEW.SHOP, VIEW.TRASH];
+      var views = [VIEW.NOTE, VIEW.ACTIVE, VIEW.DONE, VIEW.SHOP, VIEW.TRASH];
       var idx = views.indexOf(state.view);
       if (idx < 0) return;
       var next;
@@ -2919,17 +2926,15 @@ window.onerror = function (msg, url, line) {
   }
 
   function updateCounts() {
-    var c = { pin: 0, note: 0, active: 0, done: 0, shop: 0, trash: 0 };
+    var c = { note: 0, active: 0, done: 0, shop: 0, trash: 0 };
     for (var i = 0; i < state.notes.length; i++) {
       c[noteCategory(state.notes[i])]++;
     }
-    if (els.numPin)    els.numPin.textContent = c.pin;
     if (els.numNote)   els.numNote.textContent = c.note;
     if (els.numActive) els.numActive.textContent = c.active;
     if (els.numDone)   els.numDone.textContent = c.done;
     if (els.numShop)   els.numShop.textContent = c.shop;
     if (els.numTrash)  els.numTrash.textContent = c.trash;
-    if (els.nePin)     els.nePin.textContent = c.pin;
     if (els.neNote)    els.neNote.textContent = c.note;
     if (els.neActive)  els.neActive.textContent = c.active;
     if (els.neDone)    els.neDone.textContent = c.done;
@@ -2963,6 +2968,7 @@ window.onerror = function (msg, url, line) {
   }
 
   var ICON = {
+    pin: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><path d="M12 17v5"/><path d="M9 3h6l-1 6 3 3v2H7v-2l3-3z"/></svg>',
     done: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M5 12.5l4.5 4.5L19 7.5"/></svg>',
     reopen: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round"><path d="M4 10a8 8 0 118 8"/><path d="M4 5v5h5"/></svg>',
     edit: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><path d="M12 20h9M16.5 3.5a2.121 2.121 0 013 3L7 19l-4 1 1-4L16.5 3.5z"/></svg>',
@@ -2991,6 +2997,11 @@ window.onerror = function (msg, url, line) {
       }
       
       list.sort(function (a, b) {
+        // 笔记分类内：置顶的排最前，其余按时间倒序
+        if (state.view === VIEW.NOTE) {
+          var pa = isPinned(a) ? 1 : 0, pb = isPinned(b) ? 1 : 0;
+          if (pa !== pb) return pb - pa;
+        }
         return new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime();
       });
 
@@ -2999,8 +3010,7 @@ window.onerror = function (msg, url, line) {
       if (!list.length) {
         var I = function(p){ return '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round">' + p + '</svg>'; };
         var EMPTY = {
-          pin:    '<span class="big">' + I('<path d="M12 2v14M9 3h6M6 16h12M12 16v6"/>') + '</span>还没有置顶的记录。<br><span class="small">打上 #置顶 标签的笔记会进这里</span>',
-          note:   '<span class="big">' + I('<path d="M12 21c-4.5 0-7.5-3-7.5-7.5C4.5 8 9 4.5 12 2c0 0 2 6.5 7.5 6.5C19.5 14 16.5 21 12 21z"/><path d="M9.5 14c2.5-3 5.5-5 8.5-6"/>') + '</span>这里还空着。<br><span class="small">随手记的句子，会安静地躺在这里</span>',
+          note:   '<span class="big">' + I('<path d="M12 21c-4.5 0-7.5-3-7.5-7.5C4.5 8 9 4.5 12 2c0 0 2 6.5 7.5 6.5C19.5 14 16.5 21 12 21z"/><path d="M9.5 14c2.5-3 5.5-5 8.5-6"/>') + '</span>这里还空着。<br><span class="small">随手记的句子，会安静地躺在这里；打上 #置顶 就会排到最上面</span>',
           active: '<span class="big">' + I('<circle cx="12" cy="12" r="8"/><path d="M12 7.5V12l3 2"/>') + '</span>没有待办。<br><span class="small">写了时间的笔记、彩票加入的号码，都会在这里等你</span>',
           done:   '<span class="big">' + I('<path d="M4 20C4 10.5 9.5 4.5 20 4c0 10-5.5 16-16 16z"/><path d="M4 20c4.5-6 8.5-10 12.5-12.5"/>') + '</span>还没有完成的事。<br><span class="small">做完了，就放到这里</span>',
           shop:   '<span class="big">' + I('<path d="M4 9h16l-1.2-5H5.2z"/><path d="M5 9v11h14V9"/><path d="M9.5 20v-6h5v6"/>') + '</span>店铺里还空着。<br><span class="small">打上 #店铺 标签的笔记会进这里</span>',
@@ -3040,9 +3050,15 @@ window.onerror = function (msg, url, line) {
     }
     if (alertNow) cls += ' is-alert';
 
-    var meta = '<div class="note-meta"><span>' + escapeHTML(fmtDate(n.createdAt)) + '</span>';
+    var pinned = isPinned(n) && !isDone && !isTrash;
+    if (pinned) cls += ' is-pinned';
+
+    var meta = '<div class="note-meta">';
+    if (pinned) meta += '<span class="chip pin">' + ICON.pin + '置顶</span>';
+    meta += '<span>' + escapeHTML(fmtDate(n.createdAt)) + '</span>';
     var tg = n.tags || [];
     for (var ti = 0; ti < tg.length; ti++) {
+      if (pinned && String(tg[ti]).trim() === '置顶') continue;
       meta += '<span class="chip tagc">#' + escapeHTML(tg[ti]) + '</span>';
     }
     if (isDone) {
@@ -3209,7 +3225,7 @@ window.onerror = function (msg, url, line) {
     saveLocal();
     scheduleSync();
 
-    // 跳到新笔记所属的分类（六分类之一），保证发送后立刻看到
+    // 跳到新笔记所属的分类（五分类之一），保证发送后立刻看到
     var newCat = noteCategory(state.notes[0]);
     if (state.view !== newCat) { state.view = newCat; syncTabs(); }
     state.listLimit = LIST_PAGE;
