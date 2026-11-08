@@ -433,16 +433,44 @@
     padding:2px 0;box-shadow:none;font-size:30px;font-weight:600;}
   .modal .cash-amount.base-amount input[type="text"]{font-size:26px;}
   .cash-amount.base-amount input{font-size:26px;}
-  .cash-methods{display:grid;grid-template-columns:repeat(4,1fr);gap:6px;}
-  .cash-method{border:1px solid var(--line);background:var(--card-hover);border-radius:11px;
-    padding:9px 2px;font:inherit;font-size:12px;color:var(--ink-soft);cursor:pointer;transition:all .25s ease;}
-  .cash-method.on{border-color:var(--g500);background:var(--g100);color:var(--g700);font-weight:600;}
+  .cash-entry{display:grid;grid-template-columns:1fr 1fr;gap:8px;margin:10px 0 4px;}
+  .cash-cell{display:flex;align-items:center;gap:5px;border:1px solid var(--line);border-radius:12px;
+    background:var(--card-hover);padding:7px 10px;cursor:text;
+    transition:border-color .2s ease,background .2s ease;}
+  .cash-cell span{flex:none;font-size:11.5px;color:var(--ink-faint);}
+  .cash-cell input{flex:1;min-width:0;border:none;background:none;outline:none;
+    font:inherit;font-size:16px;font-weight:600;text-align:right;padding:0;
+    color:var(--ink);font-variant-numeric:tabular-nums;}
+  .modal .cash-cell input[type="text"]{flex:1 1 0;width:0 !important;max-width:none !important;
+    border:none;background:transparent;border-radius:0;box-shadow:none;
+    padding:0;margin:0;font-size:16px;font-weight:600;text-align:right;line-height:1.3;}
+  .cash-cell input::placeholder{color:var(--ink-faint);opacity:.5;font-weight:400;}
+  .cash-cell:focus-within{border-color:var(--g500);}
+  .cash-cell.filled{border-color:var(--g400);background:var(--g100);}
+  .cash-cell.filled span{color:var(--g700);}
+  .cash-total-line{display:flex;align-items:baseline;gap:7px;padding:9px 2px 5px;flex-wrap:wrap;}
+  .cash-total-line>span{font-size:10.5px;letter-spacing:.12em;color:var(--ink-faint);}
+  .cash-total-line b{font-size:21px;font-weight:700;color:var(--g800);letter-spacing:-.01em;
+    font-variant-numeric:tabular-nums;}
+  .cash-total-line small{margin-left:auto;font-size:10.5px;color:var(--ink-faint);}
   .cash-note{width:100%;margin-top:10px;border:1px solid var(--line);border-radius:11px;
     background:var(--card-hover);padding:10px 12px;font:inherit;font-size:13px;color:var(--ink);outline:none;}
   .cash-note:focus{border-color:var(--g400);}
   .cash-today{margin-top:9px;max-height:92px;overflow-y:auto;font-size:11px;color:var(--ink-faint);line-height:1.7;}
   .cash-today .ct-row{display:flex;justify-content:space-between;gap:8px;}
   .cash-today .ct-row b{color:var(--ink-soft);font-weight:500;font-variant-numeric:tabular-nums;}
+
+  /* 送货单 / 收银 切换 */
+  .shop-switch{display:inline-flex;gap:2px;padding:2px;border-radius:999px;background:var(--line-soft);min-width:0;}
+  .shop-sw{border:none;background:none;border-radius:999px;padding:4px 10px;font:inherit;font-size:11.5px;
+    color:var(--ink-faint);cursor:pointer;white-space:nowrap;transition:all .25s ease;}
+  .shop-sw small{margin-left:3px;font-size:10px;font-variant-numeric:tabular-nums;opacity:.8;}
+  .shop-sw.on{background:var(--card);color:var(--g700);font-weight:600;
+    box-shadow:0 1px 3px rgba(0,0,0,.06);}
+  .cash-item .bill-name{font-size:12px;color:var(--ink-soft);}
+  .cash-item .bill-amount{color:var(--ink);}
+  .cash-item .bill-acts button{color:var(--g600);}
+  .cash-item .bill-acts .danger{color:var(--danger);opacity:.9;}
 
   @media (max-width:560px){
     .notes-page.shop-mode{padding-left:14px;padding-right:14px;}
@@ -1374,23 +1402,24 @@
 
 <div class="modal-mask" id="cashMask" role="dialog" aria-modal="true">
   <div class="modal cash-modal">
-    <h3>收银</h3>
-    <p class="cash-sub">今天已收 <b id="cashTodayTotal">¥0.00</b>，记一笔就自动进店铺总览。</p>
-    <div class="cash-amount">
-      <span>¥</span>
-      <input id="cashAmount" type="text" inputmode="decimal" placeholder="0.00" autocomplete="off" aria-label="收款金额">
+    <h3 id="cashTitle">收银</h3>
+    <p class="cash-sub" id="cashSub">今天已收 <b id="cashTodayTotal">¥0.00</b>，几种方式可以一起填，合计记一笔。</p>
+    <div class="cash-entry" id="cashEntry" role="group" aria-label="按方式填收款金额">
+      <label class="cash-cell"><span>微信</span><input type="text" inputmode="decimal" data-method="微信" placeholder="0.00" autocomplete="off" aria-label="微信收款金额"></label>
+      <label class="cash-cell"><span>支付宝</span><input type="text" inputmode="decimal" data-method="支付宝" placeholder="0.00" autocomplete="off" aria-label="支付宝收款金额"></label>
+      <label class="cash-cell"><span>现金</span><input type="text" inputmode="decimal" data-method="现金" placeholder="0.00" autocomplete="off" aria-label="现金收款金额"></label>
+      <label class="cash-cell"><span>其他</span><input type="text" inputmode="decimal" data-method="其他" placeholder="0.00" autocomplete="off" aria-label="其他收款金额"></label>
     </div>
-    <div class="cash-methods" id="cashMethods" role="group" aria-label="收款方式">
-      <button type="button" class="cash-method on" data-method="微信">微信</button>
-      <button type="button" class="cash-method" data-method="支付宝">支付宝</button>
-      <button type="button" class="cash-method" data-method="现金">现金</button>
-      <button type="button" class="cash-method" data-method="其他">其他</button>
+    <div class="cash-total-line">
+      <span>合计</span>
+      <b id="cashTotal">¥0.00</b>
+      <small id="cashTotalHint">分方式填，留空即不计</small>
     </div>
-    <input id="cashNote" class="cash-note" type="text" placeholder="备注（可选，如：中午散客）" autocomplete="off">
+    <input id="cashNote" class="cash-note" type="text" placeholder="备注（可选，如：一日结算）" autocomplete="off">
     <div class="cash-today" id="cashTodayList"></div>
     <div class="modal-actions">
       <button class="m-btn" id="cashCancel" type="button">取消</button>
-      <button class="m-btn solid" id="cashOk" type="button">收好了</button>
+      <button class="m-btn solid" id="cashOk" type="button">记入账本</button>
     </div>
   </div>
 </div>
@@ -1546,7 +1575,7 @@ window.onerror = function (msg, url, line) {
   'use strict';
 
   // 版本号统一在此维护；localStorage 键沿用 v11 不变，切勿改名以免丢失用户数据
-  var APP_VERSION = '14.0';
+  var APP_VERSION = '14.1';
   // 送货单拍照识别：视觉模型默认名、兼容别名与各项安全上限
   var DEFAULT_VISION_MODEL = 'deepseek-flash';
   var VISION_MODEL_FALLBACK = 'deepseek-v4-flash-vision-exp';
@@ -1714,9 +1743,9 @@ window.onerror = function (msg, url, line) {
     els.shopBoard = $('shopBoard');
     els.cashBtn = $('cashBtn');
     els.cashMask = $('cashMask');
-    els.cashAmount = $('cashAmount');
+    els.cashEntry = $('cashEntry');
+    els.cashTotal = $('cashTotal');
     els.cashNote = $('cashNote');
-    els.cashMethods = $('cashMethods');
     els.cashTodayTotal = $('cashTodayTotal');
     els.cashTodayList = $('cashTodayList');
     els.baseMask = $('baseMask');
@@ -3171,24 +3200,69 @@ window.onerror = function (msg, url, line) {
   }
 
   // 收银记录：一行文本存档，参与同步与备份，不新增 localStorage 键
-  function cashText(date, method, amount, note) {
-    return '【收银】\n日期：' + date + '\n方式：' + method + '\n金额：' + fmtMoney(amount) + '元\n备注：' + (note || '');
+  // 支持一次结算多种方式（明细行），单方式旧记录仍可解析
+  function round2(v) {
+    var x = Number(v);
+    if (!isFinite(x)) return 0;
+    return Math.round(x * 100) / 100;
+  }
+  function cashText(date, parts, note) {
+    var list = [], sum = 0, main = '其他';
+    for (var i = 0; i < parts.length; i++) {
+      var a = round2(parts[i].amount);
+      if (!(a > 0)) continue;
+      if (!list.length) main = parts[i].method;
+      list.push(parts[i].method + '=' + a.toFixed(2));
+      sum += a;
+    }
+    sum = round2(sum);
+    return '【收银】\n日期：' + date +
+      '\n明细：' + list.join(';') +
+      '\n方式：' + main +
+      '\n金额：' + fmtMoney(sum) + '元' +
+      '\n备注：' + (note || '');
   }
   function parseCashText(text) {
     var s = String(text || '');
     if (s.indexOf('【收银】') !== 0) return null;
-    var out = { date: '', method: '其他', amount: 0, note: '' };
+    var out = { date: '', method: '其他', amount: 0, note: '', parts: [] };
+    var detail = '';
     var lines = s.split('\n');
     for (var i = 0; i < lines.length; i++) {
       var ln = lines[i].trim();
       if (ln.indexOf('日期') === 0) out.date = ln.replace(/^日期[：:]\s*/, '').trim();
+      else if (ln.indexOf('明细') === 0) detail = ln.replace(/^明细[：:]\s*/, '').trim();
       else if (ln.indexOf('方式') === 0) out.method = ln.replace(/^方式[：:]\s*/, '').trim() || '其他';
       else if (ln.indexOf('金额') === 0) {
         var m = ln.match(/-?[0-9.]+/);
         out.amount = m ? (parseFloat(m[0]) || 0) : 0;
       } else if (ln.indexOf('备注') === 0) out.note = ln.replace(/^备注[：:]\s*/, '').trim();
     }
+    if (detail) {
+      var segs = detail.split(/[;；]/);
+      for (var j = 0; j < segs.length; j++) {
+        var seg = segs[j].trim();
+        if (!seg) continue;
+        var mm = seg.match(/^(.+?)[=＝]\s*(-?[0-9.]+)$/);
+        if (!mm) continue;
+        var amt = round2(parseFloat(mm[2]));
+        if (!(amt > 0)) continue;
+        out.parts.push({ method: mm[1].trim() || '其他', amount: amt });
+      }
+    }
+    // 旧格式（只有「方式 + 金额」）兜底成单条明细
+    if (!out.parts.length && out.amount > 0) {
+      out.parts.push({ method: out.method, amount: round2(out.amount) });
+    }
+    if (!(out.amount > 0)) {
+      var sum = 0;
+      for (var k = 0; k < out.parts.length; k++) sum += out.parts[k].amount;
+      out.amount = round2(sum);
+    }
     if (!out.date || !(out.amount > 0)) return null;
+    var labels = [];
+    for (var q = 0; q < out.parts.length; q++) labels.push(out.parts[q].method);
+    out.methodLabel = labels.join(' + ') || out.method;
     return out;
   }
 
@@ -3267,8 +3341,12 @@ window.onerror = function (msg, url, line) {
     for (var q = 0; q < cash.length; q++) {
       if (cash[q].date !== today) continue;
       todayIn += cash[q].amount;
-      var mk = todayByMethod[cash[q].method] === undefined ? '其他' : cash[q].method;
-      todayByMethod[mk] += cash[q].amount;
+      // 一次结算可能含多种方式，按明细拆分
+      for (var pi = 0; pi < cash[q].parts.length; pi++) {
+        var pm = cash[q].parts[pi].method;
+        var pk = todayByMethod[pm] === undefined ? '其他' : pm;
+        todayByMethod[pk] += cash[q].parts[pi].amount;
+      }
     }
     bills.sort(function (x, y) {
       if (x.bill.date !== y.bill.date) return x.bill.date < y.bill.date ? 1 : -1;
@@ -3365,8 +3443,46 @@ window.onerror = function (msg, url, line) {
     }
   }
 
-  // 展开中的送货单（跨 render 保留）
+  // 展开中的送货单 / 收银记录（跨 render 保留）
   var openBills = {};
+  // 店铺明细当前页签：bill 送货单 / cash 收银流水
+  var shopListTab = 'bill';
+
+  // 收银流水行：收起只露日期、方式汇总、合计金额，展开可改可删
+  function cashRowsHTML(f, CHEV) {
+    var html = '';
+    for (var i = 0; i < f.cash.length; i++) {
+      var c = f.cash[i];
+      var mix = [], detail = '', pid = escapeHTML(c.id);
+      for (var p = 0; p < c.parts.length; p++) {
+        mix.push(escapeHTML(c.parts[p].method) + ' ' + fmtMoney(c.parts[p].amount));
+        detail += '<div class="bill-line"><span>' + escapeHTML(c.parts[p].method) + '</span><span>' +
+                  money(c.parts[p].amount) + '</span></div>';
+      }
+      if (c.note) {
+        detail += '<div class="bill-line"><span>备注</span><span>' + escapeHTML(c.note) + '</span></div>';
+      }
+      var when = String(c.date || '').slice(5) +
+                 (c.noteRef ? ' ' + hmOf(c.noteRef.createdAt) : '');
+      html += '<div class="bill-item cash-item' + (openBills[c.id] ? ' open' : '') + '" data-id="' + pid + '">' +
+        '<button class="bill-head" type="button" data-act="cash-toggle" data-id="' + pid + '">' +
+          '<span class="bill-date">' + escapeHTML(String(c.date || '').slice(5)) + '</span>' +
+          '<span class="bill-name">' + mix.join(' · ') + '</span>' +
+          '<span class="bill-amount">' + money(c.amount) + '</span>' +
+          '<span class="bill-chevron">' + CHEV + '</span>' +
+        '</button>' +
+        '<div class="bill-body">' + detail +
+          '<div class="bill-foot"><span>' + escapeHTML(when) + ' · ' + c.parts.length + ' 种方式</span>' +
+            '<span class="bill-acts">' +
+              '<button type="button" data-act="cash-edit" data-id="' + pid + '">修改</button>' +
+              '<button type="button" class="danger" data-act="cash-del" data-id="' + pid + '">删除</button>' +
+            '</span>' +
+          '</div>' +
+        '</div>' +
+      '</div>';
+    }
+    return html;
+  }
 
   function renderShopBoard() {
     if (!els.shopBoard) return;
@@ -3399,7 +3515,7 @@ window.onerror = function (msg, url, line) {
           '</div>' +
         '</div>' +
         '<div class="shop-stats">' +
-          '<div class="shop-stat"><span>总收入</span><b data-k="in">' + money(f.totalIn) + '</b><small>' + f.cashCount + ' 笔收银</small></div>' +
+          '<div class="shop-stat"><span>总收入</span><b data-k="in">' + money(f.totalIn) + '</b><small>' + f.cashCount + ' 次结算</small></div>' +
           '<div class="shop-stat"><span>总支付</span><b data-k="out">' + money(f.totalOut) + '</b><small>' + f.billCount + ' 张送货单</small></div>' +
           '<div class="shop-stat"><span>毛利润</span><b data-k="gross" class="' + grossCls + '">' + money(f.gross) + '</b><small>收入 − 进货</small></div>' +
           '<div class="shop-stat"><span>净收入</span><b data-k="net" class="' + netCls + '">' + money(f.net) + '</b><small>暂无其他费用</small></div>' +
@@ -3411,7 +3527,14 @@ window.onerror = function (msg, url, line) {
         '</div>' +
       '</div>';
 
+    var isCashTab = shopListTab === 'cash';
     var rowsHTML = '';
+    if (isCashTab) {
+      rowsHTML = cashRowsHTML(f, CHEV);
+      if (!rowsHTML) {
+        rowsHTML = '<div class="bill-empty"><b>还没有收银记录</b>点「＋ 收银」把收到的钱记进来，可以一次填几种方式</div>';
+      }
+    } else {
     for (var i = 0; i < f.bills.length; i++) {
       var it = f.bills[i], b = it.bill;
       var dateShort = b.date ? String(b.date).slice(5) : '—';
@@ -3448,12 +3571,18 @@ window.onerror = function (msg, url, line) {
     if (!rowsHTML) {
       rowsHTML = '<div class="bill-empty"><b>还没有送货单</b>点右上角「送货单」拍照或手填，会归档到这里</div>';
     }
+    }
 
     var bills =
       '<div class="shop-bills">' +
         '<div class="shop-bills-head">' +
-          '<h3>送货单 <small>' + f.billCount + ' 张 · 共 ' + money(f.totalOut) + '</small></h3>' +
-          '<button type="button" data-act="newbill">＋ 记一笔</button>' +
+          '<div class="shop-switch" role="tablist" aria-label="店铺明细">' +
+            '<button type="button" role="tab" class="shop-sw' + (isCashTab ? '' : ' on') + '" data-act="tab-bill" aria-selected="' + (isCashTab ? 'false' : 'true') + '">送货单 <small>' + f.billCount + '</small></button>' +
+            '<button type="button" role="tab" class="shop-sw' + (isCashTab ? ' on' : '') + '" data-act="tab-cash" aria-selected="' + (isCashTab ? 'true' : 'false') + '">收银 <small>' + f.cashCount + '</small></button>' +
+          '</div>' +
+          (isCashTab
+            ? '<button type="button" data-act="cash">＋ 收银</button>'
+            : '<button type="button" data-act="newbill">＋ 记一笔</button>') +
         '</div>' +
         '<div class="shop-bill-list" id="shopBillList">' + rowsHTML + '</div>' +
       '</div>';
@@ -3461,13 +3590,49 @@ window.onerror = function (msg, url, line) {
     els.shopBoard.innerHTML = hero + bills;
   }
 
-  // ===== 收银弹窗 =====
-  var cashMethod = '微信';
+  // ===== 收银弹窗（支持一次结算多种方式）=====
+  var cashEditId = null;       // 非空表示在改一笔已有记录
+  var cashEditDate = '';       // 修改时保留原日期
 
   function hmOf(iso) {
     var d = new Date(iso);
     if (isNaN(d.getTime())) return '';
     return pad2(d.getHours()) + ':' + pad2(d.getMinutes());
+  }
+
+  function cashInputs() {
+    var box = $('cashEntry');
+    if (!box) return [];
+    return Array.prototype.slice.call(box.querySelectorAll('input[data-method]'));
+  }
+
+  // 读四个输入框：只统计大于 0 的方式
+  function cashReadParts() {
+    var ins = cashInputs(), parts = [], total = 0;
+    for (var i = 0; i < ins.length; i++) {
+      var cell = ins[i].parentNode;
+      var raw = String(ins[i].value || '').replace(/[^0-9.]/g, '');
+      var v = parseFloat(raw);
+      if (!(v > 0)) {
+        if (cell && cell.classList) cell.classList.remove('filled');
+        continue;
+      }
+      v = round2(v);
+      parts.push({ method: ins[i].getAttribute('data-method'), amount: v });
+      total += v;
+      if (cell && cell.classList) cell.classList.add('filled');
+    }
+    return { parts: parts, total: round2(total) };
+  }
+
+  function syncCashTotal() {
+    var r = cashReadParts();
+    if (els.cashTotal) els.cashTotal.textContent = money(r.total);
+    var hint = $('cashTotalHint');
+    if (hint) {
+      hint.textContent = !r.parts.length ? '分方式填，留空即不计'
+        : (r.parts.length > 1 ? r.parts.length + ' 种方式合计' : '只记这一种方式');
+    }
   }
 
   function cashToday() {
@@ -3481,15 +3646,7 @@ window.onerror = function (msg, url, line) {
     list.sort(function (a, b) {
       return new Date(b.noteRef.createdAt).getTime() - new Date(a.noteRef.createdAt).getTime();
     });
-    return { list: list, total: total };
-  }
-
-  function syncCashMethods() {
-    if (!els.cashMethods) return;
-    var btns = els.cashMethods.querySelectorAll('.cash-method');
-    for (var i = 0; i < btns.length; i++) {
-      btns[i].classList.toggle('on', btns[i].getAttribute('data-method') === cashMethod);
-    }
+    return { list: list, total: round2(total) };
   }
 
   function renderCashToday() {
@@ -3501,39 +3658,96 @@ window.onerror = function (msg, url, line) {
       html = '<div class="ct-row"><span>今天还没有收款记录</span></div>';
     } else {
       for (var i = 0; i < t.list.length && i < 5; i++) {
-        var c = t.list[i];
-        html += '<div class="ct-row"><span>' + hmOf(c.noteRef.createdAt) + ' · ' + escapeHTML(c.method) +
-                (c.note ? ' · ' + escapeHTML(c.note) : '') + '</span><b>' + money(c.amount) + '</b></div>';
+        var c = t.list[i], mix = [];
+        for (var p = 0; p < c.parts.length; p++) {
+          mix.push(escapeHTML(c.parts[p].method) + ' ' + fmtMoney(c.parts[p].amount));
+        }
+        html += '<div class="ct-row"><span>' + hmOf(c.noteRef.createdAt) + ' · ' +
+                mix.join(' / ') + (c.note ? ' · ' + escapeHTML(c.note) : '') +
+                '</span><b>' + money(c.amount) + '</b></div>';
       }
     }
     els.cashTodayList.innerHTML = html;
   }
 
-  function openCashModal() {
-    cashMethod = '微信';
-    syncCashMethods();
-    if (els.cashAmount) els.cashAmount.value = '';
+  function openCashModal(id) {
+    cashEditId = (typeof id === 'string' && id) ? id : null;
+    cashEditDate = todayStr();
+    var ins = cashInputs();
+    for (var i = 0; i < ins.length; i++) {
+      ins[i].value = '';
+      if (ins[i].parentNode && ins[i].parentNode.classList) ins[i].parentNode.classList.remove('filled');
+    }
     if (els.cashNote) els.cashNote.value = '';
+
+    var title = $('cashTitle'), ok = $('cashOk');
+    if (cashEditId) {
+      var n = findNote(cashEditId);
+      var c = n ? parseCashText(n.text) : null;
+      if (c) {
+        cashEditDate = c.date;
+        for (var p = 0; p < c.parts.length; p++) {
+          for (var k = 0; k < ins.length; k++) {
+            if (ins[k].getAttribute('data-method') === c.parts[p].method) {
+              ins[k].value = fmtMoney(c.parts[p].amount);
+            }
+          }
+        }
+        if (els.cashNote) els.cashNote.value = c.note || '';
+      }
+      if (title) title.textContent = '修改收银';
+      if (ok) ok.textContent = '保存修改';
+    } else {
+      if (title) title.textContent = '收银';
+      if (ok) ok.textContent = '记入账本';
+    }
+    if (els.cashTodayList) els.cashTodayList.style.display = cashEditId ? 'none' : '';
+    var sub = $('cashSub');
+    if (sub) {
+      sub.innerHTML = cashEditId
+        ? '改 ' + escapeHTML(cashEditDate) + ' 这笔收银，保存后账本立刻更新。'
+        : '今天已收 <b id="cashTodayTotal">¥0.00</b>，几种方式可以一起填，合计记一笔。';
+      els.cashTodayTotal = $('cashTodayTotal');
+    }
+    syncCashTotal();
     renderCashToday();
     if (els.cashMask) els.cashMask.classList.add('open');
-    setTimeout(function () { try { if (els.cashAmount) els.cashAmount.focus(); } catch (e) {} }, 180);
+    setTimeout(function () {
+      try { var a = cashInputs(); if (a[0]) a[0].focus(); } catch (e) {}
+    }, 180);
   }
   function closeCashModal() {
     if (els.cashMask) els.cashMask.classList.remove('open');
+    cashEditId = null;
   }
 
   function saveCash() {
-    var raw = String(els.cashAmount ? els.cashAmount.value : '').replace(/[^0-9.]/g, '');
-    var amt = parseFloat(raw);
-    if (!(amt > 0)) {
-      toast('先填个收款金额');
-      if (els.cashAmount) els.cashAmount.focus();
+    var r = cashReadParts();
+    if (!r.parts.length) {
+      toast('先填一个收款金额');
+      var a = cashInputs();
+      if (a[0]) a[0].focus();
       return;
     }
-    amt = Math.round(amt * 100) / 100;
     var note = String(els.cashNote ? els.cashNote.value : '').trim().slice(0, 40);
     var now = new Date().toISOString();
-    var text = cashText(todayStr(), cashMethod, amt, note);
+    var label = r.parts.length > 1 ? r.parts.length + ' 种方式' : r.parts[0].method;
+
+    if (cashEditId) {
+      var n = findNote(cashEditId);
+      if (!n) { closeCashModal(); return; }
+      n.text = cashText(cashEditDate, r.parts, note);
+      n.updatedAt = now;
+      addOps('edit', n.text);
+      saveLocal();
+      scheduleSync();
+      render();
+      closeCashModal();
+      toast('已改为 ' + money(r.total) + ' · ' + label);
+      return;
+    }
+
+    var text = cashText(todayStr(), r.parts, note);
     state.notes.unshift({
       id: uid(), text: text, createdAt: now, updatedAt: now,
       status: VIEW.ACTIVE, remindAt: null, repeat: 'none', reminded: false,
@@ -3544,7 +3758,7 @@ window.onerror = function (msg, url, line) {
     scheduleSync();
     render();
     closeCashModal();
-    toast('已收 ' + money(amt) + ' · ' + cashMethod);
+    toast('已收 ' + money(r.total) + ' · ' + label);
   }
 
   // ===== 起始资金 =====
@@ -3578,7 +3792,13 @@ window.onerror = function (msg, url, line) {
       el = el.parentNode;
     }
     if (!act) return;
-    if (act === 'bill-toggle') {
+    if (act === 'tab-bill' || act === 'tab-cash') {
+      var want = (act === 'tab-cash') ? 'cash' : 'bill';
+      if (shopListTab !== want) { shopListTab = want; openBills = {}; }
+      renderShopBoard();
+      return;
+    }
+    if (act === 'bill-toggle' || act === 'cash-toggle') {
       var item = el.closest ? el.closest('.bill-item') : null;
       if (!item) return;
       item.classList.toggle('open');
@@ -3588,6 +3808,13 @@ window.onerror = function (msg, url, line) {
     if (act === 'cash') { openCashModal(); return; }
     if (act === 'base') { openBaseModal(); return; }
     if (act === 'newbill') { shopBillOpen(); return; }
+    if (act === 'cash-edit') { openCashModal(id); return; }
+    if (act === 'cash-del') {
+      delete openBills[id];
+      setStatus(id, VIEW.TRASH);
+      toast('已从账本删除');
+      return;
+    }
     if (!id) return;
     if (act === 'bill-edit') openEditModal(id);
     else if (act === 'bill-share') openShareModal(id);
@@ -5388,18 +5615,11 @@ window.onerror = function (msg, url, line) {
     }
     els.shopBillBtn.addEventListener('click', shopBillOpen);
     if (els.shopBoard) els.shopBoard.addEventListener('click', handleShopClick);
-    if (els.cashBtn) els.cashBtn.addEventListener('click', openCashModal);
-    if (els.cashMethods) {
-      els.cashMethods.addEventListener('click', function (e) {
-        var el = e.target;
-        while (el && el !== els.cashMethods) {
-          if (el.getAttribute && el.getAttribute('data-method')) {
-            cashMethod = el.getAttribute('data-method');
-            syncCashMethods();
-            return;
-          }
-          el = el.parentNode;
-        }
+    if (els.cashBtn) els.cashBtn.addEventListener('click', function () { openCashModal(); });
+    if (els.cashEntry) {
+      els.cashEntry.addEventListener('input', syncCashTotal);
+      els.cashEntry.addEventListener('keydown', function (e) {
+        if (e.key === 'Enter') { e.preventDefault(); saveCash(); }
       });
     }
     if ($('cashOk')) $('cashOk').addEventListener('click', saveCash);
@@ -5408,7 +5628,6 @@ window.onerror = function (msg, url, line) {
     if ($('baseOk')) $('baseOk').addEventListener('click', saveBase);
     if ($('baseCancel')) $('baseCancel').addEventListener('click', closeBaseModal);
     if (els.baseMask) els.baseMask.addEventListener('click', function (e) { if (e.target === els.baseMask) closeBaseModal(); });
-    if (els.cashAmount) els.cashAmount.addEventListener('keydown', function (e) { if (e.key === 'Enter') saveCash(); });
     if (els.baseAmount) els.baseAmount.addEventListener('keydown', function (e) { if (e.key === 'Enter') saveBase(); });
     if ($('shopClose')) $('shopClose').addEventListener('click', closeShopBill);
     if ($('shopCancel')) $('shopCancel').addEventListener('click', closeShopBill);
