@@ -1758,7 +1758,7 @@ window.onerror = function (msg, url, line) {
   'use strict';
 
   // 版本号统一在此维护；localStorage 键沿用 v11 不变，切勿改名以免丢失用户数据
-  var APP_VERSION = '14.6';
+  var APP_VERSION = '14.7';
   // 送货单拍照识别：视觉模型默认名、兼容别名与各项安全上限
   var DEFAULT_VISION_MODEL = 'deepseek-flash';
   var VISION_MODEL_FALLBACK = 'deepseek-v4-flash-vision-exp';
@@ -3562,11 +3562,13 @@ window.onerror = function (msg, url, line) {
     kb.sort(function (x, y) {
       return new Date(y.note.createdAt).getTime() - new Date(x.note.createdAt).getTime();
     });
-    var gross = totalIn - totalOut; // 毛利润 = 收入 - 进货支出
+    var gross = totalIn - totalOut; // 毛利 = 收入 - 进货支出
+    // 毛利润率 = 毛利 ÷ 收入。收入为 0 时没有意义，留 null 让界面显示「—」
+    var margin = totalIn > 0 ? gross / totalIn * 100 : null;
     var net = gross;                // 净收入 = 毛利 - 其他费用（暂未记账）
     return {
       bills: bills, cash: cash, kb: kb, base: base,
-      totalIn: totalIn, totalOut: totalOut, gross: gross, net: net,
+      totalIn: totalIn, totalOut: totalOut, gross: gross, margin: margin, net: net,
       balance: base + net, todayIn: todayIn, todayByMethod: todayByMethod,
       billCount: bills.length, cashCount: cash.length, kbCount: kb.length, items: items
     };
@@ -3699,7 +3701,10 @@ window.onerror = function (msg, url, line) {
 
     var netCls = f.net < 0 ? 'neg' : 'pos';
     var netSign = f.net < 0 ? '' : '+';
-    var grossCls = f.gross < 0 ? 'neg' : 'pos';
+    // 毛利率没有正负号前缀，负毛利就是负百分比
+    var marginTxt = f.margin === null ? '—' : f.margin.toFixed(1) + '%';
+    var marginCls = f.margin === null ? '' : (f.margin < 0 ? 'neg' : 'pos');
+    var marginSub = f.margin === null ? '还没有收入' : '毛利 ' + money(f.gross);
 
     var cashParts = [];
     for (var mi = 0; mi < CASH_METHODS.length; mi++) {
@@ -3725,7 +3730,7 @@ window.onerror = function (msg, url, line) {
         '<div class="shop-stats">' +
           '<div class="shop-stat"><span>总收入</span><b data-k="in">' + money(f.totalIn) + '</b><small>' + f.cashCount + ' 次结算</small></div>' +
           '<div class="shop-stat"><span>总支付</span><b data-k="out">' + money(f.totalOut) + '</b><small>' + f.billCount + ' 张送货单</small></div>' +
-          '<div class="shop-stat"><span>毛利润</span><b data-k="gross" class="' + grossCls + '">' + money(f.gross) + '</b><small>收入 − 进货</small></div>' +
+          '<div class="shop-stat"><span>毛利润率</span><b data-k="margin" class="' + marginCls + '">' + marginTxt + '</b><small>' + marginSub + '</small></div>' +
           '<div class="shop-stat"><span>净收入</span><b data-k="net" class="' + netCls + '">' + money(f.net) + '</b><small>暂无其他费用</small></div>' +
         '</div>' +
         '<div class="shop-today">' +
