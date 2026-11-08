@@ -796,22 +796,90 @@
     -webkit-tap-highlight-color:transparent;}
   .more-btn:active{background:var(--g100);color:var(--g600);border-color:var(--g400);}
 
-  /* ===== 问过去的自己 ===== */
-  .ask-modes{display:flex;gap:8px;margin-bottom:12px;}
-  .ask-mode{flex:1;padding:9px 4px;border:1px solid var(--line);border-radius:999px;background:none;
-    color:var(--ink-faint);font:inherit;font-size:12.5px;letter-spacing:.04em;cursor:pointer;
-    transition:all .3s ease;-webkit-tap-highlight-color:transparent;}
-  .ask-mode.on{border-color:var(--g400);background:var(--g100);color:var(--g600);}
-  .ask-mode:active{opacity:.85;}
-  .ask-answer{margin-top:14px;padding:13px 15px;border:1px solid var(--line);border-radius:14px;
-    background:var(--card-hover);font-size:14px;line-height:1.95;max-height:38vh;overflow:auto;}
-  .ask-answer.md-render>*:first-child{margin-top:0;}
-  .ask-answer.md-render>*:last-child{margin-bottom:0;}
-  .ask-refs{display:flex;flex-wrap:wrap;gap:6px;margin-top:10px;}
-  .ask-refs a.chip{text-decoration:none;color:var(--g600);border-color:var(--g200);}
-  .ask-refs:empty{display:none;}
-  .ask-refs .chip{cursor:pointer;}
-  .ask-refs-title{width:100%;font-size:11px;color:var(--ink-faint);letter-spacing:.1em;}
+  /* ===== v14.3 老铁有话说 ===== */
+  .lo-strip{margin-top:13px;display:flex;align-items:center;gap:8px;}
+  .lo-btn{display:inline-flex;align-items:center;gap:6px;padding:5px 12px 5px 10px;
+    border:1px solid rgba(168,135,61,.28);border-radius:999px;background:rgba(168,135,61,.055);
+    color:var(--gold);font:inherit;font-size:11.5px;font-weight:500;letter-spacing:.08em;
+    cursor:pointer;transition:color .28s ease,border-color .28s ease,background .28s ease;
+    -webkit-tap-highlight-color:transparent;}
+  .lo-btn:hover{color:var(--gold);border-color:rgba(168,135,61,.6);background:var(--gold-bg);}
+  .lo-btn:active{transform:translateY(1px);}
+  .lo-btn svg{width:13px;height:13px;flex:none;}
+  .lo-btn .lo-mark{width:5px;height:5px;border-radius:50%;background:var(--gold);display:none;}
+  .lo-btn.has-said{border-color:rgba(168,135,61,.45);background:var(--gold-bg);}
+  .lo-btn.has-said .lo-mark{display:inline-block;}
+
+  .lo-mask .modal{max-width:600px;width:100%;padding:0;max-height:86vh;display:flex;flex-direction:column;
+    overflow:hidden;border-radius:20px;}
+  .lo-head{display:flex;align-items:flex-start;gap:12px;padding:18px 20px 14px;border-bottom:1px solid var(--line-soft);}
+  .lo-ava{width:40px;height:40px;flex:none;border-radius:13px;display:grid;place-items:center;
+    background:linear-gradient(150deg,var(--gold-bg),var(--card-hover));
+    border:1px solid rgba(168,135,61,.34);color:var(--gold);
+    font-size:17px;font-weight:600;letter-spacing:0;}
+  .lo-hd{flex:1;min-width:0;padding-top:1px;}
+  .lo-hd h3{margin:0 0 3px;font-size:15px;font-weight:500;letter-spacing:.14em;color:var(--ink);}
+  .lo-sub{font-size:10px;letter-spacing:.2em;color:var(--ink-faint);}
+  .lo-close{width:30px;height:30px;flex:none;display:grid;place-items:center;border:none;background:none;
+    color:var(--ink-faint);cursor:pointer;border-radius:9px;transition:all .25s ease;}
+  .lo-close:hover{background:var(--card-hover);color:var(--ink);}
+  .lo-close svg{width:15px;height:15px;}
+  .lo-quote{margin:12px 20px 0;padding:8px 12px;border-left:2px solid var(--g300);
+    background:var(--card-hover);border-radius:0 9px 9px 0;font-size:12px;line-height:1.8;
+    color:var(--ink-soft);max-height:66px;overflow:hidden;}
+  .lo-quote:empty{display:none;}
+  .lo-badge{display:flex;align-items:center;gap:8px;padding:11px 20px 0;flex-wrap:wrap;}
+  .lo-badge:empty{display:none;}
+  .lo-tag{font-size:11px;padding:3px 10px;border-radius:999px;letter-spacing:.06em;
+    background:var(--gold-bg);color:var(--gold);border:1px solid rgba(168,135,61,.32);white-space:nowrap;}
+  .lo-tag.net{background:transparent;color:var(--g600);border-color:var(--g200);}
+  .lo-why{font-size:11.5px;color:var(--ink-faint);letter-spacing:.04em;}
+  .lo-body{flex:1;overflow-y:auto;overscroll-behavior:contain;-webkit-overflow-scrolling:touch;
+    padding:14px 22px 2px;font-size:15px;line-height:2.05;letter-spacing:.02em;color:var(--ink);}
+  .lo-body:empty{display:none;}
+  .lo-body br{content:"";display:block;margin-top:.65em;}
+  .lo-sign{margin:18px 0 6px;font-size:11px;letter-spacing:.22em;color:var(--ink-faint);text-align:right;}
+  .lo-refs{display:flex;flex-wrap:wrap;gap:6px;padding:0 20px 2px;}
+  .lo-refs:empty{display:none;}
+  .lo-refs a.chip{text-decoration:none;color:var(--g600);border-color:var(--g200);}
+  .lo-refs-title{width:100%;font-size:10.5px;color:var(--ink-faint);letter-spacing:.14em;}
+  .lo-acts{display:flex;gap:7px;flex-wrap:wrap;padding:12px 18px 14px;
+    border-top:1px solid var(--line-soft);background:var(--bg-top);}
+  .lo-btn2{border:1px solid var(--line);background:var(--card);color:var(--ink-soft);
+    border-radius:11px;padding:9px 12px;font:inherit;font-size:12px;letter-spacing:.04em;
+    cursor:pointer;transition:all .25s ease;white-space:nowrap;-webkit-tap-highlight-color:transparent;}
+  .lo-btn2:hover{border-color:var(--g400);color:var(--g600);background:var(--g100);}
+  .lo-btn2:active{transform:translateY(1px);}
+  .lo-btn2.primary{background:var(--g600);border-color:var(--g600);color:#fff;}
+  .lo-btn2.primary:hover{background:var(--g700);border-color:var(--g700);color:#fff;}
+  .lo-btn2[disabled]{opacity:.45;cursor:default;transform:none;}
+  .lo-loading{display:flex;flex-direction:column;align-items:center;gap:15px;padding:52px 0 46px;text-align:center;}
+  .lo-dots{display:flex;gap:5px;align-items:center;height:8px;}
+  .lo-dots i{width:6px;height:6px;border-radius:50%;background:var(--gold);opacity:.3;
+    animation:loDot 1.25s infinite ease-in-out;}
+  .lo-dots i:nth-child(2){animation-delay:.16s;}
+  .lo-dots i:nth-child(3){animation-delay:.32s;}
+  @keyframes loDot{0%,80%,100%{opacity:.22;transform:translateY(0);}40%{opacity:1;transform:translateY(-4px);}}
+  .lo-loading p{margin:0;font-size:12px;letter-spacing:.1em;color:var(--ink-faint);line-height:1.9;}
+  .lo-loading small{font-size:10.5px;letter-spacing:.08em;color:var(--ink-faint);opacity:.75;}
+  .lo-empty{padding:26px 4px 22px;font-size:13.5px;line-height:2;color:var(--ink-soft);text-align:left;}
+  .lo-empty b{font-size:14.5px;color:var(--ink);font-weight:600;letter-spacing:.02em;}
+  .lo-empty span{font-size:12px;color:var(--ink-faint);}
+
+  @media(max-width:560px){
+    .lo-mask{padding:0;align-items:flex-end;}
+    .lo-mask .modal{max-width:100%;max-height:91vh;border-radius:22px 22px 0 0;
+      transform:translateY(100%);}
+    .lo-mask.open .modal{transform:translateY(0);}
+    .lo-head{padding:16px 16px 12px;}
+    .lo-quote{margin:10px 16px 0;}
+    .lo-badge{padding:10px 16px 0;}
+    .lo-body{padding:12px 17px 2px;font-size:14.7px;line-height:2;}
+    .lo-refs{padding:0 16px 2px;}
+    .lo-acts{padding:10px 14px calc(12px + env(safe-area-inset-bottom));gap:6px;}
+    .lo-btn2{flex:1 1 auto;padding:9px 6px;font-size:11.5px;}
+    .lo-btn{font-size:11px;padding:5px 10px 5px 9px;}
+  }
 
   /* ===== 时光机 ===== */
   .time-list{max-height:44vh;overflow:auto;margin:-4px 0 8px;}
@@ -1199,13 +1267,6 @@
       </div>
     </div>
     <div class="header-actions">
-      <button class="icon-btn" id="askBtn" type="button" aria-label="问过去的自己">
-        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round">
-          <path d="M21 11.5a8.38 8.38 0 0 1-.9 3.8 8.5 8.5 0 0 1-7.6 4.7 8.38 8.38 0 0 1-3.8-.9L3 21l1.9-5.7a8.38 8.38 0 0 1-.9-3.8 8.5 8.5 0 0 1 4.7-7.6 8.38 8.38 0 0 1 3.8-.9h.5a8.48 8.48 0 0 1 8 8v.5z"/>
-          <path d="M9.5 9.5a2.5 2.5 0 0 1 5 0c0 1.5-2.5 2-2.5 3.5"/>
-          <circle cx="12" cy="16.2" r=".4" fill="currentColor"/>
-        </svg>
-      </button>
       <button class="icon-btn" id="themeBtn" type="button" aria-label="切换主题">
         <svg id="iconSun" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.4" stroke-linecap="round" style="display:none;"><circle cx="12" cy="12" r="4"/><path d="M12 2v2M12 20v2M4.9 4.9l1.4 1.4M17.7 17.7l1.4 1.4M2 12h2M20 12h2M4.9 19.1l1.4-1.4M17.7 6.3l1.4-1.4"/></svg>
         <svg id="iconMoon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.4" stroke-linecap="round" stroke-linejoin="round"><path d="M21 12.8A9 9 0 1111.2 3a7 7 0 009.8 9.8z"/></svg>
@@ -1315,8 +1376,6 @@
     <div class="soul-line"></div>
     <p class="soul-text" id="soulText"></p>
     <div class="soul-acts">
-      <button class="soul-hint" id="soulAsk" type="button">聊聊</button>
-      <span class="soul-dotsep">·</span>
       <button class="soul-hint" id="soulRefresh" type="button">换一句</button>
     </div>
   </section>
@@ -1402,7 +1461,7 @@
     填入模型接口（如 DeepSeek）。录音后点击“AI 提炼”，帮你把废话变成清爽的待办。
   </p>
   <p class="drawer-desc" style="font-size:11.5px;color:var(--ink-faint);border-left:2px solid var(--line);padding-left:10px;">
-    隐私提示：启用 AI 后，「AI 提炼」「竹语」「问一问」「本周回顾」会把相关笔记内容发送到你填写的模型服务；<strong>已删除的笔记不会外发</strong>。「拍照识别」会把送货单照片发送到视觉模型，照片只在内存中处理、不会保存或同步。API 密钥与访问令牌以明文保存在本机浏览器，请只使用最小权限的密钥与细粒度令牌。
+    隐私提示：启用 AI 后，「AI 提炼」「竹语」「老铁有话说」「本周回顾」会把相关笔记内容发送到你填写的模型服务；<strong>已删除的笔记不会外发</strong>。「拍照识别」会把送货单照片发送到视觉模型，照片只在内存中处理、不会保存或同步。API 密钥与访问令牌以明文保存在本机浏览器，请只使用最小权限的密钥与细粒度令牌。
   </p>
   <label class="field"><span>API 接口地址</span><input id="cfgAiUrl" placeholder="https://api.deepseek.com/chat/completions"></label>
   <label class="field"><span>API 密钥 (Key)</span><input id="cfgAiKey" type="password" placeholder="sk-..."></label>
@@ -1410,6 +1469,11 @@
   <label class="field"><span>视觉模型 (Vision Model)</span><input id="cfgVisionModel" placeholder="deepseek-flash" autocomplete="off"></label>
   <p class="drawer-desc" style="font-size:11.5px;color:var(--ink-faint);border-left:2px solid var(--line);padding-left:10px;margin-top:10px;">
     拍照识别送货单需要<strong>支持图片输入的模型</strong>，与上面的文本模型分开配置。DeepSeek 官方当前为 <code>deepseek-flash</code>（旧名 <code>deepseek-v4-flash-vision-exp</code> 仍可用）；如使用中转服务，请填该服务提供的视觉模型名。识别时照片会发送到你填写的 AI 服务。
+  </p>
+  <p class="drawer-desc" style="font-size:11.5px;color:var(--ink-faint);border-left:2px solid var(--g300);padding-left:10px;margin-top:10px;">
+    <strong>老铁有话说</strong>：每条「笔记」下面都有这个入口。他会先判断这条适合怎么讲（故事 / 新闻 / 书信 / 寓言 / 顺口溜等九种），
+    碰上新闻和硬知识会<strong>联网检索</strong>，可能比普通对话多花一点调用费用；其余说法只用模型本身的见识，不联网。
+    写出来的这段只留在本机，不进笔记也不同步，点「存进笔记」才会留下。
   </p>
 
   <div style="border-bottom: 1px dashed var(--line); margin: 20px 0;"></div>
@@ -1591,20 +1655,29 @@
   </div>
 </div>
 
-<div class="modal-mask" id="askMask" role="dialog" aria-modal="true">
+<div class="modal-mask lo-mask" id="loMask" role="dialog" aria-modal="true" aria-labelledby="loTitle">
   <div class="modal">
-    <h3>问一问</h3>
-    <div class="ask-modes" id="askModes">
-      <button class="ask-mode on" id="askModeNotes" type="button">🌿 问笔记</button>
-      <button class="ask-mode" id="askModeWeb" type="button">🌐 问网络</button>
+    <div class="lo-head">
+      <div class="lo-ava" aria-hidden="true">老</div>
+      <div class="lo-hd">
+        <h3 id="loTitle">老铁有话说</h3>
+        <div class="lo-sub">不看热闹 · 只说人话</div>
+      </div>
+      <button class="lo-close" id="loClose" type="button" aria-label="关闭">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round"><path d="M6 6l12 12M18 6L6 18"/></svg>
+      </button>
     </div>
-    <input type="text" id="askInput" placeholder="比如：我最近在纠结什么？" autocomplete="off">
-    <div class="modal-actions">
-      <button class="m-btn" id="askCancel" type="button">关闭</button>
-      <button class="m-btn solid" id="askGo" type="button">提问</button>
+    <div class="lo-quote" id="loQuote"></div>
+    <div class="lo-badge" id="loBadge"></div>
+    <div class="lo-body md-render" id="loBody" aria-live="polite"></div>
+    <div class="lo-refs" id="loRefs"></div>
+    <div class="lo-acts">
+      <button class="lo-btn2" id="loOther" type="button">换个说法</button>
+      <button class="lo-btn2" id="loAgain" type="button">再写一版</button>
+      <button class="lo-btn2" id="loSave" type="button">存进笔记</button>
+      <button class="lo-btn2" id="loCopy" type="button">复制</button>
+      <button class="lo-btn2 primary" id="loSetup" type="button" style="display:none;">去设置 AI</button>
     </div>
-    <div class="ask-answer md-render" id="askAnswer" style="display:none;"></div>
-    <div class="ask-refs" id="askRefs"></div>
   </div>
 </div>
 
@@ -1674,7 +1747,7 @@ window.onerror = function (msg, url, line) {
   'use strict';
 
   // 版本号统一在此维护；localStorage 键沿用 v11 不变，切勿改名以免丢失用户数据
-  var APP_VERSION = '14.2';
+  var APP_VERSION = '14.3';
   // 送货单拍照识别：视觉模型默认名、兼容别名与各项安全上限
   var DEFAULT_VISION_MODEL = 'deepseek-flash';
   var VISION_MODEL_FALLBACK = 'deepseek-v4-flash-vision-exp';
@@ -1726,7 +1799,13 @@ window.onerror = function (msg, url, line) {
     soulSeed: 0,
     listLimit: LIST_PAGE,
     shopMode: false,
-    askWeb: false,
+    loNoteId: null,       // 老铁当前对着哪条笔记说话
+    loMode: null,         // 当前用的说法（story / news / ...）
+    loWhy: '',            // 老铁为什么选这个说法
+    loRec: null,          // 当前展示的这一段
+    loBusy: false,        // 正在生成
+    loTimer: null,
+    loCache: null,        // 本机缓存：{ noteId: {m,w,t,r,at} }
     loadError: false,
     shopPhotos: [],       // 仅存内存：压缩后的送货单照片，绝不写入 localStorage
     shopScanning: false,
@@ -1793,13 +1872,12 @@ window.onerror = function (msg, url, line) {
     els.pickMin = $('pickMin');
     els.pickerTarget = null;
 
-    els.askBtn = $('askBtn');
-    els.askMask = $('askMask');
-    els.askInput = $('askInput');
-    els.askModeNotes = $('askModeNotes');
-    els.askModeWeb = $('askModeWeb');
-    els.askAnswer = $('askAnswer');
-    els.askRefs = $('askRefs');
+    els.loMask = $('loMask');
+    els.loQuote = $('loQuote');
+    els.loBadge = $('loBadge');
+    els.loBody = $('loBody');
+    els.loRefs = $('loRefs');
+    els.loSetup = $('loSetup');
 
     els.soulCard = $('soulCard');
     els.soulText = $('soulText');
@@ -4492,9 +4570,19 @@ window.onerror = function (msg, url, line) {
 
     var renderedText = renderMarkdown(n.text, kw);
 
+    // 只有「笔记」分类带这个入口：待办、店铺、完成、垃圾桶各说各的事，不掺和
+    var loHtml = '';
+    if (!isDone && !isTrash && noteCategory(n) === VIEW.NOTE) {
+      loHtml = '<div class="lo-strip">' +
+        '<button class="lo-btn' + (loHas(n.id) ? ' has-said' : '') + '" type="button" data-act="laoyou" data-id="' + escapeHTML(n.id) + '" aria-label="让老铁对这条说两句">' +
+        LO_ICON + '<span>老铁有话说</span><i class="lo-mark" aria-hidden="true"></i></button>' +
+      '</div>';
+    }
+
     return '<article class="' + cls + '" data-id="' + escapeHTML(n.id) + '">' +
              '<div class="note-top">' + meta + acts + '</div>' +
              '<div class="note-text md-render">' + renderedText + '</div>' +
+             loHtml +
            '</article>';
   }
 
@@ -4736,6 +4824,7 @@ window.onerror = function (msg, url, line) {
       else if (act === 'remind') openRemindModal(id);
       else if (act === 'share') openShareModal(id);
       else if (act === 'edit') openEditModal(id);
+      else if (act === 'laoyou') openLaoyou(id);
       return; 
     }
 
@@ -5530,6 +5619,7 @@ window.onerror = function (msg, url, line) {
   }
 
   // AI 调用主入口。opts.webSearch=true 时联网（DeepSeek web_search 工具优先，失败降级 Search API）
+  // opts.query：降级检索时用的关键词（默认用整段 prompt）；opts.hint：降级路径要求模型的回答方式
   function aiChat(prompt, temp, opts) {
     var cfg = state.config;
     if (!hasAI()) return Promise.reject(new Error('未配置 AI'));
@@ -5549,13 +5639,13 @@ window.onerror = function (msg, url, line) {
       if (!res.ok) {
         // 服务不支持 web_search 工具 → 降级：Search API 拿结果再普通对话
         return res.text().then(function () {
-          return webSearchApi(prompt).then(function (results) {
+          return webSearchApi((opts && opts.query) ? opts.query : prompt).then(function (results) {
             if (!results.length) throw new Error('联网没有搜到相关内容');
             var ctx = '以下是联网搜索到的资料（请基于它们回答，并在句末用 [1][2] 标注来源序号）：\n';
             for (var i = 0; i < results.length; i++) {
               ctx += '[' + (i + 1) + '] ' + results[i].title + (results[i].site ? '（' + results[i].site + '）' : '') + '\n' + results[i].summary + '\n链接: ' + results[i].url + '\n\n';
             }
-            ctx += '\n用户的问题：' + prompt + '\n请综合以上资料回答，简洁（300字内），保留关键数字与时间。';
+            ctx += '\n用户的问题：' + prompt + '\n' + ((opts && opts.hint) ? opts.hint : '请综合以上资料回答，简洁（300字内），保留关键数字与时间。');
             return aiPlain(ctx, 0.3).then(function (text) {
               return text + '\n\n__WEB_REFS__' + JSON.stringify(results);
             });
@@ -5704,185 +5794,397 @@ window.onerror = function (msg, url, line) {
   }
 
   /* =========================================
-     问过去的自己 · AI 问答
+     老铁有话说 · v14.3
+     不是问答，是有人接着你的话往下说
   ========================================= */
 
-  function setAskMode(web) {
-    state.askWeb = !!web;
-    if (els.askModeNotes) els.askModeNotes.classList.toggle('on', !web);
-    if (els.askModeWeb) els.askModeWeb.classList.toggle('on', !!web);
-    if (els.askInput) els.askInput.placeholder = web
-      ? '比如：DeepSeek 最新模型是什么？今天有什么新闻？'
-      : '比如：我最近在纠结什么？';
-    if (els.askAnswer) els.askAnswer.style.display = 'none';
-    if (els.askRefs) els.askRefs.innerHTML = '';
+  var LS_LO = 'bamboo.v11.laoyou';
+
+  var LO_ICON = '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M20 14.5a2.5 2.5 0 0 1-2.5 2.5H9l-4 3.2V6.5A2.5 2.5 0 0 1 7.5 4h10A2.5 2.5 0 0 1 20 6.5z"/><path d="M9 9.5h6M9 12.5h4"/></svg>';
+
+  // 九种说法。net=true 的会真去网上查，用新闻和硬知识说话
+  var LO_MODES = {
+    story:    { name: '讲个真人真事', net: false, rule: '讲一个你亲眼见过的人和事——可以是老家邻居、跑货时认识的老板、菜市场的大姐。用这个故事把他那条笔记里的道理演出来，讲完就收，不要总结中心思想。' },
+    news:     { name: '就着新闻说两句', net: true,  rule: '下面会给你联网查到的近期新闻。挑一到两条真的，说清楚发生了什么（时间、地点、数字），再就这件事说你自己的看法，可以有立场。文中用[1][2]标出处。' },
+    letter:   { name: '写封没寄出的信', net: false, rule: '写一封不寄出去的信。收信人是他笔记里那个人，或者过去的他自己。用平常说话的口气，别写成散文。信末不要署名，也不要「此致敬礼」。' },
+    talk:     { name: '蹲路边唠会儿', net: false, rule: '像晚上蹲在马路牙子上聊天。先撂一句实在话，再扯两句闲篇（最近的天气、菜价、谁家的事），最后绕回到他身上。' },
+    allegory: { name: '给你编个寓言', net: false, rule: '编一个短寓言，主角可以是动物、物件、街坊。故事要具体、有转折，讲完只留一句点题的话，不超过30字。' },
+    poem:     { name: '顺口溜几句', net: false, rule: '写六到十行短句，押不押韵都行，要有画面和声音（锅铲、雨、车灯、楼道里的声控灯）。不要抒情的空话。' },
+    roast:    { name: '损你两句', net: false, rule: '先损他两句，要损得准、损得他笑出来，但不能人身攻击。然后话锋一转，替他说句话，最后给他一个今天就能做的小动作。' },
+    manual:   { name: '写份使用说明', net: false, rule: '写一份《某某使用说明》，三到四条，像贴在冰箱上的纸条。每条一句大白话，配一句为什么，可以有说明书那种一本正经的口吻。' },
+    fact:     { name: '讲个冷知识', net: true,  rule: '用联网资料讲一个跟这条笔记有关的硬知识。要有数字、有出处，把一个点讲透，别铺开。' }
+  };
+  var LO_ORDER = ['story', 'news', 'talk', 'letter', 'allegory', 'roast', 'poem', 'manual', 'fact'];
+
+  // ---- 说过的话存在本机，换设备不跟着走（和笔记正文不同） ----
+  function loCacheGet() {
+    if (state.loCache) return state.loCache;
+    var o = {};
+    try {
+      var raw = localStorage.getItem(LS_LO);
+      var parsed = raw ? JSON.parse(raw) : null;
+      if (parsed && typeof parsed === 'object') o = parsed;
+    } catch (e) { o = {}; }
+    state.loCache = o;
+    return o;
   }
 
-  function openAskModal() {
-    if (els.askMask) els.askMask.classList.add('open');
-    if (els.askInput) { els.askInput.value = ''; els.askInput.focus(); }
-    if (els.askAnswer) els.askAnswer.style.display = 'none';
-    if (els.askRefs) els.askRefs.innerHTML = '';
-    setAskMode(state.askWeb);
-  }
-  function closeAskModal() {
-    if (els.askMask) els.askMask.classList.remove('open');
+  function loHas(id) {
+    var c = loCacheGet();
+    return !!(c && c[id] && c[id].t);
   }
 
-  function buildAskContext() {
-    var parts = [], i;
-    var sorted = state.notes.filter(function (n) { return n.status !== VIEW.TRASH; })
-      .sort(function (a, b) {
-        return new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime();
-      });
-    var shown = Math.min(sorted.length, 80);
-    for (i = 0; i < shown; i++) {
-      var n = sorted[i];
-      var st = n.status === VIEW.DONE ? '已完成' : n.status === VIEW.TRASH ? '已删除' : '进行中';
-      parts.push('[' + n.id + '] ' + fmtDate(n.createdAt) + ' (' + st + (n.tags && n.tags.length ? ' #' + n.tags.join(' #') : '') + ') ' + (n.text || '').slice(0, 200));
+  function loStore(id, rec) {
+    if (!id) return;
+    var c = loCacheGet();
+    c[id] = rec;
+    var keys = [], k;
+    for (k in c) keys.push(k);
+    // 只留最近 40 条，别把 localStorage 撑爆
+    if (keys.length > 40) {
+      keys.sort(function (a, b) { return (c[a].at || 0) - (c[b].at || 0); });
+      for (var i = 0; i < keys.length - 40; i++) delete c[keys[i]];
     }
-    if (sorted.length > shown) parts.push('（另有 ' + (sorted.length - shown) + ' 条更早的记录未列出）');
-    return parts.join('\n');
+    try { localStorage.setItem(LS_LO, JSON.stringify(c)); } catch (e) {}
   }
 
-  function doAsk() {
-    var q = els.askInput ? els.askInput.value.trim() : '';
-    if (!q) { toast('先写一个问题吧'); return; }
-    var ansEl = els.askAnswer, refsEl = els.askRefs;
-
-    // 联网模式
-    if (state.askWeb) {
-      if (!hasAI()) {
-        renderAskAnswer('联网问答需要先在设置里配置 AI（推荐 DeepSeek）。', []);
-        return;
-      }
-      if (ansEl) { ansEl.style.display = 'block'; ansEl.innerHTML = '<span style="color:var(--ink-faint)">联网查询中…</span>'; }
-      if (refsEl) refsEl.innerHTML = '';
-      aiChat(q, 0.3, { webSearch: true }).then(function (text) {
-        renderWebAnswer(text);
-      }).catch(function (err) {
-        renderAskAnswer('联网出错了：' + err.message, []);
-      });
-      return;
+  // ---- 第一步：先判断这条笔记该怎么说 ----
+  function loRoute(note) {
+    var list = '', i;
+    for (i = 0; i < LO_ORDER.length; i++) {
+      list += '- ' + LO_ORDER[i] + '（' + LO_MODES[LO_ORDER[i]].name + '）\n';
     }
-
-    // 笔记模式（原逻辑）
-    if (ansEl) { ansEl.style.display = 'block'; ansEl.innerHTML = '<span style="color:var(--ink-faint)">翻你的记录中…</span>'; }
-    if (refsEl) refsEl.innerHTML = '';
-
-    if (hasAI()) {
-      var prompt = '一个用户在问他的「过去的自己」。以下是他笔记库里全部记录（含状态标注）：\n\n' +
-        buildAskContext() + '\n\n他的问题是：' + q + '\n\n' +
-        '请基于这些真实记录回答他，像帮他回忆和梳理自己。要求：\n' +
-        '1. 语气温和诚实，不编造记录里没有的内容；若记录不足以回答，就温和地说没有找到相关内容，并给他一个可以从记录里观察到的相邻事实\n' +
-        '2. 引用具体笔记时在句末标注 [编号]，如 [a1b2c3]\n' +
-        '3. 简洁，300字以内';
-      aiChat(prompt, 0.3).then(function (text) {
-        var refs = [];
-        var m = text.match(/\[([a-z0-9]{6,})\]/g) || [];
-        for (var i = 0; i < m.length; i++) {
-          var id = m[i].slice(1, -1);
-          if (refs.indexOf(id) < 0 && findNote(id)) refs.push(id);
-        }
-        renderAskAnswer(text.replace(/\s*\[[a-z0-9]{6,}\]/g, ''), refs);
-      }).catch(function (err) {
-        renderAskAnswer('AI 出错了（' + err.message + '），先帮你搜了本地记录：', searchLocalNotes(q).map(function (h) { return h.id; }));
-      });
-    } else {
-      renderAskAnswer('我在你的记录里找到了这些：', searchLocalNotes(q).map(function (h) { return h.id; }));
-    }
+    var tg = (note.tags || []).filter(function (t) { return String(t) !== '置顶'; });
+    var p = '你是一个在街上混了半辈子、看人很准的老铁。有人把一条自己写的笔记递给你，先别急着回——判断一下：这条，最该用哪种方式跟他说。\n\n' +
+      '笔记：「' + String(note.text || '').slice(0, 500) + '」\n' +
+      '（写于 ' + fmtDate(note.createdAt) + (tg.length ? '，标了 #' + tg.join(' #') : '') + '）\n\n' +
+      '可选的说法（只能选一个）：\n' + list + '\n' +
+      '判断标准：看这条里最重的是什么——是情绪、是人、是钱、是社会、是身体，还是一个没说清的想法。选那个最能让对方「哎」一声的说法。\n\n' +
+      '只输出严格 JSON，不要解释、不要代码块：\n' +
+      '{"mode":"九个英文代号之一","search":"要去网上查的关键词，20字内；不需要联网就填空字符串","why":"20字以内的判断，说明你为什么选这个说法"}';
+    return aiPlain(p, 0.35).then(loParseRoute).catch(function () {
+      return { mode: 'talk', search: '', why: '这条适合慢慢聊' };
+    });
   }
 
-  // 渲染联网答案：拆出降级路径带的 __WEB_REFS__，正文里提取来源链接
-  function renderWebAnswer(text) {
-    var refs = [];
-    var m = String(text || '').split('__WEB_REFS__');
-    var body = m[0].trim();
-    if (m[1]) {
+  function loParseRoute(raw) {
+    var s = String(raw || '').replace(/```json/gi, '').replace(/```/g, '');
+    var a = s.indexOf('{'), b = s.lastIndexOf('}');
+    if (a >= 0 && b > a) {
       try {
-        var parsed = JSON.parse(m[1]);
-        if (Array.isArray(parsed)) refs = parsed.slice(0, 6);
+        var o = JSON.parse(s.slice(a, b + 1));
+        var m = String(o.mode || '').trim();
+        if (LO_MODES[m]) {
+          return { mode: m, search: String(o.search || '').slice(0, 60), why: String(o.why || '').slice(0, 40) };
+        }
+      } catch (e) {}
+    }
+    for (var k in LO_MODES) if (s.indexOf(k) > -1) return { mode: k, search: '', why: '' };
+    return { mode: 'talk', search: '', why: '' };
+  }
+
+  // ---- 第二步：按定好的说法写正文 ----
+  function loWritePrompt(note, mode) {
+    var m = LO_MODES[mode] || LO_MODES.talk;
+    var tg = (note.tags || []).filter(function (t) { return String(t) !== '置顶'; });
+    return '你就是「老铁」——四十来岁，走南闯北，做过小生意，见过人情冷暖。你不是 AI 助手，不写公文，不说教，不用「首先/其次/总之/让我们一起」。\n\n' +
+      '有人在自己的本子上写了这么一句：\n「' + String(note.text || '').slice(0, 600) + '」\n' +
+      '（写于 ' + fmtDate(note.createdAt) + (tg.length ? '，标了 #' + tg.join(' #') : '') + '）\n\n' +
+      '现在你要用【' + m.name + '】的方式跟他说一段话。' + m.rule + '\n\n' +
+      '不管用哪种方式，下面几条是死的：\n' +
+      '1. 第一句就进正题。不要「看到你这条笔记」这种开场，不要复述他写的话\n' +
+      '2. 必须有具体的东西：人名、地名、数字、动作、对话、天气、价钱。禁用「人生」「成长」「内耗」「情绪价值」「治愈」「格局」这类空词\n' +
+      '3. 450 到 650 字，短句为主，一段不超过三行\n' +
+      '4. 结尾收在一句能被记住的话上，别喊口号，别用「愿你」\n' +
+      '5. 只输出正文，不要标题、不要解释、不用 markdown 符号、不要「#」\n' +
+      '6. 你是老铁，不是老师：可以损、可以叹气、可以笑，但不许居高临下';
+  }
+
+  function loSplitRefs(raw) {
+    var text = String(raw || '');
+    var refs = [], i;
+    var parts = text.split('__WEB_REFS__');
+    text = parts[0].trim();
+    if (parts[1]) {
+      try {
+        var arr = JSON.parse(parts[1]);
+        if (Array.isArray(arr)) {
+          for (i = 0; i < arr.length && refs.length < 5; i++) {
+            if (arr[i] && arr[i].url) refs.push({ title: arr[i].title || '', url: arr[i].url });
+          }
+        }
       } catch (e) {}
     }
     if (!refs.length) {
-      // 主路径（web_search 工具）：从正文提取 URL 作为来源
-      var urls = body.match(/https?:\/\/[^\s)】」'"，。；]+/g) || [];
+      var urls = text.match(/https?:\/\/[^\s)】」'"，。；]+/g) || [];
       var seen = {};
-      for (var i = 0; i < urls.length && refs.length < 6; i++) {
+      for (i = 0; i < urls.length && refs.length < 5; i++) {
         var u = urls[i].replace(/[.,;:]+$/, '');
-        if (!seen[u]) { seen[u] = 1; refs.push({ title: u.replace(/^https?:\/\//, '').slice(0, 30), url: u }); }
+        if (!seen[u]) { seen[u] = 1; refs.push({ title: u.replace(/^https?:\/\//, '').slice(0, 34), url: u }); }
       }
-      // 过滤掉正文里已展示的链接（避免答案与来源重复）
-      if (refs.length) body = body.replace(/https?:\/\/[^\s)】」'"，。；]+/g, '').replace(/[ \t]{2,}/g, ' ').trim();
+      if (refs.length) {
+        text = text.replace(/https?:\/\/[^\s)】」'"，。；]+/g, '').replace(/[ \t]{2,}/g, ' ').trim();
+      }
     }
-    renderAskAnswer(body, []);
-    if (refs.length && els.askRefs) {
-      var refsEl = els.askRefs;
-      refsEl.innerHTML = '';
+    text = text.replace(/^好的[，,。]?\s*/, '').replace(/^以下是[^\n]*\n+/, '');
+    text = text.replace(/\n{3,}/g, '\n\n').trim();
+    return { text: text, refs: refs };
+  }
+
+  function loCompose(note, mode, search) {
+    var m = LO_MODES[mode] || LO_MODES.talk;
+    var prompt = loWritePrompt(note, mode);
+    // 新闻 / 冷知识一定联网；其它说法若老铁自己给了搜索词，也去查一下
+    var wantNet = m.net || !!search;
+    if (!wantNet) {
+      return aiPlain(prompt, 0.82).then(function (t) {
+        var r = loSplitRefs(t); r.net = false; return r;
+      });
+    }
+    // 联网：主路径让模型自己搜；失败退回 Search API；再失败就凭见识说，但禁止编新闻
+    return aiChat(prompt, 0.82, {
+      webSearch: true,
+      query: search || '',
+      hint: '请基于以上资料，用老铁的口吻写完这段话，450 到 650 字，保留关键数字与时间，并在句末用[1][2]标出处。'
+    }).then(function (t) {
+      var r = loSplitRefs(t); r.net = true; return r;
+    }).catch(function () {
+      return aiPlain(prompt + '\n\n（今天网线不好，查不到新闻。别引用具体报道、日期和数字，就凭你的见识说。）', 0.8).then(function (t) {
+        var r = loSplitRefs(t); r.net = true; r.netFail = true; return r;
+      });
+    });
+  }
+
+  // ---- 界面 ----
+  var LO_THINK_LOCAL = ['老铁把手上的活停了停…', '老铁又看了一遍你写的这句…', '老铁琢磨着这话该怎么说…'];
+  var LO_THINK_NET = ['老铁翻起了最近的新闻…', '老铁在核对这事儿的来龙去脉…', '老铁查了查，怕说错…'];
+
+  function loStopTimer() {
+    if (state.loTimer) { clearInterval(state.loTimer); state.loTimer = null; }
+  }
+
+  function loThinking(withNet) {
+    var pool = withNet ? LO_THINK_NET : LO_THINK_LOCAL;
+    var i = 0;
+    els.loBadge.innerHTML = '';
+    els.loBody.innerHTML = '<div class="lo-loading"><div class="lo-dots"><i></i><i></i><i></i></div>' +
+      '<p id="loThinkText"></p><small>' + (withNet ? '正在联网检索真实新闻' : '不联网，凭老铁的见识说') + '</small></div>';
+    els.loRefs.innerHTML = '';
+    var step = function () {
+      var t = $('loThinkText');
+      if (t) t.textContent = pool[i % pool.length];
+      i++;
+    };
+    step();
+    loStopTimer();
+    state.loTimer = setInterval(step, 2400);
+  }
+
+  function loRender(rec) {
+    var m = LO_MODES[rec.m] || LO_MODES.talk;
+    var badge = '<span class="lo-tag">' + escapeHTML(m.name) + '</span>';
+    if (rec.net) badge += '<span class="lo-tag net">' + (rec.netFail ? '这次没联上' : '已联网') + '</span>';
+    if (rec.w) badge += '<span class="lo-why">' + escapeHTML(rec.w) + '</span>';
+    els.loBadge.innerHTML = badge;
+
+    els.loBody.innerHTML = renderMarkdown(rec.t) + '<div class="lo-sign">—— 老铁</div>';
+
+    els.loRefs.innerHTML = '';
+    var refs = rec.r || [];
+    if (refs.length) {
       var title = document.createElement('span');
-      title.className = 'ask-refs-title';
-      title.textContent = '来源（点击打开）';
-      refsEl.appendChild(title);
-      for (var j = 0; j < refs.length; j++) {
-        (function (r) {
-          var safeHref = safeHttpUrl(r.url);
-          if (!safeHref) return;
-          var a = document.createElement('a');
-          a.className = 'chip';
-          a.href = safeHref;
-          a.target = '_blank';
-          a.rel = 'noopener noreferrer';
-          a.textContent = '🔗 ' + (r.title || r.url).slice(0, 18);
-          refsEl.appendChild(a);
-        })(refs[j]);
+      title.className = 'lo-refs-title';
+      title.textContent = '老铁查过的地方（点开看）';
+      els.loRefs.appendChild(title);
+      for (var i = 0; i < refs.length; i++) {
+        var href = safeHttpUrl(refs[i].url);
+        if (!href) continue;
+        var a = document.createElement('a');
+        a.className = 'chip';
+        a.href = href;
+        a.target = '_blank';
+        a.rel = 'noopener noreferrer';
+        a.textContent = '🔗 ' + String(refs[i].title || href).slice(0, 18);
+        els.loRefs.appendChild(a);
       }
+    }
+    els.loBody.scrollTop = 0;
+  }
+
+  function loBusy(on) {
+    var ids = ['loOther', 'loAgain', 'loSave', 'loCopy'];
+    for (var i = 0; i < ids.length; i++) {
+      var b = $(ids[i]);
+      if (b) b.disabled = !!on;
     }
   }
 
-  function searchLocalNotes(q) {
-    var kw = q.replace(/[，。？！、\s]/g, '');
-    var grams = [];
-    for (var i = 0; i + 1 < kw.length; i += 2) grams.push(kw.slice(i, i + 2));
-    if (!grams.length && kw) grams.push(kw.slice(0, 2));
-    var hits = [];
-    for (var j = 0; j < state.notes.length && hits.length < 6; j++) {
-      var n = state.notes[j];
-      if (n.status === VIEW.TRASH) continue;
-      var txt = (n.text || '') + ' ' + ((n.tags || []).join(' '));
-      var score = 0;
-      for (var g = 0; g < grams.length; g++) if (txt.indexOf(grams[g]) > -1) score++;
-      if (score > 0) hits.push({ id: n.id, score: score, d: fmtDate(n.createdAt), t: (n.text || '').slice(0, 60) });
+  function loReady() {
+    if (els.loSetup) els.loSetup.style.display = 'none';
+    var ids = ['loOther', 'loAgain', 'loSave', 'loCopy'];
+    for (var i = 0; i < ids.length; i++) {
+      var b = $(ids[i]);
+      if (b) { b.style.display = ''; b.disabled = false; }
     }
-    hits.sort(function (a, b) { return b.score - a.score; });
-    return hits;
+    loBusy(false);
   }
 
-  function renderAskAnswer(text, refs) {
-    var ansEl = els.askAnswer, refsEl = els.askRefs;
-    if (ansEl) {
-      ansEl.style.display = 'block';
-      ansEl.innerHTML = renderMarkdown(text);
+  function loNeedSetup() {
+    els.loBadge.innerHTML = '';
+    els.loBody.innerHTML = '<div class="lo-empty"><b>老铁还没连上线。</b><br>' +
+      '他得接上 DeepSeek 才能开口——不是他不想说，是线还没插上。<br>' +
+      '<span>在设置里填好 API 地址（<code>https://api.deepseek.com/chat/completions</code>）、密钥和模型名（<code>deepseek-chat</code>），回来再点一次。</span></div>';
+    els.loRefs.innerHTML = '';
+    var hide = ['loOther', 'loAgain', 'loSave', 'loCopy'];
+    for (var i = 0; i < hide.length; i++) {
+      var b = $(hide[i]);
+      if (b) b.style.display = 'none';
     }
-    if (refsEl) {
-      refsEl.innerHTML = '';
-      if (refs && refs.length) {
-        var title = document.createElement('span');
-        title.className = 'ask-refs-title';
-        title.textContent = '相关记录（点击查看）';
-        refsEl.appendChild(title);
-        for (var i = 0; i < refs.length && i < 5; i++) {
-          (function (id) {
-            var b = document.createElement('button');
-            b.className = 'chip';
-            b.type = 'button';
-            var n = findNote(id);
-            b.textContent = '📝 ' + ((n && n.text) || '').slice(0, 14) + '…';
-            b.addEventListener('click', function () { closeAskModal(); openFocus(id); });
-            refsEl.appendChild(b);
-          })(refs[i]);
-        }
-      }
+    if (els.loSetup) els.loSetup.style.display = '';
+  }
+
+  function loMarkBtn(id) {
+    var btns = document.querySelectorAll('.lo-btn');
+    for (var i = 0; i < btns.length; i++) {
+      if (btns[i].getAttribute('data-id') === id) btns[i].classList.add('has-said');
     }
+  }
+
+  function openLaoyou(id) {
+    var n = findNote(id);
+    if (!n) { toast('这条笔记找不到了'); return; }
+    state.loNoteId = id;
+    state.loMode = null;
+    state.loWhy = '';
+    state.loRec = null;
+    state.loBusy = false;
+    loStopTimer();
+    els.loQuote.textContent = '「' + String(n.text || '').replace(/\s+/g, ' ').slice(0, 62) + '」';
+    els.loBadge.innerHTML = '';
+    els.loBody.innerHTML = '';
+    els.loRefs.innerHTML = '';
+    els.loMask.classList.add('open');
+    if (!hasAI()) { loNeedSetup(); return; }
+    var rec = loCacheGet()[id];
+    if (rec && rec.t) {
+      state.loMode = rec.m;
+      state.loRec = rec;
+      loRender(rec);
+      loReady();
+    } else {
+      loReady();
+      loStart(n, null, true);
+    }
+  }
+
+  function closeLaoyou() {
+    loStopTimer();
+    state.loBusy = false;
+    if (els.loMask) els.loMask.classList.remove('open');
+  }
+
+  function loStart(note, mode, first) {
+    if (!note || state.loBusy) return;
+    state.loBusy = true;
+    state.loWhy = '';
+    loBusy(true);
+    loThinking(mode ? !!LO_MODES[mode].net : true);
+
+    var route = mode
+      ? Promise.resolve({ mode: mode, search: '', why: '' })
+      : loRoute(note);
+
+    route.then(function (r) {
+      var m = LO_MODES[r.mode] ? r.mode : 'talk';
+      state.loMode = m;
+      state.loWhy = r.why || '';
+      // 先说清楚他打算怎么讲，让人有个准备
+      els.loBadge.innerHTML = '<span class="lo-tag">' + escapeHTML(LO_MODES[m].name) + '</span>' +
+        (r.why ? '<span class="lo-why">' + escapeHTML(r.why) + '</span>' : '');
+      loThinking(!!LO_MODES[m].net || !!r.search);
+      return loCompose(note, m, r.search);
+    }).then(function (res) {
+      state.loBusy = false;
+      loStopTimer();
+      var rec = {
+        m: state.loMode, w: state.loWhy, t: res.text,
+        r: res.refs || [], net: !!res.net, netFail: !!res.netFail, at: Date.now()
+      };
+      state.loRec = rec;
+      loStore(state.loNoteId, rec);
+      loRender(rec);
+      loReady();
+      loMarkBtn(state.loNoteId);
+    }).catch(function (err) {
+      state.loBusy = false;
+      loStopTimer();
+      loBusy(false);
+      els.loBadge.innerHTML = '';
+      els.loBody.innerHTML = '<div class="lo-empty"><b>老铁没能开口。</b><br>' +
+        escapeHTML((err && err.message) || '网络出了点问题') +
+        '<br><span>检查一下设置里的接口地址、密钥和模型名，或者过会儿再点一次。</span></div>';
+    });
+  }
+
+  function loPickOther() {
+    var n = findNote(state.loNoteId);
+    if (!n || state.loBusy) return;
+    var idx = LO_ORDER.indexOf(state.loMode);
+    var next = LO_ORDER[(idx + 1 + LO_ORDER.length) % LO_ORDER.length];
+    if (next === state.loMode) next = LO_ORDER[0];
+    loStart(n, next);
+  }
+
+  function loAgain() {
+    var n = findNote(state.loNoteId);
+    if (!n || state.loBusy) return;
+    loStart(n, state.loMode || 'talk');
+  }
+
+  function loCopyText(t) {
+    var done = function () { toast('已复制，拿去用'); };
+    if (navigator.clipboard && navigator.clipboard.writeText) {
+      navigator.clipboard.writeText(t).then(done, function () { loCopyFallback(t, done); });
+    } else {
+      loCopyFallback(t, done);
+    }
+  }
+
+  function loCopyFallback(t, done) {
+    var ta = document.createElement('textarea');
+    ta.value = t;
+    ta.style.position = 'fixed';
+    ta.style.opacity = '0';
+    document.body.appendChild(ta);
+    ta.select();
+    try { document.execCommand('copy'); done(); } catch (e) { toast('复制失败，长按选中吧'); }
+    document.body.removeChild(ta);
+  }
+
+  function loCopy() {
+    var rec = state.loRec;
+    if (!rec) return;
+    loCopyText('老铁说（' + (LO_MODES[rec.m] || LO_MODES.talk).name + '）：\n\n' + rec.t);
+  }
+
+  function loSaveNote() {
+    var rec = state.loRec;
+    if (!rec) return;
+    var now = new Date().toISOString();
+    var text = '老铁说 · ' + (LO_MODES[rec.m] || LO_MODES.talk).name + '\n\n' + rec.t;
+    state.notes.unshift({
+      id: uid(), text: text, createdAt: now, updatedAt: now,
+      status: VIEW.ACTIVE, remindAt: null, repeat: 'none', reminded: false,
+      remindDay: null, doneAt: null, deletedAt: null, tags: ['老铁']
+    });
+    addOps('add', text.slice(0, 40));
+    saveLocal();
+    scheduleSync();
+    toast('已存进笔记，标了 #老铁');
+    closeLaoyou();
+    if (state.view !== VIEW.NOTE) { state.view = VIEW.NOTE; syncTabs(); }
+    state.listLimit = LIST_PAGE;
+    render();
   }
 
   /* =========================================
@@ -6334,19 +6636,21 @@ window.onerror = function (msg, url, line) {
     // 竹语
     initSoul();
     if ($('soulRefresh')) $('soulRefresh').addEventListener('click', refreshSoul);
-    if ($('soulAsk')) $('soulAsk').addEventListener('click', openAskModal);
 
-    // 问过去的自己
-    if (els.askBtn) els.askBtn.addEventListener('click', openAskModal);
-    if (els.askModeNotes) els.askModeNotes.addEventListener('click', function () { setAskMode(false); });
-    if (els.askModeWeb) els.askModeWeb.addEventListener('click', function () { setAskMode(true); });
-    if ($('askCancel')) $('askCancel').addEventListener('click', closeAskModal);
-    if ($('askGo')) $('askGo').addEventListener('click', doAsk);
-    if (els.askInput) els.askInput.addEventListener('keydown', function (e) {
-      if (e.key === 'Enter') { e.preventDefault(); doAsk(); }
+    // 老铁有话说
+    if ($('loClose')) $('loClose').addEventListener('click', closeLaoyou);
+    if ($('loOther')) $('loOther').addEventListener('click', loPickOther);
+    if ($('loAgain')) $('loAgain').addEventListener('click', loAgain);
+    if ($('loSave')) $('loSave').addEventListener('click', loSaveNote);
+    if ($('loCopy')) $('loCopy').addEventListener('click', loCopy);
+    if (els.loSetup) els.loSetup.addEventListener('click', function () {
+      closeLaoyou();
+      openDrawer();
+      var box = $('cfgAiKey');
+      if (box && box.scrollIntoView) box.scrollIntoView({ block: 'center', behavior: 'smooth' });
     });
-    if (els.askMask) els.askMask.addEventListener('click', function (e) {
-      if (e.target === els.askMask) closeAskModal();
+    if (els.loMask) els.loMask.addEventListener('click', function (e) {
+      if (e.target === els.loMask) closeLaoyou();
     });
 
     // 时光机
@@ -6528,7 +6832,7 @@ window.onerror = function (msg, url, line) {
         else if (els.imgMask && els.imgMask.classList.contains('open')) els.imgMask.classList.remove('open');
         else if (els.reportMask && els.reportMask.classList.contains('open')) els.reportMask.classList.remove('open');
         else if (els.timeMask && els.timeMask.classList.contains('open')) els.timeMask.classList.remove('open');
-        else if (els.askMask && els.askMask.classList.contains('open')) closeAskModal();
+        else if (els.loMask && els.loMask.classList.contains('open')) closeLaoyou();
         else if (els.pickerMask && els.pickerMask.classList.contains('open')) closeTimePicker();
         else if (els.remindMask.classList.contains('open')) closeRemindModal();
         else if (els.editMask.classList.contains('open')) closeEditModal();
