@@ -843,6 +843,8 @@
   .lo-refs:empty{display:none;}
   .lo-refs a.chip{text-decoration:none;color:var(--g600);border-color:var(--g200);}
   .lo-refs-title{width:100%;font-size:10.5px;color:var(--ink-faint);letter-spacing:.14em;}
+  .lo-neterr{width:100%;font-size:11.5px;line-height:1.75;color:var(--ink-faint);
+    border-left:2px solid var(--line);padding-left:9px;}
   .lo-acts{display:flex;gap:7px;flex-wrap:wrap;padding:12px 18px 14px;
     border-top:1px solid var(--line-soft);background:var(--bg-top);}
   .lo-btn2{border:1px solid var(--line);background:var(--card);color:var(--ink-soft);
@@ -1472,8 +1474,8 @@
   </p>
   <p class="drawer-desc" style="font-size:11.5px;color:var(--ink-faint);border-left:2px solid var(--g300);padding-left:10px;margin-top:10px;">
     <strong>老铁有话说</strong>：每条「笔记」下面都有这个入口。他会先判断这条适合怎么讲（故事 / 新闻 / 书信 / 寓言 / 顺口溜等九种），
-    碰上新闻和硬知识会<strong>联网检索</strong>，可能比普通对话多花一点调用费用；其余说法只用模型本身的见识，不联网。
-    写出来的这段只留在本机，不进笔记也不同步，点「存进笔记」才会留下。
+    碰上新闻和硬知识会<strong>联网检索</strong>（DeepSeek 官方会自动调用搜索接口，检索与对话都会计入费用）；其余说法只用模型本身的见识，不联网。
+    写出来的这段只留在本机，不进笔记也不同步，点「存进笔记」才会留下。你的服务要是不提供检索，他会如实说「没联上」，不会编新闻。
   </p>
 
   <div style="border-bottom: 1px dashed var(--line); margin: 20px 0;"></div>
@@ -1747,7 +1749,7 @@ window.onerror = function (msg, url, line) {
   'use strict';
 
   // 版本号统一在此维护；localStorage 键沿用 v11 不变，切勿改名以免丢失用户数据
-  var APP_VERSION = '14.3';
+  var APP_VERSION = '14.4';
   // 送货单拍照识别：视觉模型默认名、兼容别名与各项安全上限
   var DEFAULT_VISION_MODEL = 'deepseek-flash';
   var VISION_MODEL_FALLBACK = 'deepseek-v4-flash-vision-exp';
@@ -1805,7 +1807,8 @@ window.onerror = function (msg, url, line) {
     loRec: null,          // 当前展示的这一段
     loBusy: false,        // 正在生成
     loTimer: null,
-    loCache: null,        // 本机缓存：{ noteId: {m,w,t,r,at} }
+    loSeq: 0,             // 递增序号，丢弃换了笔记之后才回来的旧结果
+    loCache: null,        // 本机缓存：{ noteId: {m,w,t,r,at,h} }
     loadError: false,
     shopPhotos: [],       // 仅存内存：压缩后的送货单照片，绝不写入 localStorage
     shopScanning: false,
@@ -4574,7 +4577,7 @@ window.onerror = function (msg, url, line) {
     var loHtml = '';
     if (!isDone && !isTrash && noteCategory(n) === VIEW.NOTE) {
       loHtml = '<div class="lo-strip">' +
-        '<button class="lo-btn' + (loHas(n.id) ? ' has-said' : '') + '" type="button" data-act="laoyou" data-id="' + escapeHTML(n.id) + '" aria-label="让老铁对这条说两句">' +
+        '<button class="lo-btn' + (loHas(n.id, n.text) ? ' has-said' : '') + '" type="button" data-act="laoyou" data-id="' + escapeHTML(n.id) + '" aria-label="让老铁对这条说两句">' +
         LO_ICON + '<span>老铁有话说</span><i class="lo-mark" aria-hidden="true"></i></button>' +
       '</div>';
     }
@@ -5574,16 +5577,59 @@ window.onerror = function (msg, url, line) {
     } catch (e) { return ''; }
   }
 
+  // 带超时的 fetch：接口卡住时不要让弹窗一直转圈
+  function fetchTimeout(url, opt, ms) {
+    if (!window.AbortController) return fetch(url, opt);
+    var ctl = new AbortController();
+    var o = opt || {};
+    o.signal = ctl.signal;
+    return new Promise(function (resolve, reject) {
+      var timer = setTimeout(function () {
+        try { ctl.abort(); } catch (e) {}
+        reject(new Error('请求超时'));
+      }, ms || 30000);
+      fetch(url, o).then(function (r) { clearTimeout(timer); resolve(r); },
+        function (e) { clearTimeout(timer); reject(e); });
+    });
+  }
+
+  // 搜索词清洗：一行、去提示词残留、按字符截到 120（接口上限 128）
+  function cleanQuery(q) {
+    var s = String(q == null ? '' : q)
+      .replace(/[\r\n\t]+/g, ' ')
+      .replace(/\s{2,}/g, ' ')
+      .replace(/^(搜索词|关键词|query|搜索)[：:]\s*/i, '')
+      .replace(/^["“”'‘’「」]+|["“”'‘’「」]+$/g, '')
+      .trim();
+    var arr = Array.from(s);
+    if (arr.length > 120) s = arr.slice(0, 120).join('');
+    return s;
+  }
+
+  // DeepSeek 官方：chat 端不内置联网，联网必须单独调 Search API
+  function isDeepSeekOfficial() {
+    try {
+      var h = new URL(state.config.aiUrl).hostname.toLowerCase();
+      return h === 'api.deepseek.com' || /\.deepseek\.com$/.test(h);
+    } catch (e) { return false; }
+  }
+
   // DeepSeek 官方 Search API（联网降级路径）：返回 [{title,url,snippet,summary,site_name,date}]
   function webSearchApi(query) {
     var base = aiOrigin();
     if (!base) return Promise.reject(new Error('AI 接口地址无法解析'));
-    return fetch(base + '/v1/tools/search', {
+    var q = cleanQuery(query);
+    if (!q) return Promise.reject(new Error('搜索词为空'));
+    return fetchTimeout(base + '/v1/tools/search', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json', 'Authorization': 'Bearer ' + state.config.aiKey },
-      body: JSON.stringify({ query: String(query).slice(0, 128), count: 6, ori_question: String(query).slice(0, 128) })
-    }).then(function (res) {
-      if (!res.ok) throw new Error('搜索接口失败(' + res.status + ')');
+      body: JSON.stringify({ query: q, count: 8, ori_question: q, need_content: false })
+    }, 20000).then(function (res) {
+      if (!res.ok) {
+        return res.text().then(function (t) {
+          throw new Error('搜索接口 HTTP ' + res.status + (t ? '：' + String(t).replace(/\s+/g, ' ').slice(0, 70) : ''));
+        }, function () { throw new Error('搜索接口 HTTP ' + res.status); });
+      }
       return res.json();
     }).then(function (data) {
       var out = [];
@@ -5604,11 +5650,11 @@ window.onerror = function (msg, url, line) {
   // 普通对话（不发工具）
   function aiPlain(prompt, temp) {
     var cfg = state.config;
-    return fetch(cfg.aiUrl, {
+    return fetchTimeout(cfg.aiUrl, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json', 'Authorization': 'Bearer ' + cfg.aiKey },
       body: JSON.stringify({ model: cfg.aiModel, messages: [{ role: 'user', content: prompt }], temperature: temp == null ? 0.4 : temp })
-    }).then(function (res) {
+    }, 90000).then(function (res) {
       if (!res.ok) throw new Error('请求失败(' + res.status + ')');
       return res.json();
     }).then(function (data) {
@@ -5618,15 +5664,43 @@ window.onerror = function (msg, url, line) {
     });
   }
 
-  // AI 调用主入口。opts.webSearch=true 时联网（DeepSeek web_search 工具优先，失败降级 Search API）
-  // opts.query：降级检索时用的关键词（默认用整段 prompt）；opts.hint：降级路径要求模型的回答方式
+  // AI 调用主入口。opts.webSearch=true 时联网
+  // DeepSeek 官方：chat 端不内置联网，直接走 Search API；其它兼容服务先试 tools，失败再降级
+  // opts.query：检索关键词（必填，且会被清洗到 128 字符内）；opts.hint：写作要求
   function aiChat(prompt, temp, opts) {
     var cfg = state.config;
     if (!hasAI()) return Promise.reject(new Error('未配置 AI'));
     if (!opts || !opts.webSearch) return aiPlain(prompt, temp);
 
-    // 联网主路径：chat/completions + tools: web_search（模型自动搜索，答案自带来源）
-    return fetch(cfg.aiUrl, {
+    var q = cleanQuery(opts.query);
+    var hint = (opts && opts.hint) || '请基于以上资料回答，保留关键数字与时间。';
+
+    function viaSearch(prefix) {
+      return webSearchApi(q).then(function (results) {
+        if (!results.length) throw new Error('搜索引擎没有返回结果');
+        var ctx = '以下是刚刚联网搜到的真实资料（请只根据它们说，并在句末用 [1][2] 标注来源序号）：\n';
+        for (var i = 0; i < results.length; i++) {
+          ctx += '[' + (i + 1) + '] ' + results[i].title +
+            (results[i].site ? '（' + results[i].site + '）' : '') +
+            (results[i].date ? ' ' + results[i].date : '') + '\n' +
+            results[i].summary + '\n链接: ' + results[i].url + '\n\n';
+        }
+        ctx += '\n要写的东西：' + prompt + '\n' + hint;
+        return aiPlain(ctx, 0.3).then(function (text) {
+          return text + '\n\n__WEB_REFS__' + JSON.stringify(results);
+        });
+      }).catch(function (err) {
+        throw new Error((prefix ? prefix + '；' : '') + (err && err.message ? err.message : '联网失败'));
+      });
+    }
+
+    if (!q) return viaSearch('没有可用的搜索词');
+
+    // DeepSeek 官方没有 chat 内置联网，先试只会白挨一次 400，直接走 Search API
+    if (isDeepSeekOfficial()) return viaSearch('');
+
+    // 其它服务：chat/completions + tools: web_search（模型自动搜索，答案自带来源）
+    return fetchTimeout(cfg.aiUrl, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json', 'Authorization': 'Bearer ' + cfg.aiKey },
       body: JSON.stringify({
@@ -5635,29 +5709,22 @@ window.onerror = function (msg, url, line) {
         temperature: temp == null ? 0.4 : temp,
         tools: [{ type: 'web_search' }]
       })
-    }).then(function (res) {
+    }, 40000).then(function (res) {
       if (!res.ok) {
-        // 服务不支持 web_search 工具 → 降级：Search API 拿结果再普通对话
-        return res.text().then(function () {
-          return webSearchApi((opts && opts.query) ? opts.query : prompt).then(function (results) {
-            if (!results.length) throw new Error('联网没有搜到相关内容');
-            var ctx = '以下是联网搜索到的资料（请基于它们回答，并在句末用 [1][2] 标注来源序号）：\n';
-            for (var i = 0; i < results.length; i++) {
-              ctx += '[' + (i + 1) + '] ' + results[i].title + (results[i].site ? '（' + results[i].site + '）' : '') + '\n' + results[i].summary + '\n链接: ' + results[i].url + '\n\n';
-            }
-            ctx += '\n用户的问题：' + prompt + '\n' + ((opts && opts.hint) ? opts.hint : '请综合以上资料回答，简洁（300字内），保留关键数字与时间。');
-            return aiPlain(ctx, 0.3).then(function (text) {
-              return text + '\n\n__WEB_REFS__' + JSON.stringify(results);
-            });
-          }).catch(function (err) {
-            throw new Error('联网搜索不可用（' + err.message + '）。当前 AI 服务可能不支持联网，或网络受限');
-          });
-        });
+        return res.text().then(function () { return viaSearch('模型不支持内置联网'); },
+          function () { return viaSearch('模型不支持内置联网'); });
       }
       return res.json().then(function (data) {
         var c = data.choices && data.choices[0] && data.choices[0].message && data.choices[0].message.content;
         if (!c) throw new Error('返回格式不正确');
-        return String(c).trim();
+        var ann = data.choices[0].message.annotations || [];
+        var refs = [];
+        for (var i = 0; i < ann.length && refs.length < 5; i++) {
+          var u = ann[i] && (ann[i].url_citation || ann[i].url);
+          var link = safeHttpUrl(u && (u.url || u));
+          if (link) refs.push({ title: (u && u.title) || link, url: link });
+        }
+        return String(c).trim() + (refs.length ? '\n\n__WEB_REFS__' + JSON.stringify(refs) : '');
       });
     });
   }
@@ -5817,6 +5884,13 @@ window.onerror = function (msg, url, line) {
   var LO_ORDER = ['story', 'news', 'talk', 'letter', 'allegory', 'roast', 'poem', 'manual', 'fact'];
 
   // ---- 说过的话存在本机，换设备不跟着走（和笔记正文不同） ----
+  // 笔记改过之后，指纹就变了：旧的那段话不再算作这条笔记的
+  function loFP(text) {
+    var s = String(text || ''), h = 5381, i;
+    for (i = 0; i < s.length; i++) h = ((h << 5) + h + s.charCodeAt(i)) | 0;
+    return (h >>> 0).toString(36) + '_' + s.length;
+  }
+
   function loCacheGet() {
     if (state.loCache) return state.loCache;
     var o = {};
@@ -5829,9 +5903,13 @@ window.onerror = function (msg, url, line) {
     return o;
   }
 
-  function loHas(id) {
+  function loHas(id, text) {
     var c = loCacheGet();
-    return !!(c && c[id] && c[id].t);
+    var rec = c && c[id];
+    if (!rec || !rec.t) return false;
+    if (text == null) return true;
+    if (!rec.h) return true;                 // v14.3 的旧缓存没有指纹，先认
+    return rec.h === loFP(text);
   }
 
   function loStore(id, rec) {
@@ -5875,7 +5953,7 @@ window.onerror = function (msg, url, line) {
         var o = JSON.parse(s.slice(a, b + 1));
         var m = String(o.mode || '').trim();
         if (LO_MODES[m]) {
-          return { mode: m, search: String(o.search || '').slice(0, 60), why: String(o.why || '').slice(0, 40) };
+          return { mode: m, search: cleanQuery(o.search), why: String(o.why || '').slice(0, 40) };
         }
       } catch (e) {}
     }
@@ -5941,18 +6019,43 @@ window.onerror = function (msg, url, line) {
         var r = loSplitRefs(t); r.net = false; return r;
       });
     }
-    // 联网：主路径让模型自己搜；失败退回 Search API；再失败就凭见识说，但禁止编新闻
-    return aiChat(prompt, 0.82, {
-      webSearch: true,
-      query: search || '',
-      hint: '请基于以上资料，用老铁的口吻写完这段话，450 到 650 字，保留关键数字与时间，并在句末用[1][2]标出处。'
+    // 搜索词必须短。没有就现取一个，绝不把整段提示词丢给搜索接口
+    var q = cleanQuery(search);
+    var ready = q ? Promise.resolve(q) : loSearchTerm(note, mode);
+    return ready.then(function (term) {
+      var key = cleanQuery(term) || loLocalKeywords(note.text);
+      return aiChat(prompt, 0.82, {
+        webSearch: true,
+        query: key,
+        hint: '请基于以上资料，用老铁的口吻写完这段话，450 到 650 字，保留关键数字与时间，并在句末用[1][2]标出处。'
+      });
     }).then(function (t) {
       var r = loSplitRefs(t); r.net = true; return r;
-    }).catch(function () {
+    }).catch(function (err) {
+      // 联网没成，退回不联网写作；但把原因记住，界面上如实说明
       return aiPlain(prompt + '\n\n（今天网线不好，查不到新闻。别引用具体报道、日期和数字，就凭你的见识说。）', 0.8).then(function (t) {
-        var r = loSplitRefs(t); r.net = true; r.netFail = true; return r;
+        var r = loSplitRefs(t); r.net = true; r.netFail = true;
+        r.nm = (err && err.message) ? String(err.message).slice(0, 120) : '联网没成功';
+        return r;
       });
     });
+  }
+
+  // 现取搜索词：只给 6~14 个字，别让接口因为超长直接 400
+  function loSearchTerm(note, mode) {
+    var p = '把下面这条笔记缩成一句搜索词，用来检索' + (mode === 'fact' ? '相关的可靠知识或数据' : '最近的新闻') + '。\n' +
+      '要求：6 到 14 个字，只给关键词，不要标点、不要引号、不要解释、不要「搜索词：」。\n' +
+      '笔记：「' + String(note.text || '').slice(0, 300) + '」';
+    return aiPlain(p, 0.2).then(function (t) {
+      return cleanQuery(String(t).split('\n')[0]);
+    }).catch(function () { return ''; });
+  }
+
+  // 本地兜底关键词：模型也不可用时，至少给搜索接口一段短词
+  function loLocalKeywords(text) {
+    var s = String(text || '').replace(/[#*`>\-_—、，。！？；：""''（）()\[\]【】…\s]+/g, ' ').trim();
+    var arr = Array.from(s);
+    return arr.slice(0, 40).join('');
   }
 
   // ---- 界面 ----
@@ -5990,7 +6093,8 @@ window.onerror = function (msg, url, line) {
     els.loBody.innerHTML = renderMarkdown(rec.t) + '<div class="lo-sign">—— 老铁</div>';
 
     els.loRefs.innerHTML = '';
-    var refs = rec.r || [];
+    // 这次没联上的话，别把上一次的来源挂在下面冒充
+    var refs = rec.netFail ? [] : (rec.r || []);
     if (refs.length) {
       var title = document.createElement('span');
       title.className = 'lo-refs-title';
@@ -6007,6 +6111,12 @@ window.onerror = function (msg, url, line) {
         a.textContent = '🔗 ' + String(refs[i].title || href).slice(0, 18);
         els.loRefs.appendChild(a);
       }
+    }
+    if (rec.net && rec.netFail) {
+      var tip = document.createElement('div');
+      tip.className = 'lo-neterr';
+      tip.textContent = '这次没联上：' + (rec.nm || '搜索服务没响应') + '。下面这段是凭见识说的，没有引用任何报道。';
+      els.loRefs.appendChild(tip);
     }
     els.loBody.scrollTop = 0;
   }
@@ -6053,6 +6163,7 @@ window.onerror = function (msg, url, line) {
   function openLaoyou(id) {
     var n = findNote(id);
     if (!n) { toast('这条笔记找不到了'); return; }
+    state.loSeq++;               // 上一条还没回来就作废，别把别人的话说给这条听
     state.loNoteId = id;
     state.loMode = null;
     state.loWhy = '';
@@ -6066,12 +6177,15 @@ window.onerror = function (msg, url, line) {
     els.loMask.classList.add('open');
     if (!hasAI()) { loNeedSetup(); return; }
     var rec = loCacheGet()[id];
-    if (rec && rec.t) {
+    var fp = loFP(n.text);
+    // 笔记改过了，旧的那段话就不作数
+    if (rec && rec.t && (!rec.h || rec.h === fp)) {
       state.loMode = rec.m;
       state.loRec = rec;
       loRender(rec);
       loReady();
     } else {
+      if (rec && rec.t) toast('这条笔记改过了，让老铁重新说');
       loReady();
       loStart(n, null, true);
     }
@@ -6085,37 +6199,48 @@ window.onerror = function (msg, url, line) {
 
   function loStart(note, mode, first) {
     if (!note || state.loBusy) return;
+    var seq = ++state.loSeq;
+    var nid = note.id;
+    var fp = loFP(note.text);
     state.loBusy = true;
     state.loWhy = '';
     loBusy(true);
-    loThinking(mode ? !!LO_MODES[mode].net : true);
+    // 还不知道该怎么说，先别谎称在联网
+    loThinking(mode ? !!LO_MODES[mode].net : false);
 
     var route = mode
       ? Promise.resolve({ mode: mode, search: '', why: '' })
       : loRoute(note);
+    var curMode = mode || 'talk', curWhy = '';
 
     route.then(function (r) {
+      if (seq !== state.loSeq) return null;
       var m = LO_MODES[r.mode] ? r.mode : 'talk';
+      curMode = m;
+      curWhy = r.why || '';
       state.loMode = m;
-      state.loWhy = r.why || '';
+      state.loWhy = curWhy;
       // 先说清楚他打算怎么讲，让人有个准备
       els.loBadge.innerHTML = '<span class="lo-tag">' + escapeHTML(LO_MODES[m].name) + '</span>' +
-        (r.why ? '<span class="lo-why">' + escapeHTML(r.why) + '</span>' : '');
+        (curWhy ? '<span class="lo-why">' + escapeHTML(curWhy) + '</span>' : '');
       loThinking(!!LO_MODES[m].net || !!r.search);
       return loCompose(note, m, r.search);
     }).then(function (res) {
+      if (seq !== state.loSeq || !res) return;
       state.loBusy = false;
       loStopTimer();
       var rec = {
-        m: state.loMode, w: state.loWhy, t: res.text,
-        r: res.refs || [], net: !!res.net, netFail: !!res.netFail, at: Date.now()
+        m: curMode, w: curWhy, t: res.text,
+        r: res.refs || [], net: !!res.net, netFail: !!res.netFail,
+        nm: res.nm || '', h: fp, at: Date.now()
       };
       state.loRec = rec;
-      loStore(state.loNoteId, rec);
+      loStore(nid, rec);
       loRender(rec);
       loReady();
-      loMarkBtn(state.loNoteId);
+      loMarkBtn(nid);
     }).catch(function (err) {
+      if (seq !== state.loSeq) return;
       state.loBusy = false;
       loStopTimer();
       loBusy(false);
