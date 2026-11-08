@@ -3601,6 +3601,7 @@ window.onerror = function (msg, url, line) {
 
   function renderShopBoard() {
     if (!els.shopBoard) return;
+    kbReleaseURLs();          // 重渲染前释放上一轮的 blob 地址
     var f = shopFinance();
     var CHEV = '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M6 9l6 6 6-6"/></svg>';
 
