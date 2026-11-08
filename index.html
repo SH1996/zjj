@@ -6077,6 +6077,15 @@ window.onerror = function (msg, url, line) {
     return arr.slice(0, 40).join('');
   }
 
+  // 单机说时，「就着新闻说两句」这个名字就不合适了——没看新闻，别装
+  function loName(mode, net) {
+    if (net === false) {
+      if (mode === 'news') return '就这事儿说两句';
+      if (mode === 'fact') return '讲个常识';
+    }
+    return (LO_MODES[mode] || LO_MODES.talk).name;
+  }
+
   // ---- 界面 ----
   var LO_THINK_LOCAL = ['老铁把手上的活停了停…', '老铁又看了一遍你写的这句…', '老铁琢磨着这话该怎么说…'];
   var LO_THINK_NET = ['老铁翻起了最近的新闻…', '老铁在核对这事儿的来龙去脉…', '老铁查了查，怕说错…'];
@@ -6107,7 +6116,7 @@ window.onerror = function (msg, url, line) {
 
   function loRender(rec) {
     var m = LO_MODES[rec.m] || LO_MODES.talk;
-    var badge = '<span class="lo-tag">' + escapeHTML(m.name) + '</span>';
+    var badge = '<span class="lo-tag">' + escapeHTML(loName(rec.m, !!rec.net)) + '</span>';
     if (rec.net) badge += '<span class="lo-tag net">' + (rec.netFail ? '这次没联上' : '已联网') + '</span>';
     if (rec.w) badge += '<span class="lo-why">' + escapeHTML(rec.w) + '</span>';
     els.loBadge.innerHTML = badge;
@@ -6246,9 +6255,10 @@ window.onerror = function (msg, url, line) {
       state.loMode = m;
       state.loWhy = curWhy;
       // 先说清楚他打算怎么讲，让人有个准备
-      els.loBadge.innerHTML = '<span class="lo-tag">' + escapeHTML(LO_MODES[m].name) + '</span>' +
+      var willNet = forceNet === true ? true : (forceNet === false ? false : (!!LO_MODES[m].net || !!r.search));
+      els.loBadge.innerHTML = '<span class="lo-tag">' + escapeHTML(loName(m, willNet)) + '</span>' +
         (curWhy ? '<span class="lo-why">' + escapeHTML(curWhy) + '</span>' : '');
-      loThinking(forceNet === true || (forceNet == null && (!!LO_MODES[m].net || !!r.search)));
+      loThinking(willNet);
       return loCompose(note, m, r.search, forceNet);
     }).then(function (res) {
       if (seq !== state.loSeq || !res) return;
