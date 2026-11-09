@@ -662,7 +662,12 @@
     if (!factors.length) factors.push({ dir: 'cold', text: '号码分布分散，没有明显的拥挤特征' });
     return {
       score: score, heat: rel, level: level, factors: factors.slice(0, 4),
-      people: rel < 1 ? '≈ ' + rel.toFixed(2) + '× 普通一注' : '≈ ' + rel.toFixed(1) + '× 普通一注'
+      ratio: rel,
+      // 「人少 24%」而不是「≈0.76× 普通一注」：倍数的说法容易被读成
+      // 「中奖概率打了折」，而这套东西从不改概率，只改分钱的人数。
+      people: rel < 1
+        ? '人少 ' + Math.max(1, Math.round((1 - rel) * 100)) + '%'
+        : (rel < 1.03 ? '人数正常' : '人多 ' + Math.min(99, Math.round((rel - 1) * 100)) + '%')
     };
   }
 
@@ -1815,7 +1820,7 @@
     L.push('娱乐候选（评分不是中奖概率）：');
     candidates.forEach(function(c,i){
       L.push((i+1)+'. '+c.main.map(pad2).join(' ')+' + '+c.sub.map(pad2).join(' '));
-      if(c.crowd) L.push('   冷门度 '+c.crowd.score+' / 100（'+c.crowd.level+'）· 预计同号人数 '+c.crowd.people+'（经验模型，非实测销量）');
+      if(c.crowd) L.push('   冷门度 '+c.crowd.score+' / 100（'+c.crowd.level+'）· 同号拥挤度 '+c.crowd.heat.toFixed(2)+'（普通一注 = 1.00，'+c.crowd.people+'；经验模型，非实测销量）');
       L.push('   '+c.reasons.join('；'));
     });
     L.push('----------------------------------------');
@@ -1838,7 +1843,7 @@
       backtest:bt&&!bt.insufficient?{periods:bt.rows.length,statistical:bt.statistical,uniform:bt.uniform,
         theoretical:{main:analysis.expectedMainHits,sub:analysis.expectedSubHits}}:null,
       candidates:candidates.map(function(c){return {main:c.main,sub:c.sub,reasons:c.reasons,
-        crowd:c.crowd?{score:c.crowd.score,level:c.crowd.level,people:c.crowd.people,factors:c.crowd.factors.map(function(f){return f.text;})}:null};})
+        crowd:c.crowd?{score:c.crowd.score,level:c.crowd.level,heat:c.crowd.heat,people:c.crowd.people,factors:c.crowd.factors.map(function(f){return f.text;})}:null};})
     };
     return '你是严谨的彩票统计解读助手。下面是本地程序基于真实历史开奖计算出的 JSON 结果。只允许解释这些数字，不得补充、猜测或改写历史数据，不得修改候选号码。请用中文输出不超过 500 字，分「数据观察」「交叉解读」「回测结论」「边界提醒」四段。必须明确：遗漏不代表该出，冷热不代表下一期倾向；统计画像不是中奖率；公平开奖各期独立；回测样本不能证明未来优势；冷门度只影响中奖后同分人数、不影响中奖概率，且是经验模型不是实测销量；不得使用稳中、包中、精准预测、提高中奖率等措辞。语气清楚克制，不鼓励购彩。\n'+JSON.stringify(brief);
   }
