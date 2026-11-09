@@ -12,24 +12,31 @@
 
   /* ==================== 1. 常量 ==================== */
 
-  // 商品词表：长词在前，保证「黑豆浆」不会被切成「黑」+「豆浆」
+  // 商品词表：长短混排，匹配前统一按长度降序（保证「红烧肉包」不被拆成「红烧」+「肉包」）
   var ITEM_WORDS = [
-    '红枣豆浆', '黑豆浆', '五谷豆浆', '原味豆浆', '甜豆浆', '咸豆浆', '豆浆',
-    '玉米汁', '南瓜汁', '紫薯汁', '花生浆', '核桃浆', '米浆', '绿豆沙', '红豆沙',
-    '小米粥', '八宝粥', '南瓜粥', '白粥', '瘦肉粥', '皮蛋粥', '粥',
-    '肉包', '菜包', '豆沙包', '奶黄包', '叉烧包', '小笼包', '灌汤包', '包子',
-    '白馒头', '红糖馒头', '馒头', '花卷', '油条', '饭团', '糯米鸡', '烧麦',
-    '肠粉', '茶叶蛋', '水煮蛋', '卤蛋', '鸡蛋', '玉米', '红薯', '紫薯',
-    '牛奶', '酸奶', '豆奶', '面包', '蛋糕', '煎饼', '手抓饼', '蒸饺', '云吞'
+    '红枣枸杞豆浆', '红枣豆浆', '枸杞豆浆', '黑豆浆', '五谷豆浆', '原味豆浆', '甜豆浆', '咸豆浆', '黄豆浆', '豆浆',
+    '玉米汁', '南瓜汁', '紫薯汁', '花生浆', '核桃浆', '米浆', '绿豆沙', '红豆沙', '绿豆汤', '银耳汤',
+    '皮蛋瘦肉粥', '瘦肉粥', '皮蛋粥', '小米粥', '八宝粥', '南瓜粥', '黑米粥', '红枣粥', '白粥', '粥',
+    '红烧肉包', '酱肉包', '麻辣牛肉包', '牛肉包', '鲜肉包', '豆沙包', '奶黄包', '叉烧包',
+    '香菇竹笋包', '竹笋包', '豇豆包', '豆腐包', '菜角', '菜包', '肉包', '小笼包', '灌汤包', '包子',
+    '白水蛋', '白鸡蛋', '白蛋', '茶叶蛋', '水煮蛋', '卤蛋', '煎蛋', '鸡蛋',
+    '玉米蒸饺', '玉米饺', '蒸饺', '水饺', '烧麦', '烧卖', '云吞', '馄饨',
+    '油条', '麻团', '糖糕', '糍粑', '煎饼', '手抓饼', '鸡蛋饼', '葱油饼', '烧饼',
+    '饭团', '糯米鸡', '肠粉', '粽子', '发糕', '马拉糕', '蛋挞', '三明治', '寿司',
+    '白馒头', '红糖馒头', '馒头', '花卷', '面包', '蛋糕',
+    '红薯', '紫薯', '玉米', '南瓜', '山药', '芋头',
+    '牛奶', '酸奶', '豆奶', '咖啡', '奶茶'
   ];
 
-  var UNIT_CHARS = '杯份个瓶袋根只盒碗笼屉张块';
-  var CN_NUM = { '零': 0, '一': 1, '二': 2, '两': 2, '三': 3, '四': 4, '五': 5, '六': 6, '七': 7, '八': 8, '九': 9, '十': 10 };
+  var ITEM_SORTED = ITEM_WORDS.slice().sort(function (a, b) { return b.length - a.length; });
 
-  var DEFAULT_CAP = 16;      // 每个泡沫箱默认装多少杯
+  var DEFAULT_CAP = 16;      // 每个泡沫箱默认装多少件
   var MAX_BOXES = 3;         // 最多三个箱子
   var PRICE_KEY = 'bamboo.v11.jielong.price';
   var SETTINGS_KEY = 'bamboo.v11.jielong.settings';
+
+  var UNIT_CHARS = '杯份个瓶袋根只盒碗笼屉张块条颗串支片斤';
+  var CN_NUM = { '零': 0, '一': 1, '二': 2, '两': 2, '三': 3, '四': 4, '五': 5, '六': 6, '七': 7, '八': 8, '九': 9, '十': 10 };
 
   /* ==================== 2. 小工具 ==================== */
 
@@ -48,23 +55,32 @@
     if (m) return (m[1] ? CN_NUM[m[1]] : 1) * 10 + (m[2] ? CN_NUM[m[2]] : 0);
     return NaN;
   }
-  // 「3栋 / 三栋 / 3号楼 / 3# / A栋 / A座」→ 统一的键
-  function normBuilding(raw, kind) {
-    var s = trim(raw);
+  function blank(n) { var s = ''; for (var i = 0; i < n; i++) s += ' '; return s; }
+  function replaceRange(s, a, b) {
+    if (a < 0 || b > s.length || a >= b) return s;
+    return s.slice(0, a) + blank(b - a) + s.slice(b);
+  }
+
+  // 「3栋 / 三栋 / 3号楼 / 3# / A栋 / G1 / g2-」→ 统一的键
+  function normBuilding(raw) {
+    var s = trim(raw).replace(/\s+/g, '');
     if (!s) return '';
-    s = s.replace(/\s+/g, '');
-    if (/^[A-Za-z]$/.test(s)) return s.toUpperCase() + '栋';
+    s = s.replace(/[-－—.。]+$/, '');                 // G2-. → G2
+    if (/^[A-Za-z][0-9]{0,2}$/.test(s)) return s.toUpperCase() + '栋';
     var n = cnToNum(s);
     if (!isNaN(n)) return n + '栋';
     return s + '栋';
   }
-  // 楼栋自然排序：数字栋按数字，字母栋排后面
+  // 楼栋自然排序：数字栋按数字，字母栋按字母（G1 在 G2 前），未写楼栋排最后
   function buildingRank(key) {
-    var m = String(key).match(/^(\d+)/);
-    if (m) return { g: 0, n: parseInt(m[1], 10), s: key };
-    var a = String(key).match(/^([A-Za-z])/);
-    if (a) return { g: 1, n: a[1].charCodeAt(0), s: key };
-    return { g: 2, n: 0, s: key };
+    var s = String(key);
+    var m = s.match(/^([0-9]+)/);
+    if (m) return { g: 0, n: parseInt(m[1], 10), s: s };
+    var a = s.match(/^([A-Za-z])([0-9]*)/);
+    if (a) {
+      return { g: 1, n: a[1].toUpperCase().charCodeAt(0) * 100 + (a[2] ? parseInt(a[2], 10) : 0), s: s };
+    }
+    return { g: 2, n: 0, s: s };
   }
   function compareBuilding(a, b) {
     var x = buildingRank(a.key), y = buildingRank(b.key);
@@ -93,115 +109,207 @@
     return out;
   }
 
-  // 楼栋 + 房号
+  /* 楼栋：三档优先级
+   * ① 带「栋/幢/号楼/座/#」——最可信，且允许「A 栋」中间有空格
+   * ② 字母+数字但没写「栋」——G1 / G2-. / g1姗（宿舍楼常见写法）
+   * ③ 行首单个字母 + 逗号——「a，😴，一杯…」，只认 A–H，避免把名字首字母当楼栋
+   */
   function findBuilding(text) {
-    var best = null;
-    var patterns = [
-      // 3栋301 / 3幢 301 / 3号楼2单元301
-      { re: /([0-9]{1,3}|[一二三四五六七八九十]{1,3}|[A-Za-z])\s*(号楼|栋|幢|座|#)\s*(?:[0-9]{0,1}\s*单元)?\s*([0-9]{3,4})?/, kind: 'std' },
-      // 3-301 / 3－301（楼栋-房号）
-      { re: /(?:^|[\s，,、；;：:])([0-9]{1,3})\s*[-－—]\s*([0-9]{3,4})(?![0-9])/, kind: 'dash' }
-    ];
-    for (var i = 0; i < patterns.length; i++) {
-      var p = patterns[i];
-      var re = new RegExp(p.re.source, 'g');
-      var m;
-      while ((m = re.exec(text)) !== null) {
-        var got;
-        if (p.kind === 'std') {
-          got = { raw: m[0], token: m[1], tail: m[2], room: m[3] || '', start: m.index, end: m.index + m[0].length };
-        } else {
-          got = { raw: m[0], token: m[1], tail: '栋', room: m[2], start: m.index, end: m.index + m[0].length };
-        }
-        // 「3号楼」里的 token 是 3，tail 是「号楼」，都算楼栋
-        if (!best || got.end - got.start > best.end - best.start) best = got;
+    var best = null, m;
+
+    function better(got, rank) {
+      if (!best || rank < best.rank ||
+        (rank === best.rank && (got.end - got.start) > (best.end - best.start))) {
+        got.rank = rank;
+        best = got;
       }
-      if (best) break;
     }
+
+    var re1 = /([0-9]{1,3}|[一二三四五六七八九十]{1,3}|[A-Za-z][0-9]{0,2})\s*(号楼|栋|幢|座|#)\s*(?:[0-9]\s*单元)?\s*([0-9]{3,4})?/g;
+    while ((m = re1.exec(text)) !== null) {
+      better({ raw: m[0], token: m[1], room: m[3] || '', start: m.index, end: m.index + m[0].length }, 0);
+    }
+
+    var re2 = /(?:^|[\s，,、；;：:])([A-Za-z][0-9]{1,2})\s*[-－.]?\s*([0-9]{3,4})?/g;
+    while ((m = re2.exec(text)) !== null) {
+      var cut = m[0].length - m[0].replace(/^[\s，,、；;：:]/, '').length;
+      better({ raw: m[0], token: m[1], room: m[2] || '', start: m.index + cut, end: m.index + m[0].length }, 1);
+    }
+
+    // ③ 楼栋-房号：5-402 / 3－301（不要碰 G2-. 这种，后面不是 3~4 位数字就不算）
+    var re3 = /(?:^|[\s，,、；;：:])([0-9]{1,3})\s*[-－—]\s*([0-9]{3,4})(?![0-9])/g;
+    while ((m = re3.exec(text)) !== null) {
+      var cut3 = m[0].length - m[0].replace(/^[\s，,、；;：:]/, '').length;
+      better({ raw: m[0], token: m[1], room: m[2], start: m.index + cut3, end: m.index + m[0].length }, 1);
+    }
+
+    var m3 = text.match(/^\s*([A-Ha-h])\s*[，,、.。\s]/);
+    if (m3) {
+      var st = m3.index + m3[0].indexOf(m3[1]);
+      better({ raw: m3[0], token: m3[1], room: '', start: st, end: st + 1 }, 2);
+    }
+
     if (!best) return null;
-    return {
-      key: normBuilding(best.token, best.tail),
-      room: best.room || '',
-      raw: best.raw,
-      start: best.start,
-      end: best.end
-    };
+    return { key: normBuilding(best.token), room: best.room, raw: best.raw, start: best.start, end: best.end };
   }
 
-  // 从一行里抽出商品与数量
-  function findItems(text) {
-    var items = [];
-    var work = text;
-    // 长词优先；每命中一次就抹掉，避免「黑豆浆」再被「豆浆」命中
-    for (var w = 0; w < ITEM_WORDS.length; w++) {
-      var word = ITEM_WORDS[w];
-      var guard = 0;
-      while (guard++ < 12) {
-        var idx = work.indexOf(word);
-        if (idx < 0) break;
-        var before = work.slice(0, idx);
-        var after = work.slice(idx + word.length);
-        var qty = 1;
-        var consumed = 0;
+  /* 数量：只认紧挨着商品的那一个
+   * 前置「一杯 / 两个 / 半笼 / 2杯」，后置「x2 / 2个 / 两份」，或紧贴的裸数字「豆浆2」
+   * 关键：裸数字带空格的一律不当数量——「豆浆 3 元」的 3 是钱
+   */
+  function qtyBefore(s, start) {
+    var before = s.slice(0, start);
+    var reU = new RegExp('(半|[0-9]{1,2}|[一二两三四五六七八九十])\\s*([' + UNIT_CHARS + '])\\s*$');
+    var m = before.match(reU);
+    if (m) {
+      var q = m[1] === '半' ? 1 : (/^[0-9]+$/.test(m[1]) ? parseInt(m[1], 10) : (cnToNum(m[1]) || 1));
+      return { qty: q, len: m[0].length, half: m[1] === '半' };
+    }
+    m = before.match(/([0-9]{1,2})$/);
+    if (m) return { qty: parseInt(m[1], 10), len: m[0].length, bare: true };
+    return null;
+  }
 
-        // 形式 A：豆浆x2 / 豆浆×2 / 豆浆*2 / 豆浆 2 / 豆浆2杯
-        var am = after.match(/^\s*(?:[x×X*]\s*([0-9]{1,2})|([0-9]{1,2})\s*([杯份个瓶袋根只盒碗])?|([一二两三四五六七八九十])\s*([杯份个瓶袋根只盒碗]))/);
-        if (am) {
-          if (am[1]) { qty = parseInt(am[1], 10); consumed = am[0].length; }
-          else if (am[2]) { qty = parseInt(am[2], 10); consumed = am[0].length; }
-          else if (am[4]) { qty = cnToNum(am[4]) || 1; consumed = am[0].length; }
-        } else {
-          // 形式 B：2杯豆浆 / 两份豆浆（数量在词前）
-          var bm = before.match(/([0-9]{1,2}|[一二两三四五六七八九十])\s*([杯份个瓶袋根只盒碗])?\s*$/);
-          if (bm) {
-            var q = /^[0-9]+$/.test(bm[1]) ? parseInt(bm[1], 10) : (cnToNum(bm[1]) || 1);
-            // 只有明确带单位，或者数字紧贴商品词时才当数量，避免把「3栋」的 3 吃掉
-            if (bm[2] || /[0-9]$/.test(bm[1])) {
-              qty = q;
-              before = before.slice(0, before.length - bm[0].length);
-            }
-          }
+  function qtyAfter(s, end) {
+    var after = s.slice(end);
+    var reU = new RegExp('^\\s*(?:[x×X*]\\s*([0-9]{1,2})|([0-9]{1,2})\\s*([' + UNIT_CHARS + '])|([一二两三四五六七八九十])\\s*([' + UNIT_CHARS + ']))');
+    var m = after.match(reU);
+    if (m) {
+      if (m[1]) return { qty: parseInt(m[1], 10), len: m[0].length };
+      if (m[2]) return { qty: parseInt(m[2], 10), len: m[0].length };
+      if (m[4]) return { qty: cnToNum(m[4]) || 1, len: m[0].length };
+    }
+    m = after.match(/^([0-9]{1,2})(?![0-9.])/);
+    if (m) return { qty: parseInt(m[1], 10), len: m[0].length, bare: true };
+    return null;
+  }
+
+  /* 把一段拆成「商品 + 数量 + 这一段的钱」
+   * 钱的三种写法都收：3 元 / 3块 / ￥3；以及贴着商品的裸数字「红薯2」
+   */
+  function parseSeg(seg) {
+    var money = [];
+    var s = String(seg).replace(/(?:[￥¥]\s*)?([0-9]+(?:\.[0-9]+)?)\s*(元|块钱|块|圆)/g, function (m, num, u, off) {
+      money.push({ val: parseFloat(num), at: off, len: m.length });
+      return blank(m.length);
+    });
+
+    var hits = [];
+    for (var w = 0; w < ITEM_SORTED.length; w++) {
+      var word = ITEM_SORTED[w];
+      var from = 0, idx;
+      while ((idx = s.indexOf(word, from)) > -1) {
+        var end = idx + word.length, clash = false;
+        for (var c = 0; c < hits.length; c++) {
+          if (idx < hits[c].end && end > hits[c].start) { clash = true; break; }
         }
-        if (!(qty > 0 && qty < 100)) qty = 1;
-        var at = before.length;
-        items.push({ name: word, qty: qty, at: at });
-        work = before + ' '.repeat(word.length + consumed) + after.slice(consumed);
+        if (!clash) hits.push({ name: word, start: idx, end: end });
+        from = end;
       }
     }
-    items.sort(function (a, b) { return a.at - b.at; });
-    return { items: items, rest: work };
+    hits.sort(function (a, b) { return a.start - b.start; });
+
+    var used = [];
+    var items = [];
+    for (var h = 0; h < hits.length; h++) {
+      var it = hits[h];
+      var qb = qtyBefore(s, it.start);
+      var qa = qtyAfter(s, it.end);
+      var qty = 1, half = false;
+      if (qb && !qb.bare) { qty = qb.qty; half = !!qb.half; used.push([it.start - qb.len, it.start]); }
+      else if (qa && !qa.bare) { qty = qa.qty; used.push([it.end, it.end + qa.len]); }
+      else if (qb && qb.bare) { qty = qb.qty; used.push([it.start - qb.len, it.start]); }
+      else if (qa && qa.bare) { qty = qa.qty; used.push([it.end, it.end + qa.len]); }
+      if (!(qty > 0 && qty < 100)) qty = 1;
+      items.push({ name: it.name, qty: qty, half: half, start: it.start, end: it.end });
+    }
+
+    var nums = [];
+    var reN = /[0-9]+(?:\.[0-9]+)?/g, mn;
+    while ((mn = reN.exec(s)) !== null) {
+      var inUse = false;
+      for (var u = 0; u < used.length; u++) {
+        if (mn.index >= used[u][0] && mn.index < used[u][1]) { inUse = true; break; }
+      }
+      // 紧跟在字母后面的数字是昵称（y2 / A3），不是钱
+      if (mn.index > 0 && /[A-Za-z]/.test(s.charAt(mn.index - 1))) continue;
+      if (!inUse) nums.push({ val: parseFloat(mn[0]), at: mn.index, len: mn[0].length });
+    }
+
+    var amtCount = money.length + nums.length;
+    var amt = money.length ? money[0].val : (nums.length ? nums[0].val : null);
+
+    var out = { items: items, amt: amt, amtCount: amtCount, nums: nums, totalLike: false };
+
+    // 一样东西给一个数 → 这项的小计；几样东西只给一个数 → 这一单多少钱
+    if (amt != null && items.length && amtCount < items.length) out.totalLike = true;
+    // 「一个红薯2 … 4元」：带元的那个是整单总价，裸数字才是商品价
+    if (money.length && nums.length && items.length === 1) out.totalLike = true;
+    // 单独一段只有钱，没有商品（「，15 块」）
+    if (amt != null && !items.length) out.totalLike = true;
+
+    // 剥商品、数量、金额，剩下的才是名字；名字里的数字（y2、²⁵）要留住
+    var rest = s;
+    for (var r0 = 0; r0 < items.length; r0++) rest = replaceRange(rest, items[r0].start, items[r0].end);
+    for (var r1 = 0; r1 < used.length; r1++) rest = replaceRange(rest, used[r1][0], used[r1][1]);
+    for (var r2 = 0; r2 < money.length; r2++) rest = replaceRange(rest, money[r2].at, money[r2].at + money[r2].len);
+    for (var r3 = 0; r3 < nums.length; r3++) rest = replaceRange(rest, nums[r3].at, nums[r3].at + nums[r3].len);
+    out.rest = rest;
+    return out;
+  }
+
+  var SEG_SPLIT = /[+＋➕，,、；;]/;
+
+  // 兼容旧接口：只给一段文本，返回商品与剥完的剩余
+  function findItems(text) {
+    var sg = parseSeg(text);
+    return { items: sg.items, rest: sg.rest };
+  }
+
+  function segHasItems(line) {
+    var parts = String(line).split(SEG_SPLIT);
+    for (var i = 0; i < parts.length; i++) {
+      if (parseSeg(parts[i]).items.length) return true;
+    }
+    return false;
   }
 
   // 备注：括号里的内容
   function findNote(text) {
     var m = text.match(/[（(]([^）)]{1,40})[）)]/);
     if (m) return trim(m[1]);
-    m = text.match(/(不要|别放|少放|多加|加|免)[^，,。；;\s]{1,12}/);
+    m = text.match(/(不要|别放|少放|多加|免)[^，,。；;\s]{1,12}/);
     return m ? trim(m[0]) : '';
   }
 
-  var NAME_STOP = /^(?:要|加|来|的|了|和|跟|与|帮|给|送|杯|份|个|瓶|袋|根|只|盒|碗|谢谢|辛苦|麻烦|同上|一样|一份|两份)/;
+  // 名字：把楼栋、商品、数量、金额都剥掉以后，剩下第一个像人名的片段
+  // 允许单字（「g1姗」）、字母（「h」「U」）、带数字的昵称（「y2」）、emoji（「😴」）
+  function hasEmoji(s) {
+    for (var i = 0; i < s.length; i++) {
+      var c = s.charCodeAt(i);
+      if (c >= 0x2600 && c <= 0x27BF) return true;
+      if (c >= 0xD800 && c <= 0xDBFF) return true;
+    }
+    return false;
+  }
 
   function findName(text) {
-    // 只留中文与间隔号，再把商品、数量、单位、序号扫干净
-    // 注意：量词只跟着数字剥离，「张三」的「张」不是量词
     var s = String(text == null ? '' : text);
-    for (var w = 0; w < ITEM_WORDS.length; w++) {
-      if (s.indexOf(ITEM_WORDS[w]) > -1) s = s.split(ITEM_WORDS[w]).join(' ');
+    // 单独调用时（比如只给「豆浆 张三」）也要先剥商品词
+    for (var w = 0; w < ITEM_SORTED.length; w++) {
+      if (s.indexOf(ITEM_SORTED[w]) > -1) s = s.split(ITEM_SORTED[w]).join(' ');
     }
     s = s
       .replace(/[（(][^）)]*[）)]/g, ' ')
-      .replace(new RegExp('([0-9]{1,3}|[一二两三四五六七八九十])\\s*[' + UNIT_CHARS + ']', 'g'), ' ')
-      .replace(/[0-9]+/g, ' ')
-      .replace(/[，,、；;：:.。!！?？~～\-—_/\\|]/g, ' ')
-      .replace(/[x×X*]/g, ' ');
-    var cands = s.match(/[\u4e00-\u9fa5·]{2,8}/g) || [];
-    for (var i = 0; i < cands.length; i++) {
-      var c = cands[i];
-      if (NAME_STOP.test(c)) continue;
-      // 姓名字数：2–4 常见，少数民族名可到 6，超长就截断
-      if (c.length > 6) c = c.slice(0, 4);
-      return c;
+      .replace(/[，,、；;：:。.！!？?~～\-—_/\\|+＋➕=＝"'“”‘’\[\]【】]/g, ' ');
+    var parts = s.split(/\s+/);
+    for (var i = 0; i < parts.length; i++) {
+      var p = trim(parts[i]);
+      if (!p) continue;
+      if (/^[0-9.]+$/.test(p)) continue;                       // 房号 / 金额残渣
+      if (hasEmoji(p)) return p.slice(0, 8);
+      if (/^[A-Za-z0-9]+$/.test(p)) return p.slice(0, 12);      // h / U / y2
+      if (/[\u4e00-\u9fa5]/.test(p)) return p.slice(0, 8);
     }
     return '';
   }
@@ -220,13 +328,56 @@
 
     var b = findBuilding(text);
     var work = text;
-    if (b) {
-      work = text.slice(0, b.start) + ' ' + text.slice(b.end);
-    }
+    if (b) work = text.slice(0, b.start) + ' ' + text.slice(b.end);
+
     var note = findNote(work);
-    var got = findItems(work);
-    var name = findName(got.rest);
-    var items = got.items.map(function (it) { return { name: it.name, qty: it.qty, unit: null }; });
+
+    var segs = [];
+    var restChunks = [];          // 连纯名字段（「😴」）也要留，不然名字会丢
+    var parts = work.split(SEG_SPLIT);
+    for (var p = 0; p < parts.length; p++) {
+      if (!trim(parts[p])) continue;
+      var sg = parseSeg(parts[p]);
+      restChunks.push(sg.rest);
+      if (!sg.items.length && sg.amt == null) continue;
+      segs.push(sg);
+    }
+
+    // 最后一段的钱，若前面有「写了商品却没写钱」的段，这笔就是整单总价
+    var lastPaid = -1;
+    for (var q = segs.length - 1; q >= 0; q--) if (segs[q].amt != null) { lastPaid = q; break; }
+    if (lastPaid > 0 && segs[lastPaid].items.length) {
+      for (var q2 = 0; q2 < lastPaid; q2++) {
+        if (segs[q2].items.length && segs[q2].amt == null) { segs[lastPaid].totalLike = true; break; }
+      }
+    }
+
+    var total = null;
+    for (var t = segs.length - 1; t >= 0; t--) {
+      if (segs[t].totalLike && segs[t].amt > 0) { total = segs[t].amt; break; }
+    }
+
+    var items = [];
+    for (var s2 = 0; s2 < segs.length; s2++) {
+      var g2 = segs[s2];
+      for (var i2 = 0; i2 < g2.items.length; i2++) {
+        var one = g2.items[i2];
+        var unit = null;
+        if (g2.amt != null && g2.items.length === 1 && one.qty > 0) {
+          if (!g2.totalLike) {
+            unit = round2(g2.amt / one.qty);
+          } else if (g2.nums && g2.nums.length === 1) {
+            // 「一个豇豆包2 … 4元」：2 是这一样的价，4 是整单总价
+            unit = round2(g2.nums[0].val / one.qty);
+          }
+          if (!(unit > 0 && unit < 1000)) unit = null;
+        }
+        items.push({ name: one.name, qty: one.qty, unit: unit, fromText: unit != null });
+      }
+    }
+
+    var restAll = restChunks.join(' ');
+    var name = findName(restAll);
 
     var issues = [];
     var conf = 0;
@@ -245,6 +396,7 @@
       building: b ? b.key : '',
       room: b ? b.room : '',
       items: items,
+      total: total,
       note: note,
       conf: Math.min(1, conf),
       issues: issues,
@@ -262,7 +414,7 @@
       var line = lines[i];
       // 纯标题行（没有序号、没有楼栋、没有商品）跳过
       var looksTitle = !/^\s*[0-9]{1,3}\s*[.、．)）:：]/.test(line) &&
-        !findBuilding(line) && !findItems(line).items.length;
+        !findBuilding(line) && !segHasItems(line);
       if (looksTitle && orders.length === 0) { skipped.push(line); continue; }
       if (looksTitle && orders.length > 0) { skipped.push(line); continue; }
       var o = parseLine(line, orders.length);
@@ -1038,7 +1190,8 @@
     cap: 0,
     openBld: '',
     proofUrl: '',
-    proofBlob: null
+    proofBlob: null,
+    proofBld: ''
   };
   var D = null;
   var HOST = null;
@@ -1341,10 +1494,13 @@
     var cards = deliveryCards(r.buildings);
     for (var c = 0; c < cards.length; c++) {
       var card = cards[c];
+      var peek = card.rows.map(function (o) { return o.room || '—'; }).slice(0, 6).join(' · ');
+      if (card.rows.length > 6) peek += ' …';
       h += '<details class="jl-card"' + (c === 0 ? ' open' : '') + '>' +
         '<summary><b>' + esc(card.key) + '</b>' +
         '<span>' + card.orders + ' 单 · ' + card.cups + ' 件</span>' +
         (card.floors.length ? '<i>' + card.floors.length + ' 个楼层</i>' : '') + '</summary>' +
+        '<p class="jl-card-peek">' + esc(peek) + '</p>' +
         '<div class="jl-card-b">' + card.rows.map(function (o) {
           return '<div class="jl-crow"><i>#' + o.no + '</i><b>' + (o.room ? esc(o.room) : '—') +
             '</b><span>' + esc(o.name || '') + '</span><em>' + itemText(o) + '</em></div>';
@@ -1393,11 +1549,56 @@
     return h;
   }
 
+  function shotCount() {
+    var m = {};
+    for (var i = 0; i < V.photos.length; i++) {
+      var k = V.photos[i].building || '';
+      m[k] = (m[k] || 0) + 1;
+    }
+    return m;
+  }
+
+  // 还有哪一栋没拍：拍完一张就自动跳到它
+  function nextUnshot() {
+    if (!V.record) return '';
+    var done = shotCount();
+    for (var b = 0; b < V.record.buildings.length; b++) {
+      var k = V.record.buildings[b].key;
+      if (k === '未写楼栋') continue;
+      if (!done[k]) return k;
+    }
+    return '';
+  }
+
   function tabProof(r) {
     var h = '';
-    h += '<div class="jl-shot-head">' +
-      '<p>每送完一处拍一张，也可以从相册里选。点照片能改它是哪一栋——拼图时按你说的标。</p>' +
-      '</div>';
+    var blds = (r.buildings || []).filter(function (b) { return b.key !== '未写楼栋'; });
+    var cnt = shotCount();
+
+    // 默认站到「还没拍的第一栋」
+    if (!V.proofBld || !blds.some(function (b) { return b.key === V.proofBld; })) {
+      V.proofBld = nextUnshot() || (blds.length ? blds[0].key : '');
+    }
+
+    h += '<div class="jl-pickbar">' +
+      '<div class="jl-pickbar-h"><b>这次送哪儿</b>' +
+      '<span>' + (blds.length ? '点楼栋选好，再按下面拍照' : '这一单还没有楼栋') + '</span></div>';
+
+    if (blds.length) {
+      h += '<div class="jl-picks">' +
+        blds.map(function (b) {
+          var n = cnt[b.key] || 0;
+          var on = b.key === V.proofBld;
+          return '<button type="button" class="jl-pick' + (on ? ' on' : '') + (n ? ' done' : '') +
+            '" data-act="setbld" data-v="' + esc(b.key) + '">' +
+            '<b>' + esc(b.key) + '</b>' +
+            '<i>' + (n ? '已拍 ' + n + ' 张' : b.orders.length + ' 单') + '</i>' +
+            (n ? '<u>✓</u>' : '') +
+            '</button>';
+        }).join('') +
+        '</div>';
+    }
+    h += '</div>';
 
     h += '<div class="jl-shots">';
     for (var i = 0; i < V.photos.length; i++) {
@@ -1410,18 +1611,25 @@
         '<button type="button" data-act="delphoto" data-k="' + esc(p.key) + '" aria-label="删除">×</button>' +
         '</div>';
     }
+    var whom = V.proofBld ? V.proofBld : '这一栋';
     h += '<label class="jl-shot-add">' +
       '<input type="file" accept="image/*" capture="environment" id="jlShotCam">' +
-      '<b>+</b><span>拍照</span></label>' +
+      '<b>+</b><span>拍照<i>' + esc(whom) + '</i></span></label>' +
       '<label class="jl-shot-add">' +
       '<input type="file" accept="image/*" id="jlShotPick" multiple>' +
-      '<b>+</b><span>相册</span></label>';
+      '<b>+</b><span>相册<i>' + esc(whom) + '</i></span></label>';
     h += '</div>';
 
-    var unCount = 0;
+    var unCount = 0, doneBld = 0;
     for (var u = 0; u < V.photos.length; u++) if (!V.photos[u].building) unCount++;
+    for (var d = 0; d < blds.length; d++) if (cnt[blds[d].key]) doneBld++;
 
     if (V.photos.length) {
+      if (blds.length && doneBld === blds.length) {
+        h += '<p class="jl-all-done">' + blds.length + ' 栋都拍齐了，可以合成一张发群里。</p>';
+      } else if (blds.length) {
+        h += '<p class="jl-hint">还差 ' + (blds.length - doneBld) + ' 栋没拍，接着拍就行。</p>';
+      }
       h += '<div class="jl-shot-actions">' +
         '<button type="button" class="jl-primary" data-act="compose"' +
         (V.busy || unCount ? ' disabled' : '') + '>' +
@@ -1806,6 +2014,8 @@
     chain.then(function () {
       V.busy = false;
       if (added) dropProof();
+      // 这一栋拍完，自动站到下一栋
+      V.proofBld = nextUnshot() || V.proofBld;
       paint();
       if (added) {
         persist(true);
@@ -2229,6 +2439,11 @@
       return;
     }
     if (act === 'delphoto') { delPhoto(btn.getAttribute('data-k')); return; }
+    if (act === 'setbld') {
+      V.proofBld = btn.getAttribute('data-v') || '';
+      paint();
+      return;
+    }
     if (act === 'pickbld') { pickBuildingFor(btn.getAttribute('data-k')); return; }
     if (act === 'aibox') {
       if (V.record) V.record.plan.aiRejected = false;
@@ -2247,7 +2462,7 @@
   function onChange(ev) {
     var t = ev.target;
     if ((t.id === 'jlShotCam' || t.id === 'jlShotPick') && t.files && t.files.length) {
-      addPhotos(t.files);
+      addPhotos(t.files, V.proofBld);
       t.value = '';
       return;
     }
