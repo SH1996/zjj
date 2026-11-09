@@ -760,6 +760,13 @@
     return lines.join('\n');
   }
 
+  // 金额显示：一单都没定价时不能显示 ¥0，那会被读成"不用付钱"
+  function amtLabel(amount, unknownCount) {
+    var n = Number(amount) || 0;
+    if (unknownCount && n === 0) return '—';
+    return '¥' + money(n);
+  }
+
   function money(n) {
     n = Number(n) || 0;
     return (Math.round(n * 100) / 100).toFixed(n % 1 === 0 ? 0 : 2);
@@ -809,8 +816,7 @@
       '<div class="jl-kpi"><b>' + t.orders + '</b><span>单</span></div>' +
       '<div class="jl-kpi"><b>' + t.buildings + '</b><span>栋</span></div>' +
       '<div class="jl-kpi"><b>' + t.cups + '</b><span>件</span></div>' +
-      '<div class="jl-kpi jl-kpi-amt"><b>' +
-      ((t.unknownAmount && t.amount === 0) ? '—' : '¥' + money(t.amount)) + '</b><span>' +
+      '<div class="jl-kpi jl-kpi-amt"><b>' + amtLabel(t.amount, t.unknownAmount) + '</b><span>' +
       (t.unknownAmount ? t.unknownAmount + ' 单未定价' : '合计') + '</span></div>' +
       '</div>';
   }
@@ -920,7 +926,7 @@
       ? (st.blds.length + ' 栋 · ' + st.orders + ' 单 · ' + st.cups + ' 件')
       : '没有结构化数据，点开可重新拆';
     var sub = r.data
-      ? ('¥' + money(st.amount) + (st.unknown ? ' · ' + st.unknown + ' 单未定价' : ''))
+      ? (amtLabel(st.amount, st.unknown) + (st.unknown ? ' · ' + st.unknown + ' 单未定价' : ''))
       : '——';
     return '<div class="jl-hist' + (compact ? ' jl-hist-sm' : '') + '" data-act="open" data-id="' + esc(r.id) + '">' +
       '<div class="jl-hist-main">' +
@@ -1067,7 +1073,7 @@
   function tabMoney(r) {
     var t = r.totals;
     var h = '';
-    h += '<div class="jl-money-top"><span>合计</span><b>¥' + money(t.amount) + '</b>' +
+    h += '<div class="jl-money-top"><span>合计</span><b>' + amtLabel(t.amount, t.unknownAmount) + '</b>' +
       (t.unknownAmount ? '<i>' + t.unknownAmount + ' 单还没定价，没算进来</i>' : '') + '</div>';
 
     h += '<table class="jl-tb"><thead><tr><th>商品</th><th>数量</th><th>单价</th><th>小计</th></tr></thead><tbody>';
@@ -1078,7 +1084,8 @@
         '" value="' + (it.unit == null ? '' : it.unit) + '" placeholder="填"></td>' +
         '<td>' + (it.unit == null ? '<em class="jl-warn">—</em>' : '¥' + money(it.amount)) + '</td></tr>';
     }
-    h += '</tbody><tfoot><tr><td>合计</td><td>' + t.cups + '</td><td></td><td>¥' + money(t.amount) + '</td></tr></tfoot></table>';
+    h += '</tbody><tfoot><tr><td>合计</td><td>' + t.cups + '</td><td></td><td>' +
+      amtLabel(t.amount, t.unknownAmount) + '</td></tr></tfoot></table>';
 
     h += '<p class="jl-hint">单价填一次就存在本机，下一单同样的商品自动带出来。</p>';
 
@@ -1178,9 +1185,7 @@
     var title = '接龙', sub = '', back = V.view !== 'home';
     if (V.view === 'detail' && V.record) {
       title = mdLabel(V.record.date);
-      sub = V.record.totals.orders + ' 单 · ' +
-        ((V.record.totals.unknownAmount && V.record.totals.amount === 0)
-          ? '待定价' : '¥' + money(V.record.totals.amount));
+      sub = V.record.totals.orders + ' 单 · ' + amtLabel(V.record.totals.amount, V.record.totals.unknownAmount);
     } else if (V.view === 'history') {
       title = '接龙记录';
       sub = listRecords().length + ' 单';
