@@ -30,6 +30,16 @@
 
   var ITEM_SORTED = ITEM_WORDS.slice().sort(function (a, b) { return b.length - a.length; });
 
+  /* 词表永远补不全（「三鲜包」「粉丝包」「萝卜丝包」…）。
+   * 所以再加一层「后缀扩展」：以这些字结尾的中文串基本一定是吃的，
+   * 从尾字往左吞并，遇到数量词、标点、数字就停，取最长的那一段。
+   * 这样不管同学写什么包子，只要带「包」就不会整行丢掉。 */
+  var TAIL_CHARS = '包子馒饺饼粥浆脑条糕团卷饭面粉汤肠挞司堡';
+  var TAIL_STOP = '的个份杯瓶碗根只盒袋笼屉张块颗串支片斤半要和与跟给帮是加来我他她您你这那有请把从到吃';
+  var TAIL_BAD = ['面包', '打包', '红包', '书包', '背包', '钱包', '包裹', '包括', '包好', '包起来', '包子铺', '包邮',
+    '早饭', '早餐', '午饭', '午餐', '晚饭', '晚餐', '夜宵', '宵夜', '加餐', '送餐', '订餐', '点餐', '用餐', '吃饭', '做饭'];
+  var TAIL_MAX = 5;   // 最多向前吞 5 个字：「香菇青菜包」正好 5
+
   var DEFAULT_CAP = 16;      // 每个泡沫箱默认装多少件
   var MAX_BOXES = 3;         // 最多三个箱子
   var PRICE_KEY = 'bamboo.v11.jielong.price';
@@ -109,10 +119,12 @@
     return out;
   }
 
-  /* 楼栋：三档优先级
-   * ① 带「栋/幢/号楼/座/#」——最可信，且允许「A 栋」中间有空格
-   * ② 字母+数字但没写「栋」——G1 / G2-. / g1姗（宿舍楼常见写法）
-   * ③ 行首单个字母 + 逗号——「a，😴，一杯…」，只认 A–H，避免把名字首字母当楼栋
+  /* 楼栋：四档优先级
+   * ① 带「栋/幢/号楼/座/#」——最可信，允许「A 栋」空格、也允许房号前带 - ， 、
+   * ② 字母+数字但没写「栋」——G1 / G2-. / g1姗 / G-1（宿舍楼常见写法）
+   * ③ 数字-房号——5-402 / 3－301
+   * ④ 行首或名字后的单个大写字母——「a，😴，一杯…」「张三 A 一个肉包」
+   *    小写单字母不认：那是昵称（「h 一个白水蛋」）
    */
   function findBuilding(text) {
     var best = null, m;
@@ -125,15 +137,20 @@
       }
     }
 
-    var re1 = /([0-9]{1,3}|[一二三四五六七八九十]{1,3}|[A-Za-z][0-9]{0,2})\s*(号楼|栋|幢|座|#)\s*(?:[0-9]\s*单元)?\s*([0-9]{3,4})?/g;
+    // ① 「A栋」「3 号楼」「G2栋」；房号可跟 - ， 、 或空格（E栋-301 / 6栋，402 / 5栋 302）
+    var re1 = /([0-9]{1,3}|[一二三四五六七八九十]{1,3}|[A-Za-z][0-9]{0,2})\s*(号楼|栋|幢|座|#)\s*(?:[-－—，,、]\s*)?(?:[0-9]\s*单元\s*)?([0-9]{3,4})?(?![0-9])/g;
     while ((m = re1.exec(text)) !== null) {
       better({ raw: m[0], token: m[1], room: m[3] || '', start: m.index, end: m.index + m[0].length }, 0);
     }
 
-    var re2 = /(?:^|[\s，,、；;：:])([A-Za-z][0-9]{1,2})\s*[-－.]?\s*([0-9]{3,4})?/g;
+    // ② 「G1」「G-1」「g2-」，以及「A201」= A 栋 201
+    var re2 = /(?:^|[\s，,、；;：:])([A-Ha-h])\s*([-－])?\s*([0-9]{1,3})(?![0-9])\s*[-－.]?\s*([0-9]{3,4})?/g;
     while ((m = re2.exec(text)) !== null) {
       var cut = m[0].length - m[0].replace(/^[\s，,、；;：:]/, '').length;
-      better({ raw: m[0], token: m[1], room: m[2] || '', start: m.index + cut, end: m.index + m[0].length }, 1);
+      var dg = m[3];
+      var token = dg.length >= 3 ? m[1] : m[1] + dg;      // A201 → A栋+201，G1 → G1栋
+      var room = dg.length >= 3 ? dg : (m[4] || '');
+      better({ raw: m[0], token: token, room: room, start: m.index + cut, end: m.index + m[0].length }, 1);
     }
 
     // ③ 楼栋-房号：5-402 / 3－301（不要碰 G2-. 这种，后面不是 3~4 位数字就不算）
@@ -143,10 +160,22 @@
       better({ raw: m[0], token: m[1], room: m[2], start: m.index + cut3, end: m.index + m[0].length }, 1);
     }
 
-    var m3 = text.match(/^\s*([A-Ha-h])\s*[，,、.。\s]/);
+    // ④ 行首单字母 + 逗号：「a，😴，一杯…」
+    //    只认逗号，不认空格——「h 一个白水蛋」里的 h 是名字
+    var m3 = text.match(/^\s*([A-Ha-h])\s*[，,、]/);
     if (m3) {
       var st = m3.index + m3[0].indexOf(m3[1]);
       better({ raw: m3[0], token: m3[1], room: '', start: st, end: st + 1 }, 2);
+    }
+
+    // ⑤ 名字后面的孤立大写字母：「张三 A 一个肉包」。小写不认（「h」是昵称）
+    var re5 = /(?:^|[\s，,、；;：:])([A-H])(?=[\s，,、；;：:.]|$)/g;
+    while ((m = re5.exec(text)) !== null) {
+      var cut5 = m[0].length - m[0].replace(/^[\s，,、；;：:]/, '').length;
+      var at = m.index + cut5;
+      // 前面 8 个字里得有人名（中文），否则「A 一个肉包」这种就是楼栋写在行首，交给 ④
+      if (!/[\u4e00-\u9fa5]/.test(text.slice(Math.max(0, at - 8), at))) continue;
+      better({ raw: m[0], token: m[1], room: '', start: at, end: at + 1 }, 2);
     }
 
     if (!best) return null;
@@ -184,6 +213,59 @@
     return null;
   }
 
+  /* 后缀扩展：找出「…包 / …馒头 / …饼 / …粥 / …脑」这类词
+   * 例：「三鲜包」「粉丝包」「萝卜丝包」「玉米馒头」「南瓜饼」「鸡蛋灌饼」「豆腐脑」
+   */
+  function tailHits(s) {
+    var out = [];
+    for (var j = 0; j < s.length; j++) {
+      if (TAIL_CHARS.indexOf(s.charAt(j)) < 0) continue;
+      var end = j + 1;
+      if (s.charAt(j) === '包' && s.charAt(j + 1) === '子') end = j + 2;   // 菜包子
+      if (s.charAt(j) === '馒' && s.charAt(j + 1) === '头') end = j + 2;   // 玉米馒头
+      var start = j, steps = 0;
+      while (start > 0 && steps < TAIL_MAX) {
+        var ch = s.charAt(start - 1);
+        if (!/[\u4e00-\u9fa5]/.test(ch)) break;            // 数字、字母、空格、标点一律停
+        if (TAIL_STOP.indexOf(ch) > -1) break;             // 「一个」「的」「要」都是边界
+        start--; steps++;
+      }
+      if (j + 1 - start < 2) continue;                     // 光一个「包」不算商品
+      var word = s.slice(start, end);
+      if (TAIL_BAD.indexOf(word) > -1) continue;
+      out.push({ name: word, start: start, end: end });
+    }
+    return out;
+  }
+
+  /* 词表 + 后缀扩展合并：长的优先，重叠的丢短的 */
+  function collectHits(s) {
+    var all = [];
+    for (var w = 0; w < ITEM_WORDS.length; w++) {
+      var word = ITEM_WORDS[w], from = 0, idx;
+      while ((idx = s.indexOf(word, from)) > -1) {
+        all.push({ name: word, start: idx, end: idx + word.length });
+        from = idx + word.length;
+      }
+    }
+    all = all.concat(tailHits(s));
+    all.sort(function (a, b) {
+      var la = a.end - a.start, lb = b.end - b.start;
+      if (lb !== la) return lb - la;                         // 越长越可信
+      return a.start - b.start;
+    });
+    var hits = [];
+    for (var i = 0; i < all.length; i++) {
+      var h = all[i], clash = false;
+      for (var c = 0; c < hits.length; c++) {
+        if (h.start < hits[c].end && h.end > hits[c].start) { clash = true; break; }
+      }
+      if (!clash) hits.push(h);
+    }
+    hits.sort(function (a, b) { return a.start - b.start; });
+    return hits;
+  }
+
   /* 把一段拆成「商品 + 数量 + 这一段的钱」
    * 钱的三种写法都收：3 元 / 3块 / ￥3；以及贴着商品的裸数字「红薯2」
    */
@@ -194,20 +276,7 @@
       return blank(m.length);
     });
 
-    var hits = [];
-    for (var w = 0; w < ITEM_SORTED.length; w++) {
-      var word = ITEM_SORTED[w];
-      var from = 0, idx;
-      while ((idx = s.indexOf(word, from)) > -1) {
-        var end = idx + word.length, clash = false;
-        for (var c = 0; c < hits.length; c++) {
-          if (idx < hits[c].end && end > hits[c].start) { clash = true; break; }
-        }
-        if (!clash) hits.push({ name: word, start: idx, end: end });
-        from = end;
-      }
-    }
-    hits.sort(function (a, b) { return a.start - b.start; });
+    var hits = collectHits(s);
 
     var used = [];
     var items = [];
@@ -328,7 +397,15 @@
 
     var b = findBuilding(text);
     var work = text;
-    if (b) work = text.slice(0, b.start) + ' ' + text.slice(b.end);
+    if (b) {
+      work = text.slice(0, b.start) + ' ' + text.slice(b.end);
+      // 房号没被楼栋整段吃掉的（「E栋-301」老写法、「6栋，402」），单独再剥一次，
+      // 否则 301 会被当成单价，一单肉包变成 ¥301
+      if (b.room) {
+        var reRoomStr = '(?:^|[\\s，,、；;：:\\-－—])' + b.room + '(?![0-9])';
+        work = work.replace(new RegExp(reRoomStr), ' ');
+      }
+    }
 
     var note = findNote(work);
 
@@ -412,11 +489,13 @@
     var skipped = [];
     for (var i = 0; i < lines.length; i++) {
       var line = lines[i];
+      // 日期行最容易装成订单：「11.10 早饭接龙」会被读成第 11 单、金额 10 元
+      var looksDate = /^\s*[0-9]{1,2}\s*[.\-\/月]\s*[0-9]{1,2}\s*日?(?![0-9])/.test(line) &&
+        !findBuilding(line) && !segHasItems(line);
       // 纯标题行（没有序号、没有楼栋、没有商品）跳过
       var looksTitle = !/^\s*[0-9]{1,3}\s*[.、．)）:：]/.test(line) &&
         !findBuilding(line) && !segHasItems(line);
-      if (looksTitle && orders.length === 0) { skipped.push(line); continue; }
-      if (looksTitle && orders.length > 0) { skipped.push(line); continue; }
+      if (looksDate || looksTitle) { skipped.push(line); continue; }
       var o = parseLine(line, orders.length);
       // 完全没有有效信息的行不要
       if (!o.building && !o.name && !o.items.length) { skipped.push(line); continue; }
@@ -1041,15 +1120,62 @@
       });
     }
     if (!out.length) return { ok: false, error: '一条订单都没识别出来' };
-    var rec = finalize({
+    var rawRec = {
       date: opts.date || todayStr(),
       title: trim(obj.title) || '',
       orders: out,
       source: 'ai',
       conf: 0.9
-    }, opts);
+    };
+    // AI 也会漏：不认识的包子它干脆不提。本地已经认得「…包」了，补回来
+    if (opts.sourceText) {
+      try { rescueItems(rawRec, opts.sourceText); } catch (e) { }
+    }
+    var rec = finalize(rawRec, opts);
     if (obj.boxes && Array.isArray(obj.boxes)) rec.boxAi = obj.boxes;
     return { ok: true, record: rec };
+  }
+
+  /* AI 漏商品兜底：只补「AI 完全没有这一样」，不跟 AI 争件数和价钱。
+   * 因为「少一件没送到」比「多算一件」严重得多。
+   */
+  function rescueItems(record, text) {
+    var local;
+    try { local = parseText(text, { date: record.date }); } catch (e) { return; }
+    if (!local || !local.orders || !local.orders.length) return;
+
+    var added = 0;
+    for (var i = 0; i < record.orders.length; i++) {
+      var o = record.orders[i];
+      // 先按序号找，序号丢了再按名字找
+      var l = null, k;
+      for (k = 0; k < local.orders.length; k++) {
+        if (local.orders[k].no === o.no) { l = local.orders[k]; break; }
+      }
+      if (!l && o.name) {
+        for (k = 0; k < local.orders.length; k++) {
+          if (local.orders[k].name && local.orders[k].name === o.name) { l = local.orders[k]; break; }
+        }
+      }
+      if (!l || !l.items.length) continue;
+
+      var have = {};
+      for (k = 0; k < o.items.length; k++) have[o.items[k].name] = true;
+
+      for (k = 0; k < l.items.length; k++) {
+        var it = l.items[k];
+        if (!it.name || have[it.name]) continue;
+        if (!(it.qty > 0 && it.qty < 50)) continue;
+        o.items.push({
+          name: it.name, qty: it.qty,
+          unit: it.fromText ? it.unit : null,   // 原文明确写了价的才带上，不猜
+          fromText: !!it.fromText, fromLocal: true
+        });
+        added += it.qty;
+      }
+    }
+    if (added) record.rescued = added;
+    return added;
   }
 
   /* 让 AI 看着这一单排箱：只回「哪几栋放一箱、为什么」，件数本地自己算 */
@@ -1889,7 +2015,10 @@
 
     if (!D || !D.hasAI()) { V.busy = false; V.err = '还没配 AI'; paint(); return; }
     D.askAI(buildPrompt(text, opts.residents), { maxTokens: 4000 }).then(function (out) {
-      var r = parseAiPayload(out, opts);
+      var opts2 = {};
+      for (var kk in opts) if (Object.prototype.hasOwnProperty.call(opts, kk)) opts2[kk] = opts[kk];
+      opts2.sourceText = text;
+      var r = parseAiPayload(out, opts2);
       if (r.ok) { finish(r.record, 'ai'); return; }
       localFallback('AI 没拆好（' + r.error + '），已改用本地规则');
     }).catch(function (e) {
