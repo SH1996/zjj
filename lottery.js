@@ -922,6 +922,776 @@
     };
   }
 
+  /* ---------- 2b. 奖级 / 回放 / 固定奖期望 ---------- */
+  // 只用来回答「万一中了能拿多少」。一、二等奖是浮动的，一律不估算，标「浮动」。
+  // 奖级与金额来自官方规则：双色球六等奖、大乐透九等奖。
+  var PRIZE_FIXED = {
+    ssq: [[6,1,1,null],[6,0,2,null],[5,1,3,3000],[5,0,4,200],[4,1,4,200],
+          [4,0,5,10],[3,1,5,10],[2,1,6,5],[1,1,6,5],[0,1,6,5]],
+    dlt: [[5,2,1,null],[5,1,2,null],[5,0,3,10000],[4,2,4,3000],[4,1,5,300],
+          [3,2,6,200],[4,0,7,100],[3,1,8,15],[2,2,8,15],
+          [3,0,9,5],[1,2,9,5],[2,1,9,5],[0,2,9,5]]
+  };
+  var PRIZE_NAME = {
+    ssq: {1:'一等奖',2:'二等奖',3:'三等奖',4:'四等奖',5:'五等奖',6:'六等奖'},
+    dlt: {1:'一等奖',2:'二等奖',3:'三等奖',4:'四等奖',5:'五等奖',6:'六等奖',7:'七等奖',8:'八等奖',9:'九等奖'}
+  };
+  function prizeOf(gameKey, k, b) {
+    var t = PRIZE_FIXED[gameKey] || [];
+    for (var i = 0; i < t.length; i++) if (t[i][0] === k && t[i][1] === b) return { level: t[i][2], amount: t[i][3] };
+    return null;
+  }
+  function ticketHit(ticket, draw, gameKey) {
+    var g = GAMES[gameKey];
+    return {
+      k: intersectionCount(ticket.main, draw.main),
+      b: intersectionCount(ticket.sub, draw.sub)
+    };
+  }
+  // 单注固定奖期望：对任意合法组合都相同，这是摇奖机定的，不是选号能改的。
+  function singleFixedEV(gameKey) {
+    var g = GAMES[gameKey], ev = 0, k, b, p, pk, pb;
+    for (k = 0; k <= g.mainPick; k++) {
+      pk = hypergeometric(g.mainMax, g.mainPick, g.mainPick, k);
+      for (b = 0; b <= g.subPick; b++) {
+        pb = hypergeometric(g.subMax, g.subPick, g.subPick, b);
+        p = prizeOf(gameKey, k, b);
+        if (p && p.amount != null) ev += pk * pb * p.amount;
+      }
+    }
+    return ev;
+  }
+  // 回放：把一组号码按历史逐期对一遍，算固定奖回收。浮动奖只记次数，不猜金额。
+  function replay(tickets, draws, gameKey) {
+    var spend = 0, fixedWin = 0, floatHits = 0, best = null, rows = [], i, j;
+    for (i = 0; i < draws.length; i++) {
+      var d = draws[i];
+      spend += tickets.length * 2;
+      for (j = 0; j < tickets.length; j++) {
+        var h = ticketHit(tickets[j], d, gameKey);
+        var p = prizeOf(gameKey, h.k, h.b);
+        if (!p) continue;
+        if (p.amount == null) { floatHits++; }
+        else { fixedWin += p.amount; }
+        var row = { issue: d.issue, date: d.date, k: h.k, b: h.b, level: p.level,
+          name: PRIZE_NAME[gameKey][p.level], amount: p.amount };
+        if (!best || (p.level < best.level) ||
+            (p.level === best.level && h.k + h.b > best.k + best.b)) best = row;
+        if (p.level <= 4) rows.push(row);
+      }
+    }
+    return {
+      spend: spend, fixedWin: fixedWin, floatHits: floatHits, best: best,
+      rows: rows.slice(0, 12), periods: draws.length
+    };
+  }
+
+  /* ---------- 2c. 小覆盖核：固定几个胆，其余轮转 ---------- */
+  // 与 wheelDesign 同一套贪心 + 反向删除，但允许每注只从 pool 里取 k 个（k 可小于玩法主区个数）。
+  function coverCore(pool, k, t, m, cap) {
+    pool = uniqueSorted(pool || []);
+    cap = cap || 8000;
+    var v = pool.length;
+    if (v < k) return { ok: false, error: '池子至少要 ' + k + ' 个号' };
+    if (t > v) return { ok: false, error: '目标个数超过池子大小' };
+    if (m > t || m > k) return { ok: false, error: '要中的个数不能超过目标个数' };
+    if (combination(v, t) > cap) return { ok: false, error: '池子太大，算不动（上限 ' + cap + ' 种）' };
+    var cands = enumerateMasks(v, k, cap);
+    var targets = enumerateMasks(v, t, cap);
+    var uncovered = targets.slice(), chosen = [], guard = 0, ci, si;
+    while (uncovered.length && guard++ < 500) {
+      var best = -1, bestCov = -1;
+      for (ci = 0; ci < cands.length; ci++) {
+        var T = cands[ci], cov = 0;
+        for (si = 0; si < uncovered.length; si++) if (popcount(T & uncovered[si]) >= m) cov++;
+        if (cov > bestCov) { bestCov = cov; best = ci; }
+        if (bestCov === uncovered.length) break;
+      }
+      if (best < 0 || bestCov <= 0) break;
+      chosen.push(best);
+      var keep = [];
+      for (si = 0; si < uncovered.length; si++) if (popcount(cands[best] & uncovered[si]) < m) keep.push(uncovered[si]);
+      uncovered = keep;
+    }
+    for (var pass = 0; pass < 3; pass++) {
+      for (var idx = chosen.length - 1; idx >= 0; idx--) {
+        var T2 = cands[chosen[idx]], redundant = true;
+        for (var s2 = 0; s2 < targets.length; s2++) {
+          if (popcount(T2 & targets[s2]) >= m) {
+            var other = false;
+            for (var cj = 0; cj < chosen.length; cj++) {
+              if (cj !== idx && popcount(cands[chosen[cj]] & targets[s2]) >= m) { other = true; break; }
+            }
+            if (!other) { redundant = false; break; }
+          }
+        }
+        if (redundant) chosen.splice(idx, 1);
+      }
+    }
+    var maxPer = 0;
+    for (var x = m; x <= Math.min(t, k); x++) maxPer += combination(k, x) * combination(v - k, t - x);
+    return {
+      ok: chosen.length > 0,
+      tickets: chosen.map(function (i2) { return maskNums(cands[i2], pool); }),
+      count: chosen.length,
+      universe: targets.length,
+      lowerBound: Math.max(1, Math.ceil(targets.length / Math.max(1, maxPer)))
+    };
+  }
+
+  /* ---------- 2d. 冷门采样器 ---------- */
+  // 从指定号池里等概率采样，再按「拥挤度」排序。等概率保证了中奖概率不变；
+  // 排序只决定「挑哪几注」，不改变任何一注出现的概率。
+  function pickColdTickets(pool, subPool, game, count, seed, opts) {
+    opts = opts || {};
+    pool = uniqueSorted(pool || []);
+    subPool = uniqueSorted(subPool || []);
+    var k = game.mainPick, s = game.subPick;
+    if (pool.length < k) return [];
+    var rng = rngFrom(seed + '|cold|' + pool.length + '|' + k);
+    var prevMain = opts.prevMain || null;
+    var rounds = opts.rounds || 420;
+    var seen = {}, scored = [], i, j;
+    for (i = 0; i < rounds; i++) {
+      var main = [], copy = pool.slice();
+      for (j = 0; j < k; j++) {
+        var idx = Math.floor(rng() * copy.length);
+        main.push(copy[idx]); copy.splice(idx, 1);
+      }
+      main.sort(function (a, b) { return a - b; });
+      var sub = [], subCopy = subPool.slice();
+      for (j = 0; j < Math.min(s, subCopy.length); j++) {
+        var si = Math.floor(rng() * subCopy.length);
+        sub.push(subCopy[si]); subCopy.splice(si, 1);
+      }
+      sub.sort(function (a, b) { return a - b; });
+      var key = main.join(',') + '+' + sub.join(',');
+      if (seen[key]) continue;
+      seen[key] = 1;
+      scored.push({ main: main, sub: sub, crowd: crowdProfile(main, sub, game, prevMain) });
+    }
+    scored.sort(function (a, b) { return (a.crowd.heat - b.crowd.heat) || (a.main[0] - b.main[0]); });
+    var out = [], maxOverlap = Math.max(1, k - 2);
+    for (i = 0; i < scored.length && out.length < count; i++) {
+      var c = scored[i], ok = true;
+      for (j = 0; j < out.length; j++) {
+        if (intersectionCount(c.main, out[j].main) > maxOverlap) { ok = false; break; }
+      }
+      if (ok) out.push(c);
+    }
+    for (i = 0; i < scored.length && out.length < count; i++) {
+      if (out.indexOf(scored[i]) === -1) out.push(scored[i]);
+    }
+    return out.slice(0, count);
+  }
+
+  // 连号构造：先钉死一组 runLen 连号，再从剩下的号里挑最冷的补齐。
+  function runTickets(game, count, runLen, seed, prevMain) {
+    var max = game.mainMax, k = game.mainPick, rng = rngFrom(seed + '|run|' + runLen);
+    var cands = [], s, i, j;
+    for (s = 1; s + runLen - 1 <= max; s++) {
+      var base = [];
+      for (i = 0; i < runLen; i++) base.push(s + i);
+      var rest = [];
+      for (i = 1; i <= max; i++) if (base.indexOf(i) === -1) rest.push(i);
+      rest.sort(function (a, b) { return (numPopularity(a) - numPopularity(b)) || (a - b); });
+      var shortlist = rest.slice(0, Math.min(rest.length, Math.max(6, (k - runLen) * 3)));
+      for (var attempt = 0; attempt < 26; attempt++) {
+        var pick = base.slice(), copy = shortlist.slice();
+        for (j = 0; j < k - runLen; j++) {
+          var idx = Math.floor(rng() * copy.length);
+          pick.push(copy[idx]); copy.splice(idx, 1);
+        }
+        pick.sort(function (a, b) { return a - b; });
+        cands.push({ main: pick, sub: [], crowd: crowdProfile(pick, [], game, prevMain) });
+      }
+    }
+    cands.sort(function (a, b) { return (a.crowd.heat - b.crowd.heat) || (a.main[0] - b.main[0]); });
+    var out = [];
+    for (i = 0; i < cands.length && out.length < count; i++) {
+      var c = cands[i], ok = true;
+      for (j = 0; j < out.length; j++) if (intersectionCount(c.main, out[j].main) > k - 2) { ok = false; break; }
+      if (ok) out.push(c);
+    }
+    return out.slice(0, count);
+  }
+
+  // 热号 / 冷号是否延续：用「之前 30 期」的频率，看下一期命中几个。
+  function hotColdPersistence(draws, game, windowSize, topN) {
+    var g = game, w = windowSize || 30, top = topN || 8, rows = [], i, j;
+    for (i = w; i < draws.length; i++) {
+      var train = draws.slice(i, i + w), counts = {};
+      for (j = 0; j < train.length; j++) for (var q = 0; q < train[j].main.length; q++) {
+        counts[train[j].main[q]] = (counts[train[j].main[q]] || 0) + 1;
+      }
+      var nums = [];
+      for (j = 1; j <= g.mainMax; j++) nums.push(j);
+      nums.sort(function (a, b) { return (counts[b] || 0) - (counts[a] || 0) || a - b; });
+      var hot = nums.slice(0, top), cold = nums.slice(-top), target = draws[i - 1].main;
+      rows.push({ hot: intersectionCount(hot, target), cold: intersectionCount(cold, target) });
+    }
+    var n = rows.length || 1;
+    return {
+      periods: rows.length,
+      hotMean: mean(rows.map(function (r) { return r.hot; })),
+      coldMean: mean(rows.map(function (r) { return r.cold; })),
+      expected: top * g.mainPick / g.mainMax,
+      rows: rows
+    };
+  }
+  // 遗漏越久是不是「越该出」：按遗漏分箱，看下一期实际出现率。
+  function gapPersistence(draws, game) {
+    var g = game, lastSeen = {}, bins = [[0, 4], [5, 9], [10, 19], [20, 999]];
+    var stat = bins.map(function () { return { hit: 0, total: 0 }; });
+    var i, j, n;
+    for (i = draws.length - 1; i >= 0; i--) {
+      var d = draws[i];
+      if (i < draws.length - 1) {
+        for (n = 1; n <= g.mainMax; n++) {
+          var gap = lastSeen[n] == null ? 99 : (lastSeen[n] - i - 1);
+          var bi = 0;
+          for (j = 0; j < bins.length; j++) if (gap >= bins[j][0] && gap <= bins[j][1]) { bi = j; break; }
+          stat[bi].total++;
+          if (d.main.indexOf(n) > -1) stat[bi].hit++;
+        }
+      }
+      for (j = 0; j < d.main.length; j++) lastSeen[d.main[j]] = i;
+    }
+    return {
+      baseline: g.mainPick / g.mainMax,
+      bins: bins.map(function (b, k) {
+        return { label: b[1] >= 999 ? b[0] + ' 期以上' : b[0] + '–' + b[1] + ' 期',
+          rate: stat[k].total ? stat[k].hit / stat[k].total : null, total: stat[k].total };
+      })
+    };
+  }
+
+  /* ---------- 2e. 12 种买法的计算内核 ---------- */
+  // 每个函数都返回同一套结构，UI 只负责画。全部只做三件事之一：
+  // 改变分钱人数、改变覆盖与成本、把真相摊开。没有任何一个动中奖概率。
+
+  function playHide(st, opts) {
+    var count = clamp(Number(opts.count) || 5, 1, 8);
+    var g = st.game, tickets = pickColdTickets(st.pool, st.subPool, g, count, st.seed + '|hide', { prevMain: st.prevMain });
+    if (!tickets.length) return { ok: false, error: '号池不够，换个种子重试。' };
+    var scores = tickets.map(function (t) { return t.crowd.score; });
+    return {
+      ok: true, id: 'hide', tickets: tickets, count: tickets.length, cost: tickets.length * 2,
+      headline: '挑出 ' + tickets.length + ' 注，买的人都少',
+      summary: [
+        { k: '平均冷门度', v: Math.round(mean(scores)), sub: '满分 100，越高越没人抢' },
+        { k: '最冷的一注', v: Math.max.apply(null, scores), sub: tickets.length > 1 ? '最挤的一注 ' + Math.min.apply(null, scores) : '只看这一注' },
+        { k: '中奖概率', v: '不变', sub: '每一注仍是 1/' + st.jackpot.toLocaleString('zh-CN') }
+      ],
+      truth: '这 ' + tickets.length + ' 注和随手买的 ' + tickets.length + ' 注，中奖概率完全一样。不一样的只有一件事：万一中了，跟你分钱的人少。'
+    };
+  }
+
+  function playBig(st, opts) {
+    var count = clamp(Number(opts.count) || 3, 1, 5);
+    var g = st.game, from = Math.max(1, g.mainMax - 11), pool = [];
+    for (var n = from; n <= g.mainMax; n++) pool.push(n);
+    var tickets = pickColdTickets(pool, st.subPool, g, count, st.seed + '|big', { prevMain: st.prevMain });
+    var avgPop = 0, i;
+    for (i = 0; i < pool.length; i++) avgPop += numPopularity(pool[i]);
+    avgPop /= pool.length;
+    var allPop = 0;
+    for (i = 1; i <= g.mainMax; i++) allPop += numPopularity(i);
+    allPop /= g.mainMax;
+    return {
+      ok: true, id: 'big', tickets: tickets, count: tickets.length, cost: tickets.length * 2,
+      pool: pool,
+      headline: '只从 ' + pad2(from) + '–' + pad2(g.mainMax) + ' 这 ' + pool.length + ' 个号里挑',
+      summary: [
+        { k: '平均拥挤倍数', v: (avgPop / allPop).toFixed(2) + '×', sub: '全号段平均是 1.00×' },
+        { k: '生日党覆盖', v: '0 个号', sub: '日期最大 31，这段基本没人写' },
+        { k: '中奖概率', v: '不变', sub: '选号范围变窄 ≠ 概率变低' }
+      ],
+      truth: '很多人以为「只买大号，机会就少了」。不会。中奖概率只看你买了几注，不看这注长什么样。号段窄，组合少，可每一注仍然是一个独立的 1/' + st.jackpot.toLocaleString('zh-CN') + '。'
+    };
+  }
+
+  function playRun(st, opts) {
+    var count = clamp(Number(opts.count) || 3, 1, 5);
+    var runLen = clamp(Number(opts.runLen) || 3, 2, 4);
+    var g = st.game;
+    var tickets = runTickets(g, count, runLen, st.seed + '|run' + runLen, st.prevMain);
+    attachSub(tickets, g, autoSubPoolByGame(g));
+    var share = shapeShare(st.analysis, g, function (main) { return maxRun(main) >= runLen; });
+    var hist = st.analysis.draws.filter(function (d) { return maxRun(d.main) >= runLen; }).length;
+    return {
+      ok: true, id: 'run', tickets: tickets, count: tickets.length, cost: tickets.length * 2,
+      headline: '故意买 ' + runLen + ' 连号，越不像中奖号越好',
+      summary: [
+        { k: '这类形状占全部组合', v: (share * 100).toFixed(1) + '%', sub: '理论比例，抽样估计' },
+        { k: '最近 ' + st.analysis.draws.length + ' 期出现过', v: hist + ' 期', sub: (hist / st.analysis.draws.length * 100).toFixed(1) + '%，跟理论比例对得上' },
+        { k: '中奖概率', v: '不变', sub: '连号不更容易中，也不更难中' }
+      ],
+      truth: '「连号不像开奖号」是错觉。摇奖机不看形状，' + runLen + ' 连号和任何一组号码的概率一模一样。它唯一的好处是：愿意买这种形状的人少，中了少分钱。'
+    };
+  }
+
+  function playWheel(st, opts) {
+    var g = st.game, size = clamp(Number(opts.size) || 12, 9, 12);
+    var pair = (opts.guarantee || (g.mainPick >= 6 ? '5-4' : '4-3')).split('-');
+    var t = Number(pair[0]), m = Number(pair[1]);
+    var pool = st.analysis ? autoPoolBySize(st.analysis, size) : st.pool.slice(0, size);
+    var subPool = autoSubPoolByGame(g);
+    var r = wheelDesign({ pool: pool, game: g, t: t, m: m, subPool: subPool, subPick: g.subPick });
+    if (!r.ok) return r;
+    var avgHits = wheelAverageHits(pool, r.tickets, t, m, g);
+    return {
+      ok: true, id: 'wheel', tickets: r.tickets.map(function (x) { return { main: x.main, sub: x.sub }; }),
+      count: r.count, cost: r.count * 2, pool: pool,
+      headline: '用 ' + r.count + ' 注，兜住「池中 ' + t + ' 个」的下限',
+      summary: [
+        { k: '保的是什么', v: '池中 ' + t + ' → 中 ' + m, sub: '前提成立才保' },
+        { k: '前提有多难', v: (r.condProb * 100).toFixed(2) + '%', sub: '开奖号里有 ' + t + ' 个落进这 ' + pool.length + ' 个' },
+        { k: '成本', v: '¥' + r.count * 2, sub: r.count + ' 注 × 2 元' },
+        { k: '真中 t 个时', v: '平均 ' + avgHits.toFixed(1) + ' 注中 ' + m + '+', sub: '不只是「至少一注」' }
+      ],
+      table: {
+        head: ['保证等级', '需要注数', '成本', '前提概率'],
+        rows: wheelLevels(pool, g, subPool).map(function (l) {
+          return [l.label, l.count == null ? '—' : l.count + ' 注', l.count == null ? '—' : '¥' + l.count * 2, (l.cp * 100).toFixed(2) + '%'];
+        }),
+        note: '「要求更严反而更便宜」不是算错：池中个数越接近全中，凑够 m 个越宽松。但前提概率同时更低。先看前提那一列，再看价格。'
+      },
+      truth: '这句保证要连着前提读：只有开奖号里确实有 ' + t + ' 个在你圈的 ' + pool.length + ' 个里，这 ' + r.count + ' 注才保底中 ' + m + ' 个。而这件事只有 ' + (r.condProb * 100).toFixed(2) + '% 的概率发生。它不提高中奖率，只是把「恰好圈中」时的下限抬起来。'
+    };
+  }
+
+  function playDan(st, opts) {
+    var g = st.game, danN = 2, tuoN = 8;
+    var ranked = [];
+    for (var n = 1; n <= g.mainMax; n++) ranked.push(n);
+    ranked.sort(function (a, b) { return (numPopularity(a) - numPopularity(b)) || (a - b); });
+    var dan = ranked.slice(0, danN).sort(function (a, b) { return a - b; });
+    var tuo = ranked.slice(danN, danN + tuoN).sort(function (a, b) { return a - b; });
+    var k2 = g.mainPick - danN;
+    var t = k2 - 1, m = k2 - 1;
+    var core = coverCore(tuo, k2, t, m, 4000);
+    if (!core.ok) return { ok: false, error: core.error || '这组胆拖没能缩出覆盖' };
+    var tickets = core.tickets.map(function (x) {
+      return { main: uniqueSorted(dan.concat(x)), sub: [] };
+    });
+    var full = combination(tuoN, k2);
+    attachSub(tickets, g, autoSubPoolByGame(g));
+    var pFull = danProb(g, danN, tuoN, t) ;
+    return {
+      ok: true, id: 'dan', tickets: tickets, count: tickets.length, cost: tickets.length * 2,
+      dan: dan, tuo: tuo, mark: dan, layout: 'list', headline: '锁 ' + dan.map(pad2).join(' ') + ' 两个胆，' + tuoN + ' 个拖码轮着配',
+      summary: [
+        { k: '胆码（必须全中）', v: dan.map(pad2).join(' '), sub: '拖码 ' + tuo.map(pad2).join(' ') },
+        { k: '缩水后', v: tickets.length + ' 注', sub: '全胆拖 ' + full + ' 注 → 省 ' + Math.round((1 - tickets.length / full) * 100) + '%' },
+        { k: '保的是什么', v: '拖中 ' + t + ' → 中 ' + (t + danN), sub: '胆必须全中' },
+        { k: '前提概率', v: (pFull * 100).toFixed(3) + '%', sub: '胆全中且拖中 ' + t + ' 个' }
+      ],
+      truth: '这是唯一一种真能省钱的玩法：同样的保底下限，' + full + ' 注缩成 ' + tickets.length + ' 注。代价是前提变窄了——' + danN + ' 个胆必须全中，少一个，整套票就废了。'
+    };
+  }
+
+  function playBlue(st, opts) {
+    var g = st.game, n = 0, tickets = [], i, j;
+    if (st.key === 'ssq') {
+      var red = coldestN(st, 6);
+      for (i = 1; i <= 16; i++) tickets.push({ main: red.slice(), sub: [i] });
+    } else {
+      var front = coldestN(st, 5);
+      for (i = 1; i <= 12; i++) for (j = i + 1; j <= 12; j++) tickets.push({ main: front.slice(), sub: [i, j] });
+    }
+    n = tickets.length;
+    var ev = singleFixedEV(st.key) * n;
+    var rate = ev / (n * 2) * 100;
+    return {
+      ok: true, id: 'blue', tickets: tickets, count: n, cost: n * 2,
+      headline: st.key === 'ssq' ? '蓝球 16 个全包，必中 5 元' : '后区 66 种组合全包，必中 5 元',
+      summary: [
+        { k: '成本', v: '¥' + n * 2, sub: n + ' 注 × 2 元' },
+        { k: '最差结果', v: '中 5 元', sub: '开奖号再离谱也跑不掉' },
+        { k: '固定奖期望', v: '¥' + ev.toFixed(2), sub: '返还率 ' + rate.toFixed(0) + '%，一二等奖不计' }
+      ],
+      table: {
+        head: ['项目', '金额'],
+        rows: [
+          ['投入', '−' + n * 2 + ' 元'],
+          ['固定奖期望回收', '+' + ev.toFixed(2) + ' 元'],
+          ['净期望', (ev - n * 2).toFixed(2) + ' 元'],
+          ['返还率', rate.toFixed(1) + '%']
+        ],
+        note: '这是数学，不是运气：把中奖概率买成 100%，代价是每一元只换回约 ' + rate.toFixed(0) + ' 分。一等奖、二等奖是浮动的，没算进去，但它们出现的概率是 1/' + st.jackpot.toLocaleString('zh-CN') + '。'
+      },
+      truth: '它确实做到了「百分百中奖」。可「必中」和「划算」是两件事：花 ' + n * 2 + ' 元，最差回 5 元。这一格存在的意义，就是把这句话拍在桌上。'
+    };
+  }
+
+  function playTwo(st) {
+    var t = pickColdTickets(st.pool, st.subPool, st.game, 1, st.seed + '|two', { prevMain: st.prevMain });
+    if (!t.length) return { ok: false, error: '没挑出号码，换个种子。' };
+    return {
+      ok: true, id: 'two', tickets: t, count: 1, cost: 2,
+      headline: '就这一注，买完拉倒',
+      summary: [
+        { k: '花多少', v: '¥2', sub: '一注，不加倍' },
+        { k: '中头奖概率', v: '1/' + st.jackpot.toLocaleString('zh-CN'), sub: '和任何一注一样' },
+        { k: '冷门度', v: t[0].crowd.score, sub: t[0].crowd.level },
+        { k: '长期期望', v: '约 −1 元', sub: '返奖率约 50%，买得越多越接近' }
+      ],
+      truth: '两块钱买的不是机会变大，是「这一期我也在场」。真想省钱，这一格就是终点：一注，不加倍，不追。'
+    };
+  }
+
+  function playBudget(st, opts) {
+    var budget = clamp(Number(opts.budget) || 20, 2, 100);
+    var count = Math.floor(budget / 2);
+    var tickets = pickColdTickets(st.pool, st.subPool, st.game, count, st.seed + '|budget' + budget, { prevMain: st.prevMain });
+    var cost = tickets.length * 2;
+    var avg = mean(tickets.map(function (t) { return t.crowd.score; }));
+    return {
+      ok: true, id: 'budget', tickets: tickets, count: tickets.length, cost: cost, budget: budget,
+      headline: '预算 ¥' + budget + '，配 ' + tickets.length + ' 注',
+      summary: [
+        { k: '花掉', v: '¥' + cost, sub: '预算 ¥' + budget + '，剩 ¥' + (budget - cost) },
+        { k: '平均冷门度', v: Math.round(avg), sub: '预算内尽量挑没人抢的' },
+        { k: '中奖概率', v: '1/' + Math.round(st.jackpot / tickets.length).toLocaleString('zh-CN'), sub: '随注数线性变，不随选号变' }
+      ],
+      truth: '预算固定时，唯一能优化的是「这 ' + tickets.length + ' 注有多冷」，不是「有多容易中」。注数定了，中奖概率就定了。'
+    };
+  }
+
+  function playCompound(st, opts) {
+    var g = st.game, spec = opts.spec || (st.key === 'ssq' ? '7' : '6-2');
+    var tickets = [], mainN, subN;
+    if (st.key === 'ssq') {
+      mainN = clamp(Number(spec) || 7, 7, 8);
+      subN = 1;
+      var reds = coldestN(st, mainN);
+      var blue = st.subPool[0];
+      kSubsets(reds, 6).forEach(function (c) { tickets.push({ main: c, sub: [blue] }); });
+    } else {
+      var parts = String(spec).indexOf('-') > -1 ? String(spec).split('-') : ['6', '2'];
+      mainN = clamp(Number(parts[0]) || 6, 6, 7);
+      subN = clamp(Number(parts[1]) || 2, 2, 3);
+      var fronts = coldestN(st, mainN), backs = coldestSub(st, subN);
+      kSubsets(fronts, 5).forEach(function (f) {
+        kSubsets(backs, 2).forEach(function (b) { tickets.push({ main: f, sub: b }); });
+      });
+    }
+    var cost = tickets.length * 2;
+    var table = st.key === 'ssq' ? compoundTable(st, mainN) : dltCompoundTable(st, mainN, subN);
+    return {
+      ok: true, id: 'compound', tickets: tickets, count: tickets.length, cost: cost, layout: 'list',
+      headline: '一张票，' + tickets.length + ' 注',
+      summary: [
+        { k: '票面号码', v: mainN + ' + ' + subN, sub: '打一张，出 ' + tickets.length + ' 注' },
+        { k: '花多少', v: '¥' + cost, sub: '单注还是 2 元，一分没省' },
+        { k: '中奖概率', v: '1/' + Math.round(st.jackpot / tickets.length).toLocaleString('zh-CN'), sub: '正好是单注的 ' + tickets.length + ' 倍' }
+      ],
+      table: table,
+      truth: '复式不是「更聪明地买」，是「一次买 ' + tickets.length + ' 注」。概率随注数线性涨，钱也线性涨，每块钱的效率一点没变。它省的是手，不是钱。'
+    };
+  }
+
+  function playBacktest(st, opts) {
+    var lines = 3, bt = backtestAll(st.draws, st.key, { windowSize: 60, testCount: 40, lines: lines });
+    if (bt.insufficient) return { ok: false, error: '数据不够做回测（至少 ' + bt.required + ' 期）。' };
+    var cold = bt.cold, uni = bt.uniform;
+    var diffs = bt.rows.map(function (r) { return r.cold.main - r.uniform.main; });
+    var p = signFlipP(diffs, 3000, rngFrom('cold-bt-' + bt.rows.length));
+    var ci = describeDiffs(diffs, '冷门—随机');
+    var text;
+    if (p < 0.05 && mean(diffs) > 0) text = '冷门策略在这 ' + bt.rows.length + ' 期里命中数高于随机，p=' + p.toFixed(3) + '。但样本只有 ' + bt.rows.length + ' 期，仍可能是运气。';
+    else if (p < 0.05) text = '冷门策略命中数低于随机，p=' + p.toFixed(3) + '。这更正常——本来就是一样的概率，谁高谁低都是抽签。';
+    else text = '冷门策略和纯随机的命中数没有可区分的差别（p=' + p.toFixed(3) + '）。这是数学上应该出现的结果：选号改变不了摇奖机。';
+    return {
+      ok: true, id: 'backtest', tickets: [], count: 0, cost: 0,
+      headline: '过去 ' + bt.rows.length + ' 期，冷门 vs 机选',
+      summary: [
+        { k: '冷门策略', v: cold.main.toFixed(3), sub: '每注平均中 ' + st.game.mainName + '个数' },
+        { k: '纯随机', v: uni.main.toFixed(3), sub: '同一套回测，只换选号方式' },
+        { k: '差值', v: (mean(diffs) >= 0 ? '+' : '') + mean(diffs).toFixed(3), sub: '95% 区间 [' + ci.ci[0].toFixed(3) + ', ' + ci.ci[1].toFixed(3) + ']' },
+        { k: '置换检验', v: 'p = ' + p.toFixed(3), sub: p < 0.05 ? '显著，但样本小' : '不显著，符合预期' }
+      ],
+      table: {
+        head: ['指标', '冷门策略', '统计画像', '纯随机'],
+        rows: [
+          [st.game.mainName + '平均命中', cold.main.toFixed(3), bt.statistical.main.toFixed(3), uni.main.toFixed(3)],
+          [st.game.subName + '平均命中', cold.sub.toFixed(3), bt.statistical.sub.toFixed(3), uni.sub.toFixed(3)],
+          ['每注 ≥2 个' + st.game.mainName, (cold.atLeast2 * 100).toFixed(1) + '%', (bt.statistical.atLeast2 * 100).toFixed(1) + '%', (uni.atLeast2 * 100).toFixed(1) + '%'],
+          ['每注 ≥3 个' + st.game.mainName, (cold.atLeast3 * 100).toFixed(1) + '%', (bt.statistical.atLeast3 * 100).toFixed(1) + '%', (uni.atLeast3 * 100).toFixed(1) + '%']
+        ],
+        note: '每一期都只用它之前的数据，绝不给模型看答案。'
+      },
+      truth: text + ' 冷门策略真正改变的不是「中不中」，是「中了跟几个人分」——而奖金数据我们手上没有，所以只能讲到这。'
+    };
+  }
+
+  function playCheckup(st, opts) {
+    var a = st.analysis, bias = biasAudit(a);
+    var hc = hotColdPersistence(st.draws, st.game, 30, 8);
+    var gp = gapPersistence(st.draws, st.game);
+    var text = bias.flagged.length
+      ? '有 ' + bias.flagged.length + ' 个号在校正后仍偏离，但样本只有 ' + a.draws.length + ' 期，先当噪声。'
+      : '校正后没有任何号码显著偏离，摇奖机没露出偏心。';
+    return {
+      ok: true, id: 'checkup', tickets: [], count: 0, cost: 0,
+      headline: '33 个号，历史上出得匀不匀',
+      summary: [
+        { k: '样本', v: a.draws.length + ' 期', sub: st.game.mainMax + ' 个号 · χ²=' + a.main.chi2.toFixed(2) },
+        { k: '校正后显著', v: bias.flagged.length + ' 个', sub: bias.flagged.length ? '先当噪声' : '一个都没有' },
+        { k: '热号延续', v: hc.hotMean.toFixed(2), sub: '期望 ' + hc.expected.toFixed(2) + '，差 ' + (hc.hotMean - hc.expected).toFixed(2) },
+        { k: '漏久必出？', v: gp.bins[3].rate == null ? '—' : (gp.bins[3].rate * 100).toFixed(1) + '%', sub: '基线 ' + (gp.baseline * 100).toFixed(1) + '%' }
+      ],
+      table: {
+        head: ['检验', '结果', '该是多少', '结论'],
+        rows: [
+          ['热号（前 8）下一期命中', hc.hotMean.toFixed(2), hc.expected.toFixed(2), Math.abs(hc.hotMean - hc.expected) < 0.35 ? '没有延续性' : '偏差在抽样波动内'],
+          ['冷号（后 8）下一期命中', hc.coldMean.toFixed(2), hc.expected.toFixed(2), Math.abs(hc.coldMean - hc.expected) < 0.35 ? '没有补偿性' : '偏差在抽样波动内']
+        ].concat(gp.bins.map(function (b) {
+          return ['遗漏 ' + b.label, b.rate == null ? '—' : (b.rate * 100).toFixed(1) + '%', (gp.baseline * 100).toFixed(1) + '%',
+            b.rate == null ? '样本不足' : (Math.abs(b.rate - gp.baseline) < 0.05 ? '跟新号没区别' : '偏差在抽样波动内')];
+        })),
+        note: '「漏久了该出」是错觉：每个球每一期都是独立重抽，它不记得自己多久没出来。上面的百分比越接近基线 ' + (gp.baseline * 100).toFixed(1) + '%，越说明这一点。'
+      },
+      truth: text + ' 体检能告诉你的只有一件事：这台机器目前没毛病。它不能告诉你下一期出什么。'
+    };
+  }
+
+  function playHold(st, opts) {
+    var t = pickColdTickets(st.pool, st.subPool, st.game, 1, 'hold-' + (opts.holdSeed || '001'), { prevMain: null });
+    if (!t.length) return { ok: false, error: '没生成守号。' };
+    var rp = replay(t, st.draws, st.key);
+    var band = randomReplayBand(st.draws, st.game, 200, 'hold-band-' + st.key);
+    var net = rp.fixedWin - rp.spend;
+    var rank = band.wins.filter(function (w) { return w < rp.fixedWin; }).length / band.wins.length;
+    var rankTxt = rank < 0.2 ? '比大多数随机结果低——这是这一注运气差，不是守号的问题。'
+      : (rank > 0.8 ? '比大多数随机结果高——同样只是运气，不是守号的本事。'
+      : '落在随机结果的正中间，说明守号和每期乱换没有区别。');
+    return {
+      ok: true, id: 'hold', tickets: t, count: 1, cost: 2,
+      headline: '每期都买这一组，守 ' + st.draws.length + ' 期',
+      summary: [
+        { k: '总投入', v: '¥' + rp.spend, sub: st.draws.length + ' 期 × 2 元' },
+        { k: '固定奖回收', v: '¥' + rp.fixedWin, sub: '浮动奖 ' + rp.floatHits + ' 次，不估金额' },
+        { k: '账面', v: (net >= 0 ? '+' : '') + '¥' + net, sub: net >= 0 ? '这组运气不错' : '这才是常态' },
+        { k: '最好的一次', v: rp.best ? rp.best.name : '没中过', sub: rp.best ? (rp.best.issue + ' 期 · ' + rp.best.k + '+' + rp.best.b) : '连末等奖都没有' }
+      ],
+      table: rp.rows.length ? {
+        head: ['期号', '命中', '奖级', '金额'],
+        rows: rp.rows.map(function (r) { return [r.issue, r.k + ' + ' + r.b, r.name, r.amount == null ? '浮动' : '¥' + r.amount]; }),
+        note: '只列四等奖以上；五、六等奖等小奖已计入上面的回收总额。'
+      } : null,
+      truth: '同样 ' + st.draws.length + ' 期，如果每期都换一组随机号，200 次模拟的固定奖回收中位数是 ¥' + band.median +
+        '（10%–90% 区间 ¥' + band.p10 + '–¥' + band.p90 + '）。你守的这一注回收 ¥' + rp.fixedWin +
+        '，' + rankTxt + ' 守号的真正好处不是「早晚会中」，是「不用每期纠结」：这一注和任何一注一样，每期都是 1/' + st.jackpot.toLocaleString('zh-CN') + '。'
+    };
+  }
+
+  function attachSub(tickets, g, subPool) {
+    if (!subPool || !subPool.length) return tickets;
+    tickets.forEach(function (tk, i) {
+      if (g.subPick === 1) tk.sub = [subPool[i % subPool.length]];
+      else {
+        var a = subPool[i % subPool.length], b = subPool[(i + 1) % subPool.length];
+        tk.sub = uniqueSorted([a, b]);
+      }
+    });
+    return tickets;
+  }
+  function randomReplayBand(draws, game, trials, seed) {
+    var rng = rngFrom(seed), wins = [], t, i, j;
+    for (t = 0; t < trials; t++) {
+      var win = 0;
+      for (i = 0; i < draws.length; i++) {
+        var pool = [], subPool = [], main = [], sub = [];
+        for (j = 1; j <= game.mainMax; j++) pool.push(j);
+        for (j = 0; j < game.mainPick; j++) { var idx = Math.floor(rng() * pool.length); main.push(pool[idx]); pool.splice(idx, 1); }
+        for (j = 1; j <= game.subMax; j++) subPool.push(j);
+        for (j = 0; j < game.subPick; j++) { var si = Math.floor(rng() * subPool.length); sub.push(subPool[si]); subPool.splice(si, 1); }
+        var pz = prizeOf(game.key, intersectionCount(main, draws[i].main), intersectionCount(sub, draws[i].sub));
+        if (pz && pz.amount != null) win += pz.amount;
+      }
+      wins.push(win);
+    }
+    wins.sort(function (a, b) { return a - b; });
+    return { median: wins[Math.floor(wins.length / 2)], p10: wins[Math.floor(wins.length * 0.1)],
+      p90: wins[Math.floor(wins.length * 0.9)], mean: mean(wins), trials: trials, wins: wins };
+  }
+  function coldestN(st, n) {
+    var arr = [], i;
+    for (i = 1; i <= st.game.mainMax; i++) arr.push(i);
+    arr.sort(function (a, b) { return (numPopularity(a) - numPopularity(b)) || (a - b); });
+    return uniqueSorted(arr.slice(0, n));
+  }
+  function coldestSub(st, n) {
+    var arr = [], i;
+    for (i = 1; i <= st.game.subMax; i++) arr.push(i);
+    arr.sort(function (a, b) { return (numPopularity(a) - numPopularity(b)) || (a - b); });
+    return uniqueSorted(arr.slice(0, n));
+  }
+  function kSubsets(arr, k) {
+    var out = [], cur = [];
+    (function rec(start) {
+      if (cur.length === k) { out.push(cur.slice()); return; }
+      for (var i = start; i < arr.length; i++) { cur.push(arr[i]); rec(i + 1); cur.pop(); }
+    })(0);
+    return out;
+  }
+  function maxRun(main) {
+    var list = main.slice().sort(function (a, b) { return a - b; }), best = 1, cur = 1, i;
+    for (i = 1; i < list.length; i++) {
+      if (list[i] === list[i - 1] + 1) cur++; else cur = 1;
+      if (cur > best) best = cur;
+    }
+    return best;
+  }
+  function shapeShare(analysis, game, pred) {
+    var total = combination(game.mainMax, game.mainPick);
+    if (total <= 40000) {
+      var hits = 0, all = kSubsets((function () { var a = [], i; for (i = 1; i <= game.mainMax; i++) a.push(i); return a; })(), game.mainPick);
+      all.forEach(function (c) { if (pred(c)) hits++; });
+      return hits / all.length;
+    }
+    var rng = rngFrom('share-' + game.key + '-' + game.mainPick), hits2 = 0, n = 20000, i2, j;
+    for (i2 = 0; i2 < n; i2++) {
+      var pool = [], c2 = [];
+      for (j = 1; j <= game.mainMax; j++) pool.push(j);
+      for (j = 0; j < game.mainPick; j++) { var idx = Math.floor(rng() * pool.length); c2.push(pool[idx]); pool.splice(idx, 1); }
+      if (pred(c2)) hits2++;
+    }
+    return hits2 / n;
+  }
+  function autoPoolBySize(analysis, size) {
+    var g = analysis.game, seg = Math.ceil(g.mainMax / 3), pool = [];
+    var bands = [[1, seg], [seg + 1, 2 * seg], [2 * seg + 1, g.mainMax]];
+    var quota = [Math.max(1, Math.round(size * 0.08)), Math.round(size * 0.33), 0];
+    quota[2] = size - quota[0] - quota[1];
+    bands.forEach(function (b, bi) {
+      var list = [], n;
+      for (n = b[0]; n <= b[1]; n++) list.push(n);
+      list.sort(function (x, y) { return (numPopularity(x) - numPopularity(y)) || (x - y); });
+      pool = pool.concat(list.slice(0, quota[bi]));
+    });
+    return uniqueSorted(pool).slice(0, size);
+  }
+  function autoPool(size) {
+    return autoPoolBySize({ game: GAMES[ui.game] || GAMES.ssq }, size);
+  }
+  function autoSubPoolByGame(g) {
+    var list = [], n;
+    for (n = 1; n <= g.subMax; n++) list.push(n);
+    list.sort(function (x, y) { return (numPopularity(x) - numPopularity(y)) || (x - y); });
+    return uniqueSorted(list.slice(0, Math.min(g.subMax, 4)));
+  }
+  function wheelLevels(pool, g, subPool) {
+    var opts = g.mainPick >= 6 ? [[4, 3], [5, 3], [5, 4], [6, 4]] : [[3, 2], [4, 2], [4, 3], [5, 3]];
+    return opts.map(function (o) {
+      var rr = wheelDesign({ pool: pool.slice(), game: g, t: o[0], m: o[1], subPool: subPool, subPick: g.subPick, noSub: true });
+      return {
+        label: '池中 ' + o[0] + ' → 中 ' + o[1],
+        count: rr.ok ? rr.count : null,
+        cp: combination(pool.length, o[0]) * combination(g.mainMax - pool.length, g.mainPick - o[0]) / combination(g.mainMax, g.mainPick)
+      };
+    });
+  }
+  // 给定「池中恰好 t 个」时，平均有几注能中 m 个以上。比「至少一注」更细。
+  function wheelAverageHits(pool, tickets, t, m, g) {
+    var v = pool.length, k = g.mainPick, total = combination(v, t), sum = 0;
+    if (total > 3000) return 0;
+    var masks = enumerateMasks(v, t, 3000), ti;
+    for (ti = 0; ti < masks.length; ti++) {
+      var cover = 0;
+      for (var j = 0; j < tickets.length; j++) {
+        var tm = 0;
+        for (var q = 0; q < tickets[j].main.length; q++) {
+          var pos = pool.indexOf(tickets[j].main[q]);
+          if (pos > -1 && (masks[ti] & (1 << pos))) tm++;
+        }
+        if (tm >= m) cover++;
+      }
+      sum += cover;
+    }
+    return sum / masks.length;
+  }
+  function compoundTable(st, redN) {
+    var rows = [], k;
+    for (k = 4; k <= 6; k++) {
+      rows.push([
+        '开奖红球有 ' + k + ' 个落在你的 ' + redN + ' 个里',
+        String(combination(k, 6) * combination(redN - k, 0)),
+        String(combination(k, 5) * combination(redN - k, 1))
+      ]);
+    }
+    return {
+      head: ['如果……', '中 6 红的注数', '中 5 红的注数'],
+      rows: rows,
+      note: '圈中 6 个红球，这张票必有一注 6+1；圈中 5 个，必有一注 5+1。这就是复式唯一的本事：把「6 选 6」变成「' + redN + ' 选 6」。'
+    };
+  }
+  function dltCompoundTable(st, frontN, backN) {
+    var hit4 = combination(4, 4) * combination(frontN - 4, 1);
+    return {
+      head: ['如果……', '这张票里'],
+      rows: [
+        ['前区 ' + frontN + ' 个里中 5 个', '1 注中 5 前区'],
+        ['后区 ' + backN + ' 个里中 2 个', '1 注中 2 后区'],
+        ['两件同时发生', '1 注一等奖'],
+        ['前区中 4 个 + 后区中 2 个', hit4 + ' 注 4+2（四等奖）']
+      ],
+      note: '前区多圈一个号，等于多买 ' + (frontN - 5) + ' 注；后区选 ' + backN +
+        ' 个，覆盖 C(' + backN + ',2)=' + combination(backN, 2) + ' 种后区组合。整张票 ' +
+        (combination(frontN, 5) * combination(backN, 2)) + ' 注，一分没省。'
+    };
+  }
+  function danProb(g, danN, tuoN, t) {
+    var need = g.mainPick, rest = g.mainMax - danN - tuoN, sum = 0, x;
+    for (x = t; x <= tuoN && (need - danN - x) >= 0 && (need - danN - x) <= rest; x++) {
+      sum += combination(tuoN, x) * combination(rest, need - danN - x);
+    }
+    return sum / combination(g.mainMax, g.mainPick);
+  }
+
+  // 三路回测：冷门 / 统计画像 / 纯随机，同训练集、同注数。
+  function backtestAll(input, gameKey, options) {
+    options = options || {};
+    var all = normalizeDraws(input, gameKey), trainMin = Number(options.trainMin) || 30;
+    var testCount = Number(options.testCount) || 40, lines = Number(options.lines) || 3;
+    if (all.length < trainMin + 5) return { insufficient: true, available: all.length, required: trainMin + 5, rows: [] };
+    var start = Math.min(all.length - trainMin - 1, testCount - 1), rows = [];
+    for (var i = start; i >= 0; i--) {
+      var target = all[i], train = all.slice(i + 1), w = Math.min(Number(options.windowSize) || 60, train.length);
+      var a = analyze(train, gameKey, w);
+      var stat = generateCandidates(train, gameKey, { analysis: a, count: lines, mode: 'statistical', seed: 'bt-stat-' + target.issue });
+      var random = generateCandidates(train, gameKey, { analysis: a, count: lines, mode: 'uniform', seed: 'bt-rand-' + target.issue });
+      var pool = [], n;
+      for (n = 1; n <= a.game.mainMax; n++) pool.push(n);
+      var subPool = [];
+      for (n = 1; n <= a.game.subMax; n++) subPool.push(n);
+      var cold = pickColdTickets(pool, subPool, a.game, lines, 'bt-cold-' + target.issue + '-' + (a.all[0] ? a.all[0].issue : ''), { prevMain: a.all[0] ? a.all[0].main : null, rounds: 160 });
+      function hits(cs) {
+        var mh = 0, sh = 0, ge2 = 0, ge3 = 0;
+        cs.forEach(function (c) {
+          var h = intersectionCount(c.main, target.main);
+          mh += h; sh += intersectionCount(c.sub, target.sub);
+          if (h >= 2) ge2++;
+          if (h >= 3) ge3++;
+        });
+        return { main: mh / cs.length, sub: sh / cs.length, atLeast2: ge2 / cs.length, atLeast3: ge3 / cs.length };
+      }
+      rows.push({ issue: target.issue, date: target.date, cold: hits(cold), statistical: hits(stat), uniform: hits(random) });
+    }
+    var result = { insufficient: false, rows: rows, trainMin: trainMin, lines: lines };
+    ['cold', 'statistical', 'uniform'].forEach(function (k2) {
+      result[k2] = {
+        main: mean(rows.map(function (r) { return r[k2].main; })),
+        sub: mean(rows.map(function (r) { return r[k2].sub; })),
+        atLeast2: mean(rows.map(function (r) { return r[k2].atLeast2; })),
+        atLeast3: mean(rows.map(function (r) { return r[k2].atLeast3; }))
+      };
+    });
+    return result;
+  }
+
   /* ---------- 3. 诚实体检 ---------- */
   // 配对置换检验：不假设正态，直接看「统计方法减随机方法」的差值是否显著偏离 0
   function signFlipP(diffs, reps, rng) {
@@ -1076,7 +1846,8 @@
   // ------------------------------ UI ------------------------------
   var ui={inited:false,openFlag:false,game:'ssq',data:{ssq:[],dlt:[]},analysis:null,candidates:[],bt:null,lastFocus:null,opts:{},tab:'pick',
     cover:{size:12,pool:[],subPool:[],t:5,m:3,result:null},
-    simple:{count:5,seed:'竹间-001',analysis:null,candidates:[],bt:null,runId:0}};
+    simple:{count:5,seed:'竹间-001',analysis:null,candidates:[],bt:null,runId:0},
+    play:{id:null,seed:'',params:{},result:null,tickets:[],prevMain:null}};
   function $(id){return root&&root.document?root.document.getElementById(id):null;}
   function setText(id,text){var e=$(id);if(e)e.textContent=text;}
   function esc(s){return String(s==null?'':s).replace(/[&<>"']/g,function(c){return {'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c];});}
@@ -1154,102 +1925,28 @@
     if(isPending(c))return 'duplicate';
     try{return ui.opts.addPending(pendingItem(c));}catch(e){notify('加入待办失败：'+e.message);return 'error';}
   }
-  function addPendingFromIdx(idx){
-    var c=ui.simple.candidates[idx];if(!c)return;
-    var r=addPending(c);
-    if(r==='duplicate')notify('这注已经在「待办」里了。');
-    else if(r==='ok')notify('已加入「待办」，并设好开奖前一天 20:00 的提醒。');
-    rerenderSimple();
-  }
-  function addAllPending(){
-    var cs=ui.simple.candidates||[];if(!cs.length){notify('先帮我选一组号码吧。');return;}
-    var added=0,dup=0;
-    for(var i=0;i<cs.length;i++){
-      var r=addPending(cs[i]);
-      if(r==='ok')added++;else if(r==='duplicate')dup++;
-    }
-    rerenderSimple();
-    if(added)notify('已把 '+added+' 注加入「待办」，并设好开奖前一天 20:00 的提醒'+(dup?('；另有 '+dup+' 注之前已加过'):'')+';去首页「待办」分类查看。');
-    else notify('这些号码都已经在「待办」里了。');
-  }
-
   function markup() {
     return ''+
     '<div class="lt-shell">'+
-      '<header class="lt-header"><div class="lt-brand"><span class="lt-logo"><svg viewBox="0 0 24 24" width="22" height="22" aria-hidden="true"><circle cx="9.6" cy="12" r="5.7" fill="#ff5f6d"/><circle cx="14.6" cy="12" r="5.7" fill="#4f86ff"/><circle cx="7.6" cy="9.7" r="1.9" fill="#ffffff" opacity=".55"/><circle cx="12.6" cy="9.7" r="1.9" fill="#ffffff" opacity=".55"/></svg></span><div><h2 id="lotteryTitle">数彩助手</h2><p>不猜号码，只挑没人抢的</p></div></div>'+
+      '<header class="lt-header"><div class="lt-brand"><span class="lt-logo"><svg viewBox="0 0 24 24" width="22" height="22" aria-hidden="true"><circle cx="9.6" cy="12" r="5.7" fill="#ff5f6d"/><circle cx="14.6" cy="12" r="5.7" fill="#4f86ff"/><circle cx="7.6" cy="9.7" r="1.9" fill="#ffffff" opacity=".55"/><circle cx="12.6" cy="9.7" r="1.9" fill="#ffffff" opacity=".55"/></svg></span><div><h2 id="lotteryTitle">数彩助手</h2><p>十二种买法，一种真相</p></div></div>'+
       '<div class="lt-header-actions"><button class="lt-icon" id="ltHelp" type="button" aria-label="使用指南" title="使用指南"><svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M9.09 9a3 3 0 0 1 5.83 1c0 2-3 3-3 3"/><circle cx="12" cy="17" r="1" fill="currentColor" stroke="none"/></svg></button><button class="lt-icon" id="ltClose" type="button" aria-label="关闭数彩助手"><svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" aria-hidden="true"><path d="M6 6l12 12M18 6L6 18"/></svg></button></div></header>'+
       '<div class="lt-body">'+
-      '<div class="lt-responsible lt-tiny">娱乐统计，不是中奖承诺：每注中奖概率相同，历史数据不能提高概率。这里能做的只有两件——中了少分钱、圈中兜下限。理性娱乐、量力而行。</div>'+
-      '<section id="ltHelpPanel" class="lt-help" hidden><div class="lt-help-head"><h3>傻瓜式使用指南</h3><button id="ltHelpClose" type="button" aria-label="收起使用指南">收起</button></div>'+
+      '<div class="lt-responsible lt-tiny" id="ltResponsible">娱乐统计，不是中奖承诺：每注中奖概率相同，历史数据不能提高概率。十二种买法只做三件事——中了少分钱、同样的钱覆盖更多、把真相摊开。理性娱乐、量力而行。</div>'+
+      '<section id="ltHelpPanel" class="lt-help" hidden><div class="lt-help-head"><h3>十二宫格怎么用</h3><button id="ltHelpClose" type="button" aria-label="收起使用指南">收起</button></div>'+
       '<ol class="lt-steps">'+
-      '<li><b>选号</b>：点「挑一组不挤的号码」，出来的是最不挤的几注。每注标着冷门度、缘由，还有一段「谁在买这种号」——<b>中奖概率不变</b>，变的是中了以后分钱的人少。</li>'+
-      '<li><b>选彩种</b>：顶部切换「双色球」或「超级大乐透」，两个彩种互不影响。</li>'+
-      '<li><b>覆盖</b>：圈一个号池，算出最少几注能兜住下限。表里写着前提概率——大多数期这个保证轮不到生效，先看那一列。</li>'+
-      '<li><b>体检</b>：逐期回测 + 置换检验 + 号码偏差审计。结论允许是「没优势」，真没有就写没有。</li>'+
-      '<li><b>选几注</b>：点 1 / 3 / 5 / 8 注，再点「换一组」重新出号。</li>'+
-      '<li><b>存起来</b>：看中哪注点「＋ 加入待办」，号码会连同彩种、开奖日一起存进首页「待办」分类，并自动设好<b>开奖前一天 20:00</b> 的提醒；只想拿走号码就点「复制这注」。</li>'+
-      '<li><b>想看门道</b>：点顶部「专业数据」，能看到频率、结构、回测等完整分析。</li>'+
-      '<li><b>更新开奖</b>：在「专业数据」页点「更新数据」，从官网复制最新记录粘贴导入。</li>'+
-      '<li><b>AI 解读</b>：在「专业数据」页点「✨ DeepSeek 解读」，用大白话解释（可选）。</li>'+
+      '<li><b>先选一个格子</b>：十二格按「你最在乎什么」分四组——中了多拿、不漏空、省着买、别被骗。点进去就是那一种买法。</li>'+
+      '<li><b>每格都写清两件事</b>：换到了什么（比如「分钱人少」），换不到什么（永远是「中奖概率」）。没有一格敢写「更容易中」。</li>'+
+      '<li><b>参数很少</b>：多数格子只有「买几注」一个选择，改完点「开始算」。</li>'+
+      '<li><b>每注都有故事</b>：「谁在买这种号」是按常见选号习惯编的画像，不是销量统计，但它能帮你看懂自己站在人堆哪一边。</li>'+
+      '<li><b>选彩种</b>：顶部切换「双色球」或「超级大乐透」，两个彩种互不影响；有些玩法只在某个彩种下成立。</li>'+
+      '<li><b>存起来</b>：点「＋ 全部加入待办」，号码连彩种、开奖日一起进首页「待办」，提醒设在<b>开奖前一天 20:00</b>；只想拿号码就点「复制全部」。</li>'+
+      '<li><b>想看门道</b>：右上角「专业数据」，频率、结构、逐期回测和完整报告都在那里。</li>'+
+      '<li><b>更新开奖</b>：专业数据页点「更新数据」，从官网复制最新记录粘贴导入。</li>'+
       '</ol>'+
-      '<p class="lt-note">重要：这是<b>娱乐数据研究</b>。公平开奖各期独立，历史冷热、遗漏、AI 解读都不能改变中奖概率；任何合法单式组合的中奖概率完全相同。未满 18 岁请勿购彩，不借贷、不追损。</p></section>'+
+      '<p class="lt-note">重要：这是<b>娱乐数据研究</b>。公平开奖各期独立，历史冷热、遗漏都不能改变中奖概率；任何合法单式组合的中奖概率完全相同。未满 18 岁请勿购彩，不借贷、不追损。</p></section>'+
       '<div class="lt-topline"><div class="lt-games" role="tablist" aria-label="彩种"><button id="ltGameSsq" data-game="ssq" role="tab" type="button">双色球</button><button id="ltGameDlt" data-game="dlt" role="tab" type="button">超级大乐透</button></div>'+
       '<div class="lt-top-actions"><a id="ltSourceLink" class="lt-source" target="_blank" rel="noopener noreferrer">官方数据源 ↗</a><button class="lt-mini" id="ltAdvanceToggle" type="button" aria-expanded="false">专业数据 ↗</button></div></div>'+
-      '<div id="ltSimpleView">'+
-        '<div class="lt-modebar" role="tablist" aria-label="工作区">'+
-          '<button type="button" data-ltmode="pick" class="active" role="tab" aria-selected="true">选号</button>'+
-          '<button type="button" data-ltmode="cover" role="tab" aria-selected="false">覆盖</button>'+
-          '<button type="button" data-ltmode="audit" role="tab" aria-selected="false">体检</button>'+
-        '</div>'+
-        '<div id="ltPanePick">'+
-        '<section class="lt-hero">'+
-          '<h3>同样的一等奖概率，挑一注少人买的</h3>'+
-          '<p class="lt-hero-sub">每注中奖概率完全一样，这是摇奖机定的。能动手的是另一件事：避开生日号、连号这些挤成一堆的地方——中了少跟人分钱。每注下面还写着，买这种号的一般是什么人。</p>'+
-          '<div class="lt-count-choice" role="group" aria-label="选择注数">'+
-            '<button type="button" id="ltPick1" data-count="1">1 注</button>'+
-            '<button type="button" id="ltPick3" data-count="3">3 注</button>'+
-            '<button type="button" id="ltPick5" data-count="5" class="active">5 注</button>'+
-            '<button type="button" id="ltPick8" data-count="8">8 注</button>'+
-          '</div>'+
-          '<details class="lt-persona" id="ltPersona"><summary>🎯 可选：星座 / 生肖 / 性别，给号码贴个娱乐标签（不影响概率）</summary>'+
-          '<div class="lt-persona-fields">'+
-          '<label>星座<select id="ltSign"><option value="">不选</option><option>白羊座</option><option>金牛座</option><option>双子座</option><option>巨蟹座</option><option>狮子座</option><option>处女座</option><option>天秤座</option><option>天蝎座</option><option>射手座</option><option>摩羯座</option><option>水瓶座</option><option>双鱼座</option></select></label>'+
-          '<label>生肖<select id="ltZodiac"><option value="">不选</option><option>鼠</option><option>牛</option><option>虎</option><option>兔</option><option>龙</option><option>蛇</option><option>马</option><option>羊</option><option>猴</option><option>鸡</option><option>狗</option><option>猪</option></select></label>'+
-          '<label>性别<select id="ltGender"><option value="">不选</option><option>男</option><option>女</option></select></label>'+
-          '</div><p class="lt-persona-note">只是娱乐标签，用来区分每注的“气质”，不会提高中奖概率。</p></details>'+
-          '<button class="lt-go" id="ltSimpleGo" type="button">挑一组不挤的号码</button>'+
-        '</section>'+
-        '<section id="ltScan" class="lt-scan" hidden><div class="lt-scan-inner"><div class="lt-spin"></div><div id="ltScanText" class="lt-scan-text">正在读取最近开奖数据…</div><div class="lt-scan-dots"><i>·</i><i>·</i><i>·</i></div></div></section>'+
-        '<section id="ltSimpleResult" hidden>'+
-          '<div class="lt-result-head"><div><span class="lt-eyebrow">YOUR PICKS</span><h3 id="ltResultTitle">挑好了，都是偏冷的</h3></div>'+
-          '<div class="lt-result-actions"><button id="ltSimpleCopy" type="button">复制号码</button><button id="ltSimplePendAll" type="button">＋ 全部加入待办</button><button id="ltSimpleReroll" class="lt-ai" type="button">换一组</button></div></div>'+
-          '<div class="lt-plain-note">红球在前、蓝球在后。这几注是按「有多挤」挑的——<b>中奖概率和随手买一注完全一样</b>，不一样的只是万一中了，跟你分钱的人少。每注下面那段「谁在买这种号」，是按常见选号习惯编的画像，不是销量统计。</div>'+
-          '<div id="ltSimpleTickets" class="lt-simple-tickets"></div>'+
-        '</section>'+
-        '<div id="ltStatus" class="lt-status" role="status" aria-live="polite"></div>'+
-        '</div>'+
-        '<div id="ltPaneCover" hidden>'+
-        '<section class="lt-cover">'+
-          '<div class="lt-cover-head"><span class="lt-eyebrow">COVERING DESIGN</span><h3>预算内的覆盖设计</h3>'+
-          '<p>先圈一个号码池（默认按冷门度挑，不是随机圈），再用尽量少的注数把它铺满：<b>只要开奖号里有 t 个落在你的池子里，就保证至少有一注中 m 个。</b>提高的是「条件命中」——池子没圈住，这个保证就不存在，所以下面会一并算给你看池子命中的真实概率。</p></div>'+
-          '<div class="lt-cover-controls">'+
-            '<label>号池大小<select id="ltPoolSize"><option value="9">9 个号</option><option value="10">10 个号</option><option value="11">11 个号</option><option value="12" selected>12 个号</option></select></label>'+
-            '<label>保证等级<select id="ltGuarantee"></select></label>'+
-            '<button class="lt-primary" id="ltWheelGo" type="button">生成覆盖注单</button>'+
-          '</div>'+
-          '<div class="lt-pool-head"><span>点号码可增删 · 已选 <b id="ltPoolCount">12</b> / <span id="ltPoolCap">12</span> 个</span><button class="lt-mini" id="ltPoolAuto" type="button">按冷门度重选</button></div>'+
-          '<div id="ltPoolGrid" class="lt-pool-grid"></div>'+
-          '<div id="ltWheelResult" class="lt-wheel-result"></div>'+
-        '</section>'+
-        '</div>'+
-        '<div id="ltPaneAudit" hidden>'+
-        '<section class="lt-audit">'+
-          '<div class="lt-cover-head"><span class="lt-eyebrow">HONEST CHECKUP</span><h3>这套方法到底有没有用</h3>'+
-          '<p>三件事摊开：逐期回测（每一期只用它之前的数据）、配对置换检验加多重比较校正、号码偏差审计。结论允许是「没有」——真没有的话，这里会直接写没有。</p></div>'+
-          '<div id="ltAuditBody"></div>'+
-        '</section>'+
-        '</div>'+
-      '</div>'+
+      '<div id="ltSimpleView">'+simpleMarkup()+'</div>'+
       '<div id="ltAdvanceView" hidden>'+
       '<section class="lt-data-card"><div><span class="lt-eyebrow">DATA HEALTH</span><h3 id="ltDataTitle"></h3><p id="ltDataMeta"></p></div><div class="lt-data-actions"><button id="ltSync" type="button">更新数据</button><button id="ltImportToggle" type="button">导入 / 粘贴</button></div></section>'+
       '<section id="ltImportPanel" class="lt-import" hidden><h3>导入真实开奖记录</h3><p>支持 JSON 或逐行文本。所有记录会校验期号、日期、号码数量、范围与重复；任何一行不合格都不会写入。</p>'+
@@ -1352,317 +2049,444 @@
 
   // ===== 傻瓜模式 =====
   // 娱乐个性化：五行 / 星座 / 生肖映射（只影响展示与「你的标签」标记，不改号码生成、不改概率）
-  var WX_ORDER=['木','火','土','金','水'];
-  var SIGNS=[['白羊座','火'],['金牛座','土'],['双子座','金'],['巨蟹座','水'],['狮子座','火'],['处女座','土'],['天秤座','金'],['天蝎座','水'],['射手座','火'],['摩羯座','土'],['水瓶座','金'],['双鱼座','水']];
-  var ZODIAC=[['鼠','水'],['牛','土'],['虎','木'],['兔','木'],['龙','土'],['蛇','火'],['马','火'],['羊','土'],['猴','金'],['鸡','金'],['狗','土'],['猪','水']];
-  var WX_TAG={
-    '木':{who:'属虎、属兔', note:'春生 · 有冲劲、爱尝鲜'},
-    '火':{who:'白羊 / 狮子 / 射手', note:'热情、果断'},
-    '土':{who:'金牛 / 处女 / 摩羯', note:'稳重、踏实'},
-    '金':{who:'双子 / 天秤 / 水瓶', note:'理性、干脆'},
-    '水':{who:'巨蟹 / 天蝎 / 双鱼', note:'敏锐、细腻'}
-  };
-  function wuxingOfNumber(n){var t=n%10;if(t===1||t===6)return '水';if(t===2||t===7)return '火';if(t===3||t===8)return '木';if(t===4||t===9)return '金';return '土';}
-  function wuxingOfTicket(c){
-    var cnt={'木':0,'火':0,'土':0,'金':0,'水':0}, total=0, main='土', max=0;
-    c.main.concat(c.sub).forEach(function(n){var w=wuxingOfNumber(n);cnt[w]++;total++;});
-    WX_ORDER.forEach(function(k){if(cnt[k]>max){max=cnt[k];main=k;}});
-    return {main:main,count:max,total:total,cnt:cnt};
+  /* ==================== 傻瓜模式 · 12 种买法 ==================== */
+  // 只放「怎么说人话」和「怎么画」，算号全在 2e 的内核里。
+  // 每一格都必须老实交代：换到了什么、换不到什么。
+  var GROUPS = [
+    { key: 'A', color: '#e2566a', name: '中了多拿', line: '奖金池是固定的，分的人越少，每注拿得越多。' },
+    { key: 'B', color: '#3f7af0', name: '不漏空', line: '先圈一个范围，再用最少的注数兜住下限。' },
+    { key: 'C', color: '#15936e', name: '省着买', line: '先定花多少，再决定买几注——顺序反过来就容易超支。' },
+    { key: 'D', color: '#7c5cd6', name: '别被骗', line: '三个能把话说死的检验。结论允许是「没用」。' }
+  ];
+  var PLAYS = [
+    { id: 'hide', no: '01', g: 'A', name: '躲人堆', cost: '¥2 起',
+      line: '全号段挑最没人买的那几注',
+      changed: '分钱人少', not: '概率不变',
+      kicker: '最省事的一种挑法',
+      title: '同样是一等奖，挑一注没人抢的',
+      why: ['每注中奖概率完全一样，这是摇奖机定的，谁也改不了。',
+            '能改的只有一件事：万一中了，跟你分钱的人有多少。',
+            '所以这里不猜号码，只按「有多挤」从 420 组里挑最不挤的几注。'],
+      params: [{ key: 'count', type: 'seg', label: '买几注', values: [1, 3, 5, 8], def: 5, suffix: ' 注' }] },
+
+    { id: 'big', no: '02', g: 'A', name: '只挑大号', cost: '¥4 起',
+      line: '只买最大的 12 个号，生日党一个都不碰',
+      changed: '独中率高', not: '机会变少',
+      kicker: '把生日党整段让出去',
+      title: '31 以上，是整张票上最空的地方',
+      why: ['日期最大只到 31，32、33 这两个号，很多人一辈子没往票上写过。',
+            '只从最大的 12 个号里挑，等于主动绕开「一家人生日凑六个」的那群人。',
+            '有人担心「范围窄了机会少」——不会。概率只看你买了几注，不看号码长什么样。'],
+      params: [{ key: 'count', type: 'seg', label: '买几注', values: [1, 3, 5], def: 3, suffix: ' 注' }] },
+
+    { id: 'run', no: '03', g: 'A', name: '连号怪', cost: '¥2 起',
+      line: '故意买三连、四连，越不像中奖号越好',
+      changed: '没人抢', not: '概率不变',
+      kicker: '专挑「看着不像」的形状',
+      title: '越像假号，越没人买',
+      why: ['很多人觉得 05 06 07 连在一起「不可能是开奖号」，所以从来不写。',
+            '可摇奖机不认形状：三连号和任何一组号码，概率一模一样。',
+            '这一格专门挑连号，图的不是准，是没人跟你分。'],
+      params: [
+        { key: 'count', type: 'seg', label: '买几注', values: [1, 3, 5], def: 3, suffix: ' 注' },
+        { key: 'runLen', type: 'seg', label: '连几个', values: [3, 4], def: 3, suffix: ' 连' }
+      ] },
+
+    { id: 'wheel', no: '04', g: 'B', name: '撒网保底', cost: '¥20 起',
+      line: '圈 12 个号，用最少注数兜住下限',
+      changed: '有条件保底', not: '池子要先中',
+      kicker: '把「差一点」变成「至少中几个」',
+      title: '圈一片水域，再算最少撒几网',
+      why: ['你先圈 9–12 个号，我算出最少几注，能把这片水域铺满。',
+            '只要开奖号里有 t 个落在你圈的范围里，就保证至少有一注中 m 个。',
+            '但这个保证有个前提——池子本身要先中。前提概率会一并算给你看，大多数期它轮不到生效。'],
+      params: [
+        { key: 'size', type: 'seg', label: '圈几个号', values: [9, 10, 11, 12], def: 12, suffix: ' 个' },
+        { key: 'guarantee', type: 'seg', label: '保到什么程度', values: function (g) {
+          return g.mainPick >= 6 ? [['4-3', '池中 4 → 中 3'], ['5-3', '池中 5 → 中 3'], ['5-4', '池中 5 → 中 4'], ['6-4', '池中 6 → 中 4']]
+                                 : [['3-2', '池中 3 → 中 2'], ['4-2', '池中 4 → 中 2'], ['4-3', '池中 4 → 中 3'], ['5-3', '池中 5 → 中 3']];
+        }, def: function (g) { return g.mainPick >= 6 ? '5-4' : '4-3'; } }] },
+
+    { id: 'dan', no: '05', g: 'B', name: '胆拖缩水', cost: '¥30 上下',
+      line: '锁死 2 个号，剩下 8 个轮着配',
+      changed: '真省钱', not: '胆必须全中',
+      kicker: '唯一一种真能少花钱的玩法',
+      title: '70 注的活，十几注干完',
+      why: ['选 2 个「胆」，每注都带上；再选 8 个「拖」，轮着跟胆配对。',
+            '全胆拖要 70 注、140 块；缩水之后十几注就够，保的下限一模一样。',
+            '代价很硬：2 个胆必须全中。少一个，整套票当场作废。'],
+      hint: '胆和拖都按冷门度自动挑，不用你选。', params: [] },
+
+    { id: 'blue', no: '06', g: 'B', name: '包蓝保底', cost: '¥32 起',
+      line: '蓝球 16 个全包，32 块必中 5 块',
+      changed: '百分百中', not: '百分百亏',
+      kicker: '把「必中」这件事买下来',
+      title: '中奖率 100%，返还率约 24%',
+      why: ['双色球蓝球只有 16 个，全包 16 注，花 32 块。',
+            '无论开奖号多离谱，总有一注蓝球对得上——最差也中 5 元。',
+            '这一格不是教你买，是把「必中 ≠ 划算」这句话摆到桌面上：花 32，固定奖期望只回来七八块。'],
+      hint: '彩种决定注数：双色球 16 注，大乐透 66 注。', params: [] },
+
+    { id: 'two', no: '07', g: 'C', name: '两块钱', cost: '¥2',
+      line: '就一注，最冷的那注，买完拉倒',
+      changed: '花得最少', not: '只有一枪',
+      kicker: '给「就玩一把」的人',
+      title: '两块钱，买一张入场券',
+      why: ['一注，2 元，不加倍，不追。',
+            '挑的还是最不挤的那一组，中了照样是一等奖，只是没人跟你抢。',
+            '这一格是整站的地板价：如果你只想花两块钱，到这里就可以停了。'],
+      hint: '一注，没得调。', params: [] },
+
+    { id: 'budget', no: '08', g: 'C', name: '预算封顶', cost: '¥10 起',
+      line: '给 20 块，自动配最划算的注数',
+      changed: '绝不超支', not: '概率不变',
+      kicker: '先定预算，再谈号码',
+      title: '钱先封死，号码在里面挑',
+      why: ['你说一个数，我只在这个数里配注数：20 块就是 10 注，一分不超。',
+            '注数一定，中奖概率就定了，剩下的优化空间只有「这 10 注有多冷」。',
+            '这一格治的是「本来想买 20，最后花了 200」。'],
+      params: [{ key: 'budget', type: 'seg', label: '预算', values: [10, 20, 30, 50, 100], def: 20, prefix: '¥' }] },
+
+    { id: 'compound', no: '09', g: 'C', name: '复式小全', cost: '¥14 起',
+      line: '7 个号打成一张票，14 块 7 注',
+      changed: '省事', not: '不省钱',
+      kicker: '一次选 7 个，把选择压力降下来',
+      title: '一张票，七个 6+1',
+      why: ['平时是「6 选 6」，一个号看走眼就全废；复式是「7 选 6」，容错多一个。',
+            '7 个红球打一张票，等于 7 注，14 块钱，出一张票。',
+            '概率确实涨到 7 倍——因为你花了 7 倍的钱。每块钱的效率，一分没变。'],
+      params: [{ key: 'spec', type: 'seg', label: '票面大小', values: function (g) {
+        return g.mainPick >= 6 ? [['7', '7 红 + 1 蓝 · 7 注'], ['8', '8 红 + 1 蓝 · 28 注']]
+                               : [['6-2', '6 前 + 2 后 · 6 注'], ['6-3', '6 前 + 3 后 · 18 注'], ['7-2', '7 前 + 2 后 · 21 注']];
+      }, def: '7' }] },
+
+    { id: 'backtest', no: '10', g: 'D', name: '回测对照', cost: '不花钱',
+      line: '过去 120 期跑一遍，冷门到底赢没赢机选',
+      changed: '可证伪', not: '结论可能是没有',
+      kicker: '先证明，再相信',
+      title: '把「躲人堆」放回历史里跑一遍',
+      why: ['每一期都只用它之前的数据，绝不偷看答案。',
+            '同一套规则跑三路：冷门挑号、统计画像、纯随机，注数完全一样。',
+            '如果冷门真的更准，命中数应该明显高出一截。跑完你就知道答案了——大概率是没有。'],
+      hint: '窗口固定 60 期、每期 3 注，保证三路公平。', params: [] },
+
+    { id: 'checkup', no: '11', g: 'D', name: '号码体检', cost: '不花钱',
+      line: '33 个号历史上出得匀不匀',
+      changed: '查偏心', not: '不预测下期',
+      kicker: '先看机器有没有病',
+      title: '摇奖机偏心吗？三个检验',
+      why: ['第一个：33 个号的出现次数，偏离均匀分布有多远（卡方 + 多重比较校正）。',
+            '第二个：上个月的热号，下个月还会不会热。',
+            '第三个：漏了十几期的号，是不是「该出了」。三个都指向同一件事——球没有记忆。'],
+      hint: '三个检验固定跑，不需要参数。', params: [] },
+
+    { id: 'hold', no: '12', g: 'D', name: '死守一注', cost: '¥2 / 期',
+      line: '每期都买同一组，省得纠结',
+      changed: '省决策', not: '概率不变',
+      kicker: '给「不想每期想号码」的人',
+      title: '守一组，然后把这事忘掉',
+      why: ['固定一注，每期照打。不用研究，不用纠结，也不用怕「换了号它就开出来」。',
+            '下面直接把这一注放回过去 120 期，一期一期对，看它到底中过什么。',
+            '守号的好处是省心，不是「早晚会中」——它每一期都还是那个概率。'],
+      hint: '号码固定，每期照打。想换号码就点「换一组」。', params: [] }
+  ];
+  var PLAY_MAP = {};
+  PLAYS.forEach(function (p) { PLAY_MAP[p.id] = p; });
+
+  function simpleMarkup() {
+    return '' +
+      '<div id="ltGrid">' +
+        '<div class="lt-g-intro">' +
+          '<div class="lt-g-intro-l"><span class="lt-eyebrow">12 WAYS TO PLAY</span>' +
+          '<h3>先选一个你最在乎的东西</h3>' +
+          '<p>中奖率一个字都改不了。能改的只有三件事：<b>中了跟几个人分</b>、<b>同样的钱覆盖多少</b>、<b>你知不知道自己买的是什么</b>。十二个格子按这三件事分，第四组专门用来打脸。</p></div>' +
+          '<div class="lt-g-intro-r"><b>12</b><span>种买法</span><em>全部不改变中奖概率</em></div>' +
+        '</div>' +
+        '<div id="ltGridBody"></div>' +
+        '<div class="lt-g-foot">每一格底下写着两行小字：左边是「换到了什么」，右边是「换不到什么」。没有一格敢写「更容易中」。</div>' +
+      '</div>' +
+      '<div id="ltPlayView" class="lt-p-view" hidden>' +
+        '<div class="lt-p-bar">' +
+          '<button class="lt-p-back" id="ltPlayBack" type="button"><span>←</span> 返回十二宫格</button>' +
+          '<span class="lt-p-no" id="ltPlayNum">01</span>' +
+          '<b class="lt-p-name" id="ltPlayName"></b>' +
+          '<span class="lt-p-cost" id="ltPlayCost"></span>' +
+        '</div>' +
+        '<header class="lt-p-head">' +
+          '<p class="lt-p-kicker" id="ltPlayKicker"></p>' +
+          '<h3 id="ltPlayTitle"></h3>' +
+          '<ol class="lt-p-why" id="ltPlayWhy"></ol>' +
+          '<div class="lt-p-tags" id="ltPlayTags"></div>' +
+        '</header>' +
+        '<section class="lt-p-params" id="ltPlayParams"></section>' +
+        '<div class="lt-p-go-wrap">' +
+          '<button class="lt-p-go" id="ltPlayGo" type="button">开始算</button>' +
+          '<button class="lt-p-reroll" id="ltPlayReroll" type="button">换一组</button>' +
+          '<span class="lt-p-hint" id="ltPlayHint"></span>' +
+        '</div>' +
+        '<section class="lt-p-loading" id="ltPlayLoading" hidden><div class="lt-spin"></div><span id="ltPlayLoadText">正在算…</span></section>' +
+        '<section class="lt-p-result" id="ltPlayResult" hidden></section>' +
+        '<div class="lt-p-truth" id="ltPlayTruth" hidden></div>' +
+      '</div>' +
+      '<div id="ltStatus" class="lt-status" role="status" aria-live="polite"></div>';
   }
-  function userTargetWx(){
-    var set={}, i, sv=($('ltSign')||{}).value, zv=($('ltZodiac')||{}).value, gv=($('ltGender')||{}).value;
-    for(i=0;i<SIGNS.length;i++)if(SIGNS[i][0]===sv)set[SIGNS[i][1]]=1;
-    for(i=0;i<ZODIAC.length;i++)if(ZODIAC[i][0]===zv)set[ZODIAC[i][1]]=1;
-    if(gv==='男'){set['火']=1;set['木']=1;}
-    if(gv==='女'){set['水']=1;set['金']=1;}
-    return Object.keys(set);
-  }
-  function renderSimpleTickets() {
-    var s=ui.simple;
-    var target=userTargetWx();
-    var prev=s.analysis&&s.analysis.all[0]?s.analysis.all[0].main:null;
-    var rows=s.candidates.map(function(c,i){
-      var cp=c.crowd||crowdProfile(c.main,c.sub,s.analysis.game,prev);
-      var wx=wuxingOfTicket(c);
-      return {i:i, c:c, crowd:cp, wx:wx, fit:(target.length>0 && target.indexOf(wx.main)>-1)};
+
+  function renderGrid() {
+    var body = $('ltGridBody');
+    if (!body) return;
+    var html = '';
+    GROUPS.forEach(function (grp) {
+      var list = PLAYS.filter(function (p) { return p.g === grp.key; });
+      html += '<section class="lt-g-group" data-g="' + grp.key + '" style="--gc:' + grp.color + '">' +
+        '<div class="lt-g-head"><b>' + grp.key + '</b><div><span>' + grp.name + '</span><em>' + grp.line + '</em></div></div>' +
+        '<div class="lt-g-cards">' + list.map(function (p) {
+          return '<button class="lt-g-card" type="button" data-play="' + p.id + '">' +
+            '<span class="lt-g-no">' + p.no + '</span>' +
+            '<b class="lt-g-name">' + p.name + '</b>' +
+            '<span class="lt-g-line">' + p.line + '</span>' +
+            '<span class="lt-g-tags"><i>' + p.changed + '</i><s>' + p.not + '</s></span>' +
+            '<span class="lt-g-arrow" aria-hidden="true">→</span>' +
+          '</button>';
+        }).join('') + '</div>' +
+      '</section>';
     });
-    if(target.length>0 && !rows.some(function(r){return r.fit;})){
-      rows.slice().sort(function(a,b){return b.crowd.score-a.crowd.score;})[0].fit=true;
+    body.innerHTML = html;
+  }
+
+  function currentPlayId() { return ui.play.id; }
+
+  function openPlay(id) {
+    var p = PLAY_MAP[id];
+    if (!p) return;
+    ui.play.id = id;
+    ui.play.seed = '竹间-' + id + '-001';
+    ui.play.result = null;
+    $('ltGrid').hidden = true;
+    $('ltPlayView').hidden = false;
+    var resp = $('ltResponsible'); if (resp) resp.hidden = true;
+    $('ltPlayResult').hidden = true;
+    $('ltPlayTruth').hidden = true;
+    $('ltPlayLoading').hidden = true;
+    setText('ltPlayNum', p.no);
+    setText('ltPlayName', p.name);
+    setText('ltPlayCost', p.cost);
+    setText('ltPlayKicker', p.kicker);
+    setText('ltPlayTitle', p.title);
+    $('ltPlayWhy').innerHTML = p.why.map(function (t) { return '<li>' + esc(t) + '</li>'; }).join('');
+    $('ltPlayTags').innerHTML =
+      '<span class="lt-p-tag good">换到：' + esc(p.changed) + '</span>' +
+      '<span class="lt-p-tag bad">换不到：' + esc(p.not) + '</span>';
+    renderPlayParams(p);
+    $('ltPlayGo').textContent = p.id === 'backtest' ? '跑回测' : (p.id === 'checkup' ? '做体检' : '开始算');
+    var rerollable = ['hide', 'big', 'run', 'two', 'budget', 'compound', 'hold'];
+    $('ltPlayReroll').hidden = rerollable.indexOf(p.id) === -1;
+    setText('ltPlayHint', p.params.length ? '参数随时可以改，改完再点一次。' : '');
+    $('ltPlayView').scrollIntoView({ block: 'start' });
+  }
+
+  function closePlay() {
+    ui.play.id = null;
+    $('ltPlayView').hidden = true;
+    $('ltGrid').hidden = false;
+    var resp = $('ltResponsible'); if (resp) resp.hidden = false;
+    $('ltGrid').scrollIntoView({ block: 'start' });
+  }
+
+  function playParamValue(p, key) {
+    if (!ui.play.params[p.id]) ui.play.params[p.id] = {};
+    var store = ui.play.params[p.id];
+    if (store[key] == null) {
+      var def = null;
+      p.params.forEach(function (x) { if (x.key === key) def = x.def; });
+      if (typeof def === 'function') def = def(currentGame());
+      store[key] = def;
     }
-    var usedStory={};
-    var items=rows.map(function(r){
-      var i=r.i, c=r.c, crowd=r.crowd, fit=r.fit;
-      var balls=c.main.map(function(n){return '<b class="red">'+pad2(n)+'</b>';}).join('')+'<i>+</i>'+c.sub.map(function(n){return '<b class="blue">'+pad2(n)+'</b>';}).join('');
-      var factors=crowd.factors.map(function(f){
-        return '<li class="'+f.dir+'">'+esc(f.text)+'</li>';
-      }).join('');
-      if(!factors) factors='<li class="cold">号码分布分散，没有明显的拥挤特征。</li>';
-      var story=pickStory(c.main,s.analysis.game,prev,usedStory);
-      var storyHtml='<div class="lt-story">'+
-        '<div class="lt-story-head"><span class="lt-story-tag">谁在买这种号</span><b>'+esc(story.label)+'</b></div>'+
-        '<p class="lt-story-who">'+esc(story.who)+'</p>'+
-        '<p class="lt-story-text">'+esc(story.text)+'</p>'+
-        '<p class="lt-story-coda">'+esc(crowdCoda(crowd.score))+'</p>'+
-      '</div>';
-      var inPending = isPending(c);
-      var copyBtn = '<button class="lt-big-copy-one" type="button" data-idx="'+i+'">复制这注</button>';
-      var pendBtn = inPending ? '<button class="lt-big-pending added" type="button" data-idx="'+i+'" disabled>已加入待办 ✓</button>'
-                              : '<button class="lt-big-pending" type="button" data-idx="'+i+'">＋ 加入待办</button>';
-      var wxTag = target.length ? '<span class="lt-crowd-wx">娱乐标签 · 五行属'+r.wx.main+'</span>' : '';
-      var fitBadge = fit ? '<span class="lt-fit-badge">你的星座/生肖</span>' : '';
-      // 与其它注的最大重号，多注一起买时的互补程度
-      var maxSame=0;
-      s.candidates.forEach(function(o,j){ if(j!==i) maxSame=Math.max(maxSame,intersectionCount(c.main,o.main)); });
-      var sameTxt = s.candidates.length>1 ? '与其它注最多重 '+maxSame+' 个号' : '';
-      return '<article class="lt-big-ticket'+(fit?' lt-fit':'')+'">'+
-        '<div class="lt-big-top"><span>第 '+(i+1)+' 注</span><span class="lt-big-actions">'+fitBadge+copyBtn+pendBtn+'</span></div>'+
-        '<div class="lt-big-balls">'+balls+'</div>'+
-        '<div class="lt-crowd">'+
-          '<div class="lt-crowd-head"><b>冷门度 '+crowd.score+'</b><span class="lt-crowd-level lt-lv-'+(crowd.score>=71?'cold':crowd.score>=56?'mid':'hot')+'">'+crowd.level+'</span><span class="lt-crowd-people">'+esc(crowd.people)+'</span></div>'+
-          '<div class="lt-crowd-bar" role="img" aria-label="冷门度 '+crowd.score+' 分"><i style="width:'+crowd.score+'%"></i></div>'+
-          '<ul class="lt-crowd-factors">'+factors+'</ul>'+
-          storyHtml+
-          (sameTxt?'<p class="lt-crowd-same">'+esc(sameTxt)+' · 多注一起买时互相补位</p>':'')+
-          (wxTag?'<p class="lt-crowd-same">'+wxTag+'</p>':'')+
-        '</div></article>';
-    });
-    $('ltSimpleTickets').innerHTML=items.join('');
-    setText('ltResultTitle','这 '+s.candidates.length+' 注，买的人都少');
+    return store[key];
   }
-  function rerenderSimple() {
-    if(!ui.simple.candidates.length)return;
-    renderSimpleTickets();
+  function setPlayParam(p, key, val) {
+    if (!ui.play.params[p.id]) ui.play.params[p.id] = {};
+    ui.play.params[p.id][key] = val;
   }
-  function simpleNumbersText() {
-    return ui.simple.candidates.map(function(c,i){return (i+1)+'. '+c.main.map(pad2).join(' ')+' + '+c.sub.map(pad2).join(' ');}).join('\n');
-  }
-  function runSimple() {
-    var my=++ui.simple.runId;
-    var steps=['读取最近开奖记录…','给每个号码算「受欢迎程度」…','估算这一注会被多少人买…','避开 1–12 的生日号段…','避开连号 · 同尾 · 上期重号…','挑出最不挤的几注…','翻一翻买这种号的人都是谁…','好了，接着往下看 ✓'];
-    $('ltSimpleResult').hidden=true;
-    $('ltScan').hidden=false;
-    setText('ltScanText',steps[0]);
-    var draws=currentDraws(), count=ui.simple.count, seed=ui.simple.seed;
-    var analysis=analyze(draws,ui.game,60);
-    var candidates=generateCandidates(draws,ui.game,{analysis:analysis,count:count,mode:'cold',seed:seed});
-    var bt=backtest(draws,ui.game,{windowSize:60,testCount:30,lines:3});
-    ui.simple.analysis=analysis;ui.simple.candidates=candidates;ui.simple.bt=bt;
-    var i=0;
-    var timer=setInterval(function(){
-      if(my!==ui.simple.runId){clearInterval(timer);return;}
-      i++;
-      if(i>=steps.length){
-        clearInterval(timer);
-        $('ltScan').hidden=true;
-        renderSimpleTickets();
-        $('ltSimpleResult').hidden=false;
-        setText('ltStatus','翻过 '+analysis.draws.length+' 期开奖，挑出 '+candidates.length+' 注从头到尾避开人堆的。它们不是算出来的「准号」——中奖概率和随手买一注一模一样，不一样的是万一中了，分钱的人少。');
-        return;
-      }
-      setText('ltScanText',steps[i]);
-    },185);
-  }
-  function rerollSimple() {
-    ui.simple.seed='竹间-'+Math.random().toString(36).slice(2,8);
-    runSimple();
-  }
-  function setSimpleCount(n) {
-    ui.simple.count=n;
-    [1,3,5,8].forEach(function(k){var b=$('ltPick'+k);if(b)b.classList.toggle('active',k===n);});
-    runSimple();
-  }
-  // ===== 覆盖 / 体检 =====
-  var COVER_GUARANTEES = {
-    ssq: [[4, 3], [5, 3], [5, 4], [6, 4]],
-    dlt: [[3, 2], [4, 2], [4, 3], [5, 3]]
-  };
-  function autoPool(size) {
-    var g = currentGame(), seg = Math.ceil(g.mainMax / 3), pool = [];
-    var bands = [[1, seg], [seg + 1, 2 * seg], [2 * seg + 1, g.mainMax]];
-    // 低段（生日号最挤）只占一点，高段多放：既铺开号码空间，又避开人群
-    var quota = [Math.max(1, Math.round(size * 0.08)), Math.round(size * 0.33), 0];
-    quota[2] = size - quota[0] - quota[1];
-    bands.forEach(function (b, bi) {
-      var list = [];
-      for (var n = b[0]; n <= b[1]; n++) list.push(n);
-      list.sort(function (x, y) { return (numPopularity(x) - numPopularity(y)) || (x - y); });
-      pool = pool.concat(list.slice(0, quota[bi]));
-    });
-    return uniqueSorted(pool).slice(0, size);
-  }
-  function autoSubPool() {
-    var g = currentGame(), list = [];
-    for (var n = 1; n <= g.subMax; n++) list.push(n);
-    list.sort(function (x, y) { return (numPopularity(x) - numPopularity(y)) || (x - y); });
-    return uniqueSorted(list.slice(0, Math.min(g.subMax, 4)));
-  }
-  function renderGuaranteeOptions() {
-    var g = currentGame(), opts = COVER_GUARANTEES[ui.game] || COVER_GUARANTEES.ssq;
-    var sel = $('ltGuarantee');
-    if (!sel) return;
-    var cur = ui.cover.t + '-' + ui.cover.m;
-    sel.innerHTML = opts.map(function (o) {
-      return '<option value="' + o[0] + '-' + o[1] + '">池中 ' + o[0] + ' 个 → 至少中 ' + o[1] + ' 个</option>';
-    }).join('');
-    var idx = opts.map(function (o) { return o[0] + '-' + o[1]; }).indexOf(cur);
-    sel.value = idx > -1 ? cur : (opts[Math.min(1, opts.length - 1)][0] + '-' + opts[Math.min(1, opts.length - 1)][1]);
-    var pick = sel.value.split('-');
-    ui.cover.t = Number(pick[0]); ui.cover.m = Number(pick[1]);
-  }
-  function renderPoolGrid() {
-    var g = currentGame(), pool = ui.cover.pool, html = '';
-    for (var n = 1; n <= g.mainMax; n++) {
-      var on = pool.indexOf(n) > -1;
-      html += '<button type="button" class="lt-pool-num' + (on ? ' on' : '') + '" data-n="' + n + '" aria-pressed="' + (on ? 'true' : 'false') + '">' + pad2(n) + '</button>';
-    }
-    $('ltPoolGrid').innerHTML = html;
-    setText('ltPoolCount', pool.length);
-    setText('ltPoolCap', ui.cover.size);
-  }
-  function renderCoverPane(resetPool) {
-    var g = currentGame();
-    if (resetPool || !ui.cover.pool.length) {
-      ui.cover.pool = autoPool(ui.cover.size);
-      ui.cover.subPool = autoSubPool();
-    }
-    renderGuaranteeOptions();
-    renderPoolGrid();
-    $('ltWheelResult').innerHTML = '<p class="lt-note">点「生成覆盖注单」，会算出最少的注数。</p>';
-  }
-  function buildCover() {
-    var g = currentGame(), pool = ui.cover.pool;
-    if (pool.length !== ui.cover.size) {
-      notify('号池要正好 ' + ui.cover.size + ' 个号（现在 ' + pool.length + ' 个）。点号码增减。');
+
+  function renderPlayParams(p) {
+    var host = $('ltPlayParams');
+    if (!p.params.length) {
+      host.innerHTML = '<p class="lt-p-noparam">' + esc(p.hint || '这一格不用调参数，直接算。') + '</p>';
       return;
     }
-    var btn = $('ltWheelGo');
-    btn.disabled = true; btn.textContent = '铺号码…';
-    $('ltWheelResult').innerHTML = '<p class="lt-note">正在铺满 ' + combination(pool.length, ui.cover.t).toLocaleString('zh-CN') + ' 种情况…</p>';
-    setTimeout(function () {
-      var r = wheelDesign({ pool: pool, game: g, t: ui.cover.t, m: ui.cover.m, subPool: ui.cover.subPool, subPick: g.subPick });
-      btn.disabled = false; btn.textContent = '生成覆盖注单';
-      if (!r.ok) { $('ltWheelResult').innerHTML = '<p class="lt-note lt-bad">' + esc(r.error) + '</p>'; return; }
-      ui.cover.result = r;
-      var levels = (COVER_GUARANTEES[ui.game] || []).map(function (o) {
-        if (o[0] === r.t && o[1] === r.m) return { t: o[0], m: o[1], count: r.count };
-        var rr = wheelDesign({ pool: pool.slice(), game: g, t: o[0], m: o[1], subPool: ui.cover.subPool, subPick: g.subPick, noSub: true });
-        return { t: o[0], m: o[1], count: rr.ok ? rr.count : null };
-      });
-      renderCoverResult(r, levels);
-    }, 30);
-  }
-  function renderCoverResult(r, levels) {
-    var g = currentGame();
-    var cost = r.count * 2;
     var html = '';
-    html += '<div class="lt-wheel-summary">' +
-      '<div><span>用了多少注</span><b>' + r.count + ' 注</b><small>理论下限 ' + r.lowerBound + ' 注 · 花了 ' + r.ms + ' ms 铺满</small></div>' +
-      '<div><span>保的是什么</span><b>池中 ' + r.t + ' → 中 ' + r.m + '</b><small>前提成立才保</small></div>' +
-      '<div><span>前提有多难成立</span><b>' + fmt(r.condProb * 100, 2) + '%</b><small>开奖号里有 ' + r.t + ' 个落进这 ' + r.pool.length + ' 个号</small></div>' +
-      '<div><span>成本</span><b>¥' + cost + '</b><small>' + r.count + ' 注 × 2 元</small></div>' +
-      '</div>';
-    html += '<div class="lt-cover-truth"><b>这句保证要连着前提一起读。</b>「' + esc(r.guarantee) + '」——只有开奖号里确实有 ' + r.t +
-      ' 个在你圈的 ' + r.pool.length + ' 个号里，' + r.count + ' 注才保底中 ' + r.m + ' 个。而这件事本身发生的概率是 ' +
-      fmt(r.condProb * 100, 2) + '%。换句话说：大多数期，这个保证根本轮不到生效。它不提高中奖率，只是把「恰好圈中」时的下限抬起来。</div>';
-    html += '<p class="lt-note">圈的是这 ' + r.pool.length + ' 个号：' + r.pool.map(pad2).join(' ') + '</p>';
-    if (levels && levels.length) {
-      html += '<h4 class="lt-cover-sub">同样这 ' + r.pool.length + ' 个号，换不同保证要花多少钱</h4>';
-      html += '<div class="lt-table-wrap"><table class="lt-bt-table"><thead><tr><th>保证</th><th>需要注数</th><th>成本</th><th>前提概率</th></tr></thead><tbody>';
-      levels.forEach(function (l) {
-        var on = (l.t === r.t && l.m === r.m);
-        var cp = combination(r.pool.length, l.t) * combination(g.mainMax - r.pool.length, g.mainPick - l.t) / combination(g.mainMax, g.mainPick);
-        html += '<tr' + (on ? ' class="lt-cur"' : '') + '><td>池中 ' + l.t + ' 个 → 至少中 ' + l.m + ' 个</td><td>' +
-          (l.count == null ? '—' : l.count + ' 注') + '</td><td>' + (l.count == null ? '—' : '¥' + (l.count * 2)) +
-          '</td><td>' + fmt(cp * 100, 2) + '%</td></tr>';
+    p.params.forEach(function (pr) {
+      var vals = typeof pr.values === 'function' ? pr.values(currentGame()) : pr.values;
+      var cur = playParamValue(p, pr.key);
+      var exists = vals.filter(function (v) { return String(Array.isArray(v) ? v[0] : v) === String(cur); }).length > 0;
+      if (!exists) {
+        cur = typeof pr.def === 'function' ? pr.def(currentGame()) : pr.def;
+        setPlayParam(p, pr.key, cur);
+      }
+      html += '<div class="lt-p-field"><span class="lt-p-label">' + esc(pr.label) + '</span><div class="lt-p-seg" role="group" aria-label="' + esc(pr.label) + '">';
+      vals.forEach(function (v) {
+        var val = Array.isArray(v) ? v[0] : v;
+        var text = Array.isArray(v) ? v[1] : ((pr.prefix || '') + v + (pr.suffix || ''));
+        html += '<button type="button" class="' + (String(cur) === String(val) ? 'on' : '') + '" data-param="' + pr.key + '" data-value="' + val + '">' + text + '</button>';
       });
-      html += '</tbody></table></div>';
-      html += '<p class="lt-note">表里可能出现「要求更严、反而更便宜」的情况，不是算错：池中个数越接近全中，你手里的命中号越多，凑够 m 个就越宽松。但前提概率同时更低。便宜和容易，是两件事——先看前提概率那一列，再看价格。</p>';
+      html += '</div></div>';
+    });
+    host.innerHTML = html;
+  }
+
+  function buildPlayState() {
+    var draws = currentDraws();
+    var analysis = analyze(draws, ui.game, 60);
+    var pool = [], subPool = [], i;
+    for (i = 1; i <= analysis.game.mainMax; i++) pool.push(i);
+    for (i = 1; i <= analysis.game.subMax; i++) subPool.push(i);
+    return {
+      key: ui.game, game: analysis.game, analysis: analysis, draws: analysis.all,
+      pool: pool, subPool: subPool,
+      prevMain: analysis.all[0] ? analysis.all[0].main : null,
+      jackpot: analysis.jackpotCombinations,
+      seed: ui.play.seed
+    };
+  }
+
+  function runPlay() {
+    var p = PLAY_MAP[ui.play.id];
+    if (!p) return;
+    var btn = $('ltPlayGo');
+    btn.disabled = true;
+    $('ltPlayLoading').hidden = false;
+    $('ltPlayResult').hidden = true;
+    $('ltPlayTruth').hidden = true;
+    setText('ltPlayLoadText', p.id === 'backtest' ? '正在逐期回测，每一期都只用它之前的数据…'
+      : (p.id === 'checkup' ? '正在做卡方检验、热号延续和遗漏分箱…' : '正在从几万种组合里挑…'));
+    var go = function () {
+      var st = buildPlayState();
+      ui.play.prevMain = st.prevMain;
+      var prm = ui.play.params[p.id] || {};
+      var res;
+      try {
+        if (p.id === 'hide') res = playHide(st, prm);
+        else if (p.id === 'big') res = playBig(st, prm);
+        else if (p.id === 'run') res = playRun(st, prm);
+        else if (p.id === 'wheel') res = playWheel(st, prm);
+        else if (p.id === 'dan') res = playDan(st, prm);
+        else if (p.id === 'blue') res = playBlue(st, prm);
+        else if (p.id === 'two') res = playTwo(st, prm);
+        else if (p.id === 'budget') res = playBudget(st, prm);
+        else if (p.id === 'compound') res = playCompound(st, prm);
+        else if (p.id === 'backtest') res = playBacktest(st, prm);
+        else if (p.id === 'checkup') res = playCheckup(st, prm);
+        else if (p.id === 'hold') res = playHold(st, prm);
+      } catch (e) {
+        res = { ok: false, error: '算的时候出了点问题：' + e.message };
+      }
+      btn.disabled = false;
+      $('ltPlayLoading').hidden = true;
+      if (!res || !res.ok) {
+        $('ltPlayResult').hidden = false;
+        $('ltPlayResult').innerHTML = '<div class="lt-p-error">' + esc((res && res.error) || '没算出来') + '</div>';
+        return;
+      }
+      ui.play.result = res;
+      renderPlayResult(p, res);
+    };
+    setTimeout(go, 40);
+  }
+
+  function renderPlayResult(p, res) {
+    ui.play.tickets = res.tickets || [];
+    var html = '';
+    html += '<div class="lt-p-result-head"><div><span class="lt-eyebrow">RESULT</span><h4>' + esc(res.headline) + '</h4></div>' +
+      (res.count ? '<div class="lt-p-result-actions">' +
+        '<button type="button" id="ltPlayCopy">复制全部</button>' +
+        '<button type="button" id="ltPlayPend">＋ 全部加入待办</button></div>' : '') + '</div>';
+    if (res.summary && res.summary.length) {
+      html += '<div class="lt-p-sumgrid">' + res.summary.map(function (s) {
+        return '<div class="lt-p-sum"><span>' + esc(s.k) + '</span><b>' + esc(s.v) + '</b><small>' + esc(s.sub || '') + '</small></div>';
+      }).join('') + '</div>';
     }
-    html += '<div class="lt-wheel-tickets">' + r.tickets.map(function (t, i) {
-      return '<div class="lt-wheel-ticket"><span>' + pad2(i + 1) + '</span><b>' + t.main.map(pad2).join(' ') + '</b>' +
-        (t.sub.length ? '<i>+</i><b class="blue">' + t.sub.map(pad2).join(' ') + '</b>' : '') + '</div>';
-    }).join('') + '</div>';
-    html += '<div class="lt-result-actions" style="margin-top:12px"><button type="button" id="ltCoverCopy">复制全部 ' + r.count + ' 注</button></div>';
-    $('ltWheelResult').innerHTML = html;
-    var cb = $('ltCoverCopy');
-    if (cb) cb.addEventListener('click', function () {
-      writeClipboard(r.tickets.map(function (t, i) {
+    if (res.count) {
+      if (res.layout === 'list' || res.count > 8) {
+        var mark = res.mark || [];
+        html += '<div class="lt-p-list">' + res.tickets.map(function (t, i) {
+          return '<div class="lt-p-row"><span>' + pad2(i + 1) + '</span><b>' + t.main.map(function (n) {
+            return mark.indexOf(n) > -1 ? '<em class="lt-p-dan">' + pad2(n) + '</em>' : pad2(n);
+          }).join(' ') + '</b>' +
+            (t.sub.length ? '<i>+</i><b class="blue">' + t.sub.map(pad2).join(' ') + '</b>' : '') + '</div>';
+        }).join('') + '</div>' +
+        '<p class="lt-p-small">' + res.count + ' 注，合计 ¥' + (res.cost || res.count * 2) + '。注数多的时候不逐注讲故事——故事是给「就买几注」的人看的。</p>';
+      } else {
+        var used = {};
+        html += '<div class="lt-p-cards">' + res.tickets.map(function (t, i) {
+          return ticketCardHtml(t, i, used);
+        }).join('') + '</div>';
+      }
+    }
+    if (res.table) {
+      html += '<div class="lt-p-tablewrap"><table class="lt-p-table"><thead><tr>' +
+        res.table.head.map(function (h) { return '<th>' + esc(h) + '</th>'; }).join('') +
+        '</tr></thead><tbody>' + res.table.rows.map(function (r) {
+          return '<tr>' + r.map(function (c, ci) { return '<td' + (ci === 0 ? ' class="k"' : '') + '>' + esc(c) + '</td>'; }).join('') + '</tr>';
+        }).join('') + '</tbody></table></div>' +
+        (res.table.note ? '<p class="lt-p-note">' + esc(res.table.note) + '</p>' : '');
+    }
+    $('ltPlayResult').innerHTML = html;
+    $('ltPlayResult').hidden = false;
+    var truth = $('ltPlayTruth');
+    truth.innerHTML = '<b>这一格改了什么、没改什么</b><p>' + esc(res.truth || p.why[p.why.length - 1]) + '</p>';
+    truth.hidden = false;
+    bind('ltPlayCopy', 'click', function () {
+      writeClipboard(res.tickets.map(function (t, i) {
         return (i + 1) + '. ' + t.main.map(pad2).join(' ') + (t.sub.length ? ' + ' + t.sub.map(pad2).join(' ') : '');
-      }).join('\n'), '已复制 ' + r.count + ' 注。');
+      }).join('\n'), '已复制 ' + res.tickets.length + ' 注。');
+    });
+    bind('ltPlayPend', 'click', function () {
+      var added = 0, dup = 0;
+      res.tickets.forEach(function (t) {
+        var r = addPending(t);
+        if (r === 'ok') added++; else if (r === 'duplicate') dup++;
+      });
+      if (added) notify('已把 ' + added + ' 注加入「待办」，提醒设在开奖前一天 20:00' + (dup ? '；' + dup + ' 注之前加过' : '') + '。');
+      else notify('这些号码都已经在「待办」里了。');
     });
   }
-  function renderAuditPane() {
-    var host = $('ltAuditBody');
-    if (!host) return;
-    host.innerHTML = '<p class="lt-note">正在跑逐期回测并做显著性检验…（每一期都只用它之前的数据，慢一点是应该的）</p>';
-    setTimeout(function () {
-      var draws = currentDraws(), g = currentGame();
-      var analysis = analyze(draws, ui.game, 60);
-      var bt = backtest(draws, ui.game, { windowSize: 60, testCount: 40, lines: 3 });
-      var verdict = backtestVerdict(bt, ui.game);
-      var bias = biasAudit(analysis);
-      var html = '';
-      // ① 回测
-      html += '<div class="lt-audit-card"><h4>① 逐期回测：统计画像 vs 纯随机</h4>';
-      if (!verdict.ok) {
-        html += '<p class="lt-note">' + esc(verdict.text) + '</p>';
-      } else {
-        html += '<div class="lt-table-wrap"><table class="lt-bt-table"><thead><tr><th>指标</th><th>统计画像</th><th>纯随机</th><th>差值</th><th>95% 区间</th><th>校正后 q</th></tr></thead><tbody>';
-        verdict.tests.forEach(function (t) {
-          var row = null;
-          if (t.key === 'main') row = [bt.statistical.main, bt.uniform.main];
-          else if (t.key === 'sub') row = [bt.statistical.sub, bt.uniform.sub];
-          else row = [bt.statistical.atLeast2, bt.uniform.atLeast2];
-          var isRate = t.key === 'a2';
-          html += '<tr><td>' + esc(t.label) + '</td>' +
-            '<td>' + (isRate ? fmt(row[0] * 100, 1) + '%' : fmt(row[0], 3)) + '</td>' +
-            '<td>' + (isRate ? fmt(row[1] * 100, 1) + '%' : fmt(row[1], 3)) + '</td>' +
-            '<td class="' + (t.d.mean >= 0 ? 'lt-pos' : 'lt-neg') + '">' + (t.d.mean >= 0 ? '+' : '') + (isRate ? fmt(t.d.mean * 100, 1) + 'pp' : fmt(t.d.mean, 3)) + '</td>' +
-            '<td>[' + (isRate ? fmt(t.d.ci[0] * 100, 1) : fmt(t.d.ci[0], 3)) + ', ' + (isRate ? fmt(t.d.ci[1] * 100, 1) : fmt(t.d.ci[1], 3)) + ']</td>' +
-            '<td class="' + (t.q < 0.05 ? 'lt-pos' : '') + '">' + (t.q < 0.001 ? '<0.001' : fmt(t.q, 3)) + '</td></tr>';
-        });
-        html += '</tbody></table></div>';
-        html += '<p class="lt-note">共 ' + bt.rows.length + ' 期 × 每期 ' + bt.lines + ' 注。差值 = 统计画像 − 纯随机；区间跨过 0 就说明分不出高下。q 是本指标经过 Benjamini–Hochberg 校正后的值（同时测 3 个指标，必须校正，否则总有一个「显著」）。</p>';
-      }
-      html += '</div>';
-      // ② 偏差
-      html += '<div class="lt-audit-card"><h4>② 号码偏差审计：摇奖机有没有偏</h4>';
-      html += '<p class="lt-audit-p">' + esc(bias.text) + '</p>';
-      html += '<div class="lt-bias-grid">' + bias.rows.slice(0, 12).map(function (r) {
-        return '<span class="' + (r.q < 0.05 ? 'flag' : '') + '"><b>' + pad2(r.n) + '</b><small>' + fmt(r.z, 2) + '</small></span>';
-      }).join('') + '</div>';
-      html += '<p class="lt-note">上面是偏离最大的 12 个号，小字是 z 值。' + (bias.flagged.length ? '' : '全部落在正常波动范围内。') +
-        '这次审计用的是最近 ' + bias.draws + ' 期。按这个样本量，想检出 1% 的物理偏差需要约 <b>' + bias.needFor1pct.toLocaleString('zh-CN') + '</b> 期，检出 2% 需要约 <b>' +
-        bias.needFor2pct.toLocaleString('zh-CN') + '</b> 期——差了三个数量级，所以这条路走不通，只能写进报告，不能拿来选号。</p>';
-      html += '</div>';
-      // ③ 结论
-      html += '<div class="lt-audit-card lt-verdict"><h4>③ 结论</h4>';
-      html += '<p class="lt-audit-big">' + esc(verdict.ok ? verdict.text : '数据不够。') + '</p>';
-      html += '<p class="lt-note">所以「选号」那一页做的事，不是让号码更容易中，而是让中了的钱少分给别人；「覆盖」那一页做的事，是圈中时兜住下限。两件都不改变单注概率——这就是全部真相，剩下的都是噪声。</p>';
-      html += '</div>';
-      host.innerHTML = html;
-    }, 40);
+
+  function ticketCardHtml(t, i, used) {
+    var cp = t.crowd || crowdProfile(t.main, t.sub, currentGame(), ui.play.prevMain);
+    var prev = ui.play.prevMain;
+    var story = pickStory(t.main, currentGame(), prev, used);
+    var factors = cp.factors.map(function (f) { return '<li class="' + f.dir + '">' + esc(f.text) + '</li>'; }).join('');
+    return '<article class="lt-p-card">' +
+      '<div class="lt-p-card-top"><span>第 ' + (i + 1) + ' 注</span><span class="lt-p-card-people">' + esc(cp.people) + '</span></div>' +
+      '<div class="lt-p-balls">' + t.main.map(function (n) { return '<b class="red">' + pad2(n) + '</b>'; }).join('') +
+        '<i>+</i>' + t.sub.map(function (n) { return '<b class="blue">' + pad2(n) + '</b>'; }).join('') + '</div>' +
+      '<div class="lt-p-crowd"><b>冷门度 ' + cp.score + '</b><span class="lt-p-lv">' + cp.level + '</span>' +
+        '<span class="lt-p-crowdbar"><i style="width:' + cp.score + '%"></i></span></div>' +
+      '<ul class="lt-p-factors">' + factors + '</ul>' +
+      '<details class="lt-p-story"><summary>谁在买这种号 · ' + esc(story.label) + '</summary>' +
+        '<p class="who">' + esc(story.who) + '</p><p>' + esc(story.text) + '</p>' +
+        '<p class="coda">' + esc(crowdCoda(cp.score)) + '</p></details>' +
+    '</article>';
   }
-  function setTab(name) {
-    ui.tab = name;
-    var map = { pick: 'ltPanePick', cover: 'ltPaneCover', audit: 'ltPaneAudit' };
-    Object.keys(map).forEach(function (k) { var el = $(map[k]); if (el) el.hidden = k !== name; });
-    var bar = $('ltSimpleView').querySelectorAll('[data-ltmode]');
-    for (var i = 0; i < bar.length; i++) {
-      var on = bar[i].getAttribute('data-ltmode') === name;
-      bar[i].classList.toggle('active', on);
-      bar[i].setAttribute('aria-selected', on ? 'true' : 'false');
-    }
-    if (name === 'cover') renderCoverPane(false);
-    if (name === 'audit') renderAuditPane();
+
+  function rerollPlay() {
+    ui.play.seed = '竹间-' + ui.play.id + '-' + Math.random().toString(36).slice(2, 8);
+    runPlay();
   }
 
   function setMode(simple) {
-    $('ltSimpleView').hidden=!simple;
-    $('ltAdvanceView').hidden=simple;
-    var btn=$('ltAdvanceToggle');
-    if(simple){btn.textContent='专业数据 ↗';btn.setAttribute('aria-expanded','false');setTab('pick');runSimple();}
-    else{btn.textContent='← 回到傻瓜模式';btn.setAttribute('aria-expanded','true');renderAll();}
+    $('ltSimpleView').hidden = !simple;
+    $('ltAdvanceView').hidden = simple;
+    var btn = $('ltAdvanceToggle');
+    if (simple) {
+      btn.textContent = '专业数据 ↗';
+      btn.setAttribute('aria-expanded', 'false');
+      if (ui.play.id) runPlay(); else { closePlay(); renderGrid(); }
+    } else {
+      btn.textContent = '← 回到傻瓜模式';
+      btn.setAttribute('aria-expanded', 'true');
+      renderAll();
+    }
   }
 
   function syncOfficial() {
@@ -1701,13 +2525,6 @@
   function copyReport() {
     writeClipboard(buildReport(ui.analysis,ui.candidates,ui.bt,$('ltSeed').value.trim()||'竹间-001',$('ltMode').value),'完整分析报告已复制。');
   }
-  function copySimple(idx) {
-    var text;
-    if(idx<0){text=simpleNumbersText();}
-    else{var c=ui.simple.candidates[idx];text=c?(c.main.map(pad2).join(' ')+' + '+c.sub.map(pad2).join(' ')):'';}
-    if(!text){notify('没有可复制的号码。');return;}
-    writeClipboard(text,'号码已复制。');
-  }
   function writeClipboard(text,okMsg) {
     function done(){notify(okMsg);}
     if(root.navigator.clipboard&&root.isSecureContext){root.navigator.clipboard.writeText(text).then(done).catch(function(){fallbackCopy(text,okMsg);});}
@@ -1741,14 +2558,15 @@
     if(ui.lastFocus&&ui.lastFocus.focus)ui.lastFocus.focus();
   }
   function switchGame(game) {
-    if(!GAMES[game])return;ui.game=game;
+    if(!GAMES[game])return;ui.game=game;ui.play.params={};
     ['ssq','dlt'].forEach(function(k){var b=$('ltGame'+k.charAt(0).toUpperCase()+k.slice(1));if(b){b.classList.toggle('active',k===game);b.setAttribute('aria-selected',k===game?'true':'false');}});
     if(ui.openFlag){
       if(!$('ltAdvanceView').hidden){renderAll();return;}
-      ui.cover.pool=[];ui.cover.subPool=[];ui.cover.result=null;
-      if(ui.tab==='cover')renderCoverPane(true);
-      else if(ui.tab==='audit')renderAuditPane();
-      else runSimple();
+      if(ui.play.id) {
+        var cur=PLAY_MAP[ui.play.id];
+        if(cur) renderPlayParams(cur);
+        runPlay();
+      } else renderGrid();
     }
   }
   function bind(id,event,fn){var e=$(id);if(e)e.addEventListener(event,fn);}
@@ -1772,48 +2590,20 @@
     bind('ltMainFreq','click',function(e){var b=e.target.closest('.lt-num');if(b)notify(currentGame().mainName+' '+pad2(Number(b.getAttribute('data-n')))+'：当前窗口出现 '+b.getAttribute('data-count')+' 次，标准化偏差 z='+b.getAttribute('data-z')+'，当前遗漏 '+b.getAttribute('data-gap')+' 期。');});
     bind('ltSubFreq','click',function(e){var b=e.target.closest('.lt-num');if(b)notify(currentGame().subName+' '+pad2(Number(b.getAttribute('data-n')))+'：当前窗口出现 '+b.getAttribute('data-count')+' 次，标准化偏差 z='+b.getAttribute('data-z')+'，当前遗漏 '+b.getAttribute('data-gap')+' 期。');});
     bind('ltAdvanceToggle','click',function(){setMode(!$('ltAdvanceView').hidden);});
-    bind('ltSimpleGo','click',runSimple);
-    bind('ltSimpleReroll','click',rerollSimple);
-    bind('ltSimpleCopy','click',function(){copySimple(-1);});
-    bind('ltSimplePendAll','click',addAllPending);
-    bind('ltPick1','click',function(){setSimpleCount(1);});
-    bind('ltPick3','click',function(){setSimpleCount(3);});
-    bind('ltPick5','click',function(){setSimpleCount(5);});
-    bind('ltPick8','click',function(){setSimpleCount(8);});
-    bind('ltSign','change',rerenderSimple);
-    bind('ltZodiac','change',rerenderSimple);
-    bind('ltGender','change',rerenderSimple);
-    bind('ltSimpleTickets','click',function(e){
-      var c1=e.target.closest('.lt-big-copy-one');if(c1)copySimple(Number(c1.getAttribute('data-idx')));
-      var t=e.target.closest('.lt-big-pending');if(t&&!t.disabled)addPendingFromIdx(Number(t.getAttribute('data-idx')));
+    bind('ltGridBody','click',function(e){
+      var b=e.target.closest('[data-play]');if(b)openPlay(b.getAttribute('data-play'));
     });
-    bind('ltSimpleView','click',function(e){
-      var b=e.target.closest('[data-ltmode]');
-      if(b)setTab(b.getAttribute('data-ltmode'));
+    bind('ltPlayBack','click',closePlay);
+    bind('ltPlayParams','click',function(e){
+      var b=e.target.closest('[data-param]');if(!b)return;
+      var p=PLAY_MAP[ui.play.id];if(!p)return;
+      setPlayParam(p,b.getAttribute('data-param'),b.getAttribute('data-value'));
+      renderPlayParams(p);
+      $('ltPlayResult').hidden=true;$('ltPlayTruth').hidden=true;
     });
-    bind('ltPoolGrid','click',function(e){
-      var b=e.target.closest('.lt-pool-num');if(!b)return;
-      var n=Number(b.getAttribute('data-n')),pool=ui.cover.pool.slice(),i=pool.indexOf(n);
-      if(i>-1){
-        if(pool.length<=currentGame().mainPick){notify('号池不能再少了，至少要有 '+currentGame().mainPick+' 个号。');return;}
-        pool.splice(i,1);
-      }else{
-        if(pool.length>=ui.cover.size){notify('号池已经满 '+ui.cover.size+' 个，先点掉一个再换。');return;}
-        pool.push(n);
-      }
-      ui.cover.pool=uniqueSorted(pool);renderPoolGrid();
-    });
-    bind('ltPoolSize','change',function(){
-      ui.cover.size=Number($('ltPoolSize').value)||12;
-      ui.cover.pool=[];renderCoverPane(true);
-    });
-    bind('ltGuarantee','change',function(){
-      var v=String($('ltGuarantee').value).split('-');
-      ui.cover.t=Number(v[0]);ui.cover.m=Number(v[1]);
-      $('ltWheelResult').innerHTML='<p class="lt-note">等级变了，点「生成覆盖注单」重新算。</p>';
-    });
-    bind('ltWheelGo','click',buildCover);
-    bind('ltPoolAuto','click',function(){ui.cover.pool=autoPool(ui.cover.size);renderPoolGrid();$('ltWheelResult').innerHTML='<p class="lt-note">已按冷门度重选号池，点「生成覆盖注单」。</p>';});
+    bind('ltPlayGo','click',runPlay);
+    bind('ltPlayReroll','click',rerollPlay);
+    bind('ltStatus','click',function(){});
     root.document.addEventListener('keydown',function(e){
       if(!ui.openFlag)return;
       if(e.key==='Escape'){e.preventDefault();close();return;}
@@ -1835,6 +2625,13 @@
     numPopularity:numPopularity,popcount:popcount,autoPool:autoPool,
     classifyTicket:classifyTicket,pickStory:pickStory,crowdCoda:crowdCoda,STORY:STORY,
     buildReport:buildReport,buildAiPrompt:buildAiPrompt,
+    prizeOf:prizeOf,ticketHit:ticketHit,singleFixedEV:singleFixedEV,replay:replay,
+    coverCore:coverCore,pickColdTickets:pickColdTickets,runTickets:runTickets,
+    maxRun:maxRun,shapeShare:shapeShare,hotColdPersistence:hotColdPersistence,gapPersistence:gapPersistence,
+    backtestAll:backtestAll,PLAYS:PLAYS,PLAY_MAP:PLAY_MAP,danProb:danProb,
+    playHide:playHide,playBig:playBig,playRun:playRun,playWheel:playWheel,playDan:playDan,
+    playBlue:playBlue,playTwo:playTwo,playBudget:playBudget,playCompound:playCompound,
+    playBacktest:playBacktest,playCheckup:playCheckup,playHold:playHold,
     chiSquareP:chiSquareP,combination:combination,hypergeometric:hypergeometric,
     structureOf:structureOf,rngFrom:rngFrom,
     init:init,open:open,close:close,
