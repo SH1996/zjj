@@ -2246,21 +2246,48 @@
     ctx.closePath();
   }
 
-  // 合成图的尺寸：只有照片和每张下面的楼栋标注，没有标题栏、没有页脚
+  /* 合成图的尺寸：顶部一行日期，中间照片 + 楼栋标注，底部一句提醒。
+   * 日期是为了让群里的人一眼知道这是哪天的；提醒是给取餐同学看的。
+   */
   function proofSize(n) {
     var PAD = 36, W = 1080;
+    var HEAD = 128;      // 顶部日期
+    var FOOT = 148;      // 底部提醒
     var cols = n <= 1 ? 1 : (n <= 4 ? 2 : 3);
     var cellW = Math.floor((W - PAD * (cols + 1)) / cols);
     var cellH = Math.round(cellW * (n === 1 ? 0.75 : 1));
     var LABEL = 56;
     var rows = Math.max(1, Math.ceil(n / cols));
-    var H = PAD + rows * (cellH + LABEL + PAD);
-    return { PAD: PAD, W: W, cols: cols, cellW: cellW, cellH: cellH, LABEL: LABEL, rows: rows, H: H };
+    var body = rows * (cellH + LABEL) + (rows - 1) * PAD;
+    var H = HEAD + body + PAD + FOOT;
+    return { PAD: PAD, W: W, HEAD: HEAD, FOOT: FOOT, cols: cols, cellW: cellW, cellH: cellH, LABEL: LABEL, rows: rows, H: H };
+  }
+
+  var WEEK_CN = '日一二三四五六';
+  function weekdayOf(dateStr) {
+    var m = String(dateStr || '').match(/^(\d{4})-(\d{2})-(\d{2})$/);
+    if (!m) return '';
+    var d = new Date(parseInt(m[1], 10), parseInt(m[2], 10) - 1, parseInt(m[3], 10));
+    return isNaN(d.getTime()) ? '' : WEEK_CN.charAt(d.getDay());
+  }
+
+  /* 底部提醒：天冷就提盖子，天热就提趁热吃。两句话，不啰嗦 */
+  function proofTip(dateStr) {
+    var m = String(dateStr || '').match(/^\d{4}-(\d{2})-/);
+    var mon = m ? parseInt(m[1], 10) : (new Date().getMonth() + 1);
+    var cold = mon >= 11 || mon <= 3;
+    return {
+      main: '早点拿，趁热吃',
+      sub: cold ? '天冷了，泡沫箱盖子盖好' : '泡沫箱盖子记得盖好'
+    };
   }
 
   function composeProof(photos, meta) {
     var s = proofSize(photos.length);
     var PAD = s.PAD, W = s.W, cols = s.cols, cellW = s.cellW, cellH = s.cellH, LABEL = s.LABEL, H = s.H;
+    meta = meta || {};
+    var HEAD = s.HEAD, FOOT = s.FOOT;
+    var tip = meta.tip || proofTip(meta.rawDate || meta.date);
 
     return Promise.all(photos.map(function (p) { return loadImg(p.url); })).then(function (imgs) {
       var cv = document.createElement('canvas');
@@ -2271,10 +2298,22 @@
       ctx.fillStyle = '#fdf8f0';
       ctx.fillRect(0, 0, W, H);
 
+      /* 顶部：接龙日期，让群里的人一眼知道这是哪天的 */
+      var headCx = W / 2;
+      ctx.fillStyle = '#3a2a1c';
+      ctx.font = '600 46px -apple-system,"PingFang SC","Microsoft YaHei",sans-serif';
+      ctx.textAlign = 'center';
+      var headTxt = meta.date || '';
+      if (meta.week) headTxt += ' · 周' + meta.week;
+      ctx.fillText(headTxt, headCx, 82);
+      ctx.textAlign = 'left';
+
+      var lastRowN = imgs.length - (s.rows - 1) * cols;   // 末行几张，单张时居中放
       for (var i = 0; i < imgs.length; i++) {
         var r = Math.floor(i / cols), c = i % cols;
         var x = PAD + c * (cellW + PAD);
-        var y = PAD + r * (cellH + LABEL + PAD);
+        if (r === s.rows - 1 && lastRowN === 1) x = (W - cellW) / 2;
+        var y = HEAD + r * (cellH + LABEL + PAD);
         var im = imgs[i];
 
         ctx.save();
@@ -2304,6 +2343,21 @@
         ctx.fillText(tm, x + cellW - tw - 4, y + cellH + 40);
       }
 
+      /* 底部：一句提醒，两行，中间一根细线隔开 */
+      var tipTop = H - FOOT;
+      ctx.fillStyle = '#eadfce';
+      ctx.fillRect(PAD * 2, tipTop, W - PAD * 4, 2);
+
+      ctx.textAlign = 'center';
+      ctx.fillStyle = '#3a2a1c';
+      ctx.font = '600 36px -apple-system,"PingFang SC","Microsoft YaHei",sans-serif';
+      ctx.fillText(tip.main, headCx, tipTop + 62);
+
+      ctx.fillStyle = '#8a7259';
+      ctx.font = '400 30px -apple-system,"PingFang SC","Microsoft YaHei",sans-serif';
+      ctx.fillText(tip.sub, headCx, tipTop + 108);
+      ctx.textAlign = 'left';
+
       return new Promise(function (resolve, reject) {
         cv.toBlob(function (blob) {
           if (!blob) { reject(new Error('合成失败')); return; }
@@ -2321,11 +2375,10 @@
     V.busy = true;
     V.err = '';
     paint();
-    var t = V.record.totals;
     composeProof(V.photos, {
       date: mdLabel(V.record.date),
-      line: t.buildings + ' 栋 · ' + t.orders + ' 单 · ' + t.cups + ' 件',
-      foot: '共 ' + V.photos.length + ' 处送达'
+      week: weekdayOf(V.record.date),
+      tip: proofTip(V.record.date)
     }).then(function (out) {
       V.busy = false;
       if (V.proofUrl) { try { URL.revokeObjectURL(V.proofUrl); } catch (e) {} }
@@ -2657,6 +2710,9 @@
     parseBoxPayload: parseBoxPayload,
     useAiBoxes: useAiBoxes,
     proofSize: proofSize,
+    composeProof: composeProof,
+    proofTip: proofTip,
+    weekdayOf: weekdayOf,
     residentBook: residentBook,
     residentsText: residentsText,
     fillMissingBuildings: fillMissingBuildings,
