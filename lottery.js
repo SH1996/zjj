@@ -1183,6 +1183,8 @@
     return {
       ok: true, id: 'hide', tickets: tickets, count: tickets.length, cost: tickets.length * 2,
       headline: '挑出 ' + tickets.length + ' 注，买的人都少',
+      src: '先在 1–' + st.game.mainMax + ' 里随机撒 420 注（伪随机，种子写死），再按「多少人会写这一注」从少到多排，取最不挤的 ' +
+        tickets.length + ' 注，并让任意两注最多重 ' + (st.game.mainPick - 2) + ' 个号。同一期、同样参数，每次出的号都一样——点「换一组」才换种子。',
       summary: [
         { k: '平均冷门度', v: Math.round(mean(scores)), sub: '满分 100，越高越没人抢' },
         { k: '最冷的一注', v: Math.max.apply(null, scores), sub: tickets.length > 1 ? '最挤的一注 ' + Math.min.apply(null, scores) : '只看这一注' },
@@ -1207,6 +1209,8 @@
       ok: true, id: 'big', tickets: tickets, count: tickets.length, cost: tickets.length * 2,
       pool: pool,
       headline: '只从 ' + pad2(from) + '–' + pad2(g.mainMax) + ' 这 ' + pool.length + ' 个号里挑',
+      src: '号域先砍到 ' + pad2(from) + '–' + pad2(g.mainMax) + ' 这一段——日期最大 31，超出这段的号没人拿来写生日。' +
+        '然后在 ' + pool.length + ' 个号里撒 420 注，挑最不挤的 ' + tickets.length + ' 注。选号范围窄了，每一注的概率没变。',
       summary: [
         { k: '平均拥挤倍数', v: (avgPop / allPop).toFixed(2) + '×', sub: '全号段平均是 1.00×' },
         { k: '生日党覆盖', v: '0 个号', sub: '日期最大 31，这段基本没人写' },
@@ -1227,6 +1231,8 @@
     return {
       ok: true, id: 'run', tickets: tickets, count: tickets.length, cost: tickets.length * 2,
       headline: '故意买 ' + runLen + ' 连号，越不像中奖号越好',
+      src: '连号是硬凑的：先钉一段 ' + runLen + ' 连，剩下几个号从「最没人写的那一档」里随机补，凑完再按冷门度挑最不挤的 ' +
+        tickets.length + ' 注。连号本身不加分也不减分，它只是「看着不像」，所以写的人少。',
       summary: [
         { k: '这类形状占全部组合', v: (share * 100).toFixed(1) + '%', sub: '理论比例，抽样估计' },
         { k: '最近 ' + st.analysis.draws.length + ' 期出现过', v: hist + ' 期', sub: (hist / st.analysis.draws.length * 100).toFixed(1) + '%，跟理论比例对得上' },
@@ -1249,6 +1255,9 @@
       ok: true, id: 'wheel', tickets: r.tickets.map(function (x) { return { main: x.main, sub: x.sub }; }),
       count: r.count, cost: r.count * 2, pool: pool,
       headline: '用 ' + r.count + ' 注，兜住「池中 ' + t + ' 个」的下限',
+      src: '这 ' + pool.length + ' 个号不是我按走势挑的，是按分区配额自动圈：小号段拿 ' + Math.max(1, Math.round(pool.length * 0.08)) +
+        ' 个（最小号最挤），中段拿 ' + Math.round(pool.length * 0.33) + ' 个，大号段补满——每段都取自己那一段里最没人写的。' +
+        '号码定了，注数是覆盖算法算出来的，不是我随手写的。',
       summary: [
         { k: '保的是什么', v: '池中 ' + t + ' → 中 ' + m, sub: '前提成立才保' },
         { k: '前提有多难', v: (r.condProb * 100).toFixed(2) + '%', sub: '开奖号里有 ' + t + ' 个落进这 ' + pool.length + ' 个' },
@@ -1285,14 +1294,18 @@
     var pFull = danProb(g, danN, tuoN, t) ;
     return {
       ok: true, id: 'dan', tickets: tickets, count: tickets.length, cost: tickets.length * 2,
-      dan: dan, tuo: tuo, mark: dan, layout: 'list', headline: '锁 ' + dan.map(pad2).join(' ') + ' 两个胆，' + tuoN + ' 个拖码轮着配',
+      dan: dan, tuo: tuo, mark: dan, layout: 'list', headline: '拿 ' + dan.map(pad2).join(' ') + ' 当胆，' + tuoN + ' 个拖码轮着配',
+      src: '把 1–' + g.mainMax + ' 按「多少人会写这个号」从少到多排，第 1、2 名当胆，第 3–10 名当拖。' +
+        dan.map(pad2).join('、') + ' 排在最前面，原因很土：大多数人写生日，日期最大 31，这几个号没人写。不是它们更可能出，是买它们的人更少。',
       summary: [
-        { k: '胆码（必须全中）', v: dan.map(pad2).join(' '), sub: '拖码 ' + tuo.map(pad2).join(' ') },
-        { k: '缩水后', v: tickets.length + ' 注', sub: '全胆拖 ' + full + ' 注 → 省 ' + Math.round((1 - tickets.length / full) * 100) + '%' },
-        { k: '保的是什么', v: '拖中 ' + t + ' → 中 ' + (t + danN), sub: '胆必须全中' },
-        { k: '前提概率', v: (pFull * 100).toFixed(3) + '%', sub: '胆全中且拖中 ' + t + ' 个' }
+        { k: '胆码：最没人买的 2 个', v: dan.map(pad2).join(' '), sub: '不是「最可能出」，是「最少人分」' },
+        { k: '拖码 8 个', v: tuo.map(pad2).join(' '), sub: '每注 = 2 个胆 + 4 个拖' },
+        { k: '省了多少', v: tickets.length + ' / ' + full + ' 注', sub: '同样保底下限，省 ' + Math.round((1 - tickets.length / full) * 100) + '%' },
+        { k: '前提概率', v: (pFull * 100).toFixed(3) + '%', sub: '2 胆全中 + 拖中 ' + t + ' 个 → 至少 1 注中 ' + (t + danN) + ' 个' }
       ],
-      truth: '这是唯一一种真能省钱的玩法：同样的保底下限，' + full + ' 注缩成 ' + tickets.length + ' 注。代价是前提变窄了——' + danN + ' 个胆必须全中，少一个，整套票就废了。'
+      truth: '这是唯一一种真能省钱的玩法：同样的保底下限，' + full + ' 注缩成 ' + tickets.length + ' 注。' +
+        '但「胆」要先说清楚——它不是「最可能出的号」，是「最没人买的号」，锁它只为一件事：万一中了，分钱的人少。' +
+        '代价也很硬：这 2 个号必须开出来，少一个，' + tickets.length + ' 注全废。'
     };
   }
 
@@ -1310,7 +1323,11 @@
     var rate = ev / (n * 2) * 100;
     return {
       ok: true, id: 'blue', tickets: tickets, count: n, cost: n * 2,
-      headline: st.key === 'ssq' ? '蓝球 16 个全包，必中 5 元' : '后区 66 种组合全包，必中 5 元',
+      headline: st.key === 'ssq' ? '蓝球 16 个全包，最差也回 5 元' : '后区 66 种组合全包，最差也回 5 元',
+      src: '号码是算出来的，但没有「选号」这回事：' + (st.key === 'ssq'
+        ? '红球固定取最没人写的 6 个，16 注完全一样；蓝球 01–16 一个不落全买。'
+        : '前区固定取最没人写的 5 个，66 注完全一样；后区 01–12 里所有两两组合全买。') +
+        '它百分百中，不是因为号挑得好，是因为把整个蓝球（后区）买下来了。',
       summary: [
         { k: '成本', v: '¥' + n * 2, sub: n + ' 注 × 2 元' },
         { k: '最差结果', v: '中 5 元', sub: '开奖号再离谱也跑不掉' },
@@ -1326,7 +1343,7 @@
         ],
         note: '这是数学，不是运气：把中奖概率买成 100%，代价是每一元只换回约 ' + rate.toFixed(0) + ' 分。一等奖、二等奖是浮动的，没算进去，但它们出现的概率是 1/' + st.jackpot.toLocaleString('zh-CN') + '。'
       },
-      truth: '它确实做到了「百分百中奖」。可「必中」和「划算」是两件事：花 ' + n * 2 + ' 元，最差回 5 元。这一格存在的意义，就是把这句话拍在桌上。'
+      truth: '它确实做到了「百分百中奖」。可「百分百中」和「划算」是两件事：花 ' + n * 2 + ' 元，最差回 5 元。这一格存在的意义，就是把这句话拍在桌上。'
     };
   }
 
@@ -1336,6 +1353,8 @@
     return {
       ok: true, id: 'two', tickets: t, count: 1, cost: 2,
       headline: '就这一注，买完拉倒',
+      src: '从 420 注伪随机号里挑最冷的一注——所谓「最冷」，就是这 6+1 个号最不像别人会写的。' +
+        '它和随手机选的一注概率一模一样，区别只有：万一真中了一等奖，跟你分的人少。',
       summary: [
         { k: '花多少', v: '¥2', sub: '一注，不加倍' },
         { k: '中头奖概率', v: '1/' + st.jackpot.toLocaleString('zh-CN'), sub: '和任何一注一样' },
@@ -1355,6 +1374,8 @@
     return {
       ok: true, id: 'budget', tickets: tickets, count: tickets.length, cost: cost, budget: budget,
       headline: '预算 ¥' + budget + '，配 ' + tickets.length + ' 注',
+      src: '预算是你定的，注数就是预算 ÷ 2（这里 ' + tickets.length + ' 注），一分不超。' +
+        '号码从这里开始才轮到算法：撒 420 注，挑最不挤的 ' + tickets.length + ' 注。所以这一格真正能优化的只有「买多少」，其次才是「买多冷」。',
       summary: [
         { k: '花掉', v: '¥' + cost, sub: '预算 ¥' + budget + '，剩 ¥' + (budget - cost) },
         { k: '平均冷门度', v: Math.round(avg), sub: '预算内尽量挑没人抢的' },
@@ -1387,6 +1408,8 @@
     return {
       ok: true, id: 'compound', tickets: tickets, count: tickets.length, cost: cost, layout: 'list',
       headline: '一张票，' + tickets.length + ' 注',
+      src: '先取最没人写的 ' + mainN + ' 个号' + (st.key === 'ssq' ? '，蓝球取最冷的那 1 个' : '，后区取最冷的 ' + subN + ' 个') +
+        '，再把这 ' + mainN + ' 个号的所有 6 选组合打成一张票。号是挑的，注数是组合数——' + tickets.length + ' 注不是买得多，是同一张票摊开的。',
       summary: [
         { k: '票面号码', v: mainN + ' + ' + subN, sub: '打一张，出 ' + tickets.length + ' 注' },
         { k: '花多少', v: '¥' + cost, sub: '单注还是 2 元，一分没省' },
@@ -1411,6 +1434,7 @@
     return {
       ok: true, id: 'backtest', tickets: [], count: 0, cost: 0,
       headline: '过去 ' + bt.rows.length + ' 期，冷门 vs 机选',
+      src: '这一格不生成号码。它把三套选号规则（冷门 / 统计画像 / 纯随机）放回真实历史里，每一期只给它之前的数据，同注数对跑——目的不是找规律，是验证「找规律」有没有用。',
       summary: [
         { k: '冷门策略', v: cold.main.toFixed(3), sub: '每注平均中 ' + st.game.mainName + '个数' },
         { k: '纯随机', v: uni.main.toFixed(3), sub: '同一套回测，只换选号方式' },
@@ -1441,6 +1465,7 @@
     return {
       ok: true, id: 'checkup', tickets: [], count: 0, cost: 0,
       headline: '33 个号，历史上出得匀不匀',
+      src: '这一格不生成号码。它只对已有的 ' + a.draws.length + ' 期做三个检验：出现次数是否均匀、热号下期还热不热、漏久的号下期出不出。答案不会给你一组号——它只会告诉你「这台机器没毛病，别指望从历史里挖出下一期」。',
       summary: [
         { k: '样本', v: a.draws.length + ' 期', sub: st.game.mainMax + ' 个号 · χ²=' + a.main.chi2.toFixed(2) },
         { k: '校正后显著', v: bias.flagged.length + ' 个', sub: bias.flagged.length ? '先当噪声' : '一个都没有' },
@@ -1475,6 +1500,8 @@
     return {
       ok: true, id: 'hold', tickets: t, count: 1, cost: 2,
       headline: '每期都买这一组，守 ' + st.draws.length + ' 期',
+      src: '同样从 420 注伪随机号里挑最冷的一注，种子固定，所以它每期都不会变——「守号」守的就是这一注。' +
+        '下面把它放回过去 ' + st.draws.length + ' 期逐期对奖，再跟「每期都换一组」的 200 次模拟比排名。',
       summary: [
         { k: '总投入', v: '¥' + rp.spend, sub: st.draws.length + ' 期 × 2 元' },
         { k: '固定奖回收', v: '¥' + rp.fixedWin, sub: '浮动奖 ' + rp.floatHits + ' 次，不估金额' },
@@ -1942,6 +1969,7 @@
       '<li><b>先选一个格子</b>：十二格按「你最在乎什么」分四组——中了多拿、不漏空、省着买、别被骗。点进去就是那一种买法。</li>'+
       '<li><b>每格都写清两件事</b>：换到了什么（比如「分钱人少」），换不到什么（永远是「中奖概率」）。没有一格敢写「更容易中」。</li>'+
       '<li><b>参数很少</b>：多数格子只有「买几注」一个选择，改完点「开始算」。</li>'+
+      '<li><b>号是怎么来的</b>：全部在这台设备上算出来，不联网、不问 AI、不看走势图。只有一条规则——估算「这一注有多少人会写得跟你一样」：1–12 最挤（能当月份和日期），13–31 次之（只能当日期），32 以上最冷。每格结果上方都有一行「号从哪来」，写明这一格具体怎么挑的。</li>'+
       '<li><b>每注都有故事</b>：「谁在买这种号」是按常见选号习惯编的画像，不是销量统计，但它能帮你看懂自己站在人堆哪一边。</li>'+
       '<li><b>选彩种</b>：顶部切换「双色球」或「超级大乐透」，两个彩种互不影响；有些玩法只在某个彩种下成立。</li>'+
       '<li><b>存起来</b>：点「＋ 全部加入待办」，号码连彩种、开奖日一起进首页「待办」，提醒设在<b>开奖前一天 20:00</b>；只想拿号码就点「复制全部」。</li>'+
@@ -2053,7 +2081,6 @@
   }
 
   // ===== 傻瓜模式 =====
-  // 娱乐个性化：五行 / 星座 / 生肖映射（只影响展示与「你的标签」标记，不改号码生成、不改概率）
   /* ==================== 傻瓜模式 · 12 种买法 ==================== */
   // 只放「怎么说人话」和「怎么画」，算号全在 2e 的内核里。
   // 每一格都必须老实交代：换到了什么、换不到什么。
@@ -2102,7 +2129,7 @@
       changed: '有条件保底', not: '池子要先中',
       kicker: '把「差一点」变成「至少中几个」',
       title: '圈一片水域，再算最少撒几网',
-      why: ['你先圈 9–12 个号，我算出最少几注，能把这片水域铺满。',
+      why: ['先圈 9–12 个号——具体是哪几个由分区配额自动挑，不用你选；我算出最少几注，能把这片水域铺满。',
             '只要开奖号里有 t 个落在你圈的范围里，就保证至少有一注中 m 个。',
             '但这个保证有个前提——池子本身要先中。前提概率会一并算给你看，大多数期它轮不到生效。'],
       params: [
@@ -2113,23 +2140,23 @@
         }, def: function (g) { return g.mainPick >= 6 ? '5-4' : '4-3'; } }] },
 
     { id: 'dan', no: '05', g: 'B', name: '胆拖缩水', cost: '¥30 上下',
-      line: '锁死 2 个号，剩下 8 个轮着配',
-      changed: '真省钱', not: '胆必须全中',
+      line: '挑 2 个最没人买的号当胆，8 个拖码轮着配',
+      changed: '真省钱', not: '胆不开就全废',
       kicker: '唯一一种真能少花钱的玩法',
       title: '70 注的活，十几注干完',
-      why: ['选 2 个「胆」，每注都带上；再选 8 个「拖」，轮着跟胆配对。',
+      why: ['先把 1–33 按「多少人会写这个号」排个序，最没人买的 2 个当「胆」，每注都带上；再取次冷的 8 个当「拖」，轮着跟胆配对。',
             '全胆拖要 70 注、140 块；缩水之后十几注就够，保的下限一模一样。',
-            '代价很硬：2 个胆必须全中。少一个，整套票当场作废。'],
+            '但「胆」不是「最可能出的号」，是「最没人买的号」——锁它只为中奖后少分钱。代价很硬：这 2 个号必须开出来，少一个，整套票当场作废。'],
       hint: '胆和拖都按冷门度自动挑，不用你选。', params: [] },
 
     { id: 'blue', no: '06', g: 'B', name: '包蓝保底', cost: '¥32 起',
-      line: '蓝球 16 个全包，32 块必中 5 块',
+      line: '蓝球 16 个全包，32 块最差回 5 块',
       changed: '百分百中', not: '百分百亏',
-      kicker: '把「必中」这件事买下来',
+      kicker: '把「百分百中」这件事买下来',
       title: '中奖率 100%，返还率约 24%',
       why: ['双色球蓝球只有 16 个，全包 16 注，花 32 块。',
-            '无论开奖号多离谱，总有一注蓝球对得上——最差也中 5 元。',
-            '这一格不是教你买，是把「必中 ≠ 划算」这句话摆到桌面上：花 32，固定奖期望只回来七八块。'],
+            '无论开奖号多离谱，总有一注蓝球对得上——最差也回 5 元。',
+            '这一格不是教你买，是把「百分百中 ≠ 划算」这句话摆到桌面上：花 32，固定奖期望只回来七八块。'],
       hint: '彩种决定注数：双色球 16 注，大乐透 66 注。', params: [] },
 
     { id: 'two', no: '07', g: 'C', name: '两块钱', cost: '¥2',
@@ -2208,7 +2235,7 @@
           '<div class="lt-g-intro-r"><b>12</b><span>种买法</span><em>全部不改变中奖概率</em></div>' +
         '</div>' +
         '<div id="ltGridBody"></div>' +
-        '<div class="lt-g-foot">每一格底下写着两行小字：左边是「换到了什么」，右边是「换不到什么」。没有一格敢写「更容易中」。</div>' +
+        '<div class="lt-g-foot">所有号码都在你这台设备上算出来——不联网、不问 AI、不看走势图，用的是「这种号有多少人会写」的一套经验规则。每一格底下写着两行小字：左边「换到了什么」，右边「换不到什么」。没有一格敢写「更容易中」。</div>' +
       '</div>' +
       '<div id="ltPlayView" class="lt-p-view" hidden>' +
         '<div class="lt-p-bar">' +
@@ -2405,6 +2432,9 @@
       (res.count ? '<div class="lt-p-result-actions">' +
         '<button type="button" id="ltPlayCopy">复制全部</button>' +
         '<button type="button" id="ltPlayPend">＋ 全部加入待办</button></div>' : '') + '</div>';
+    if (res.src) {
+      html += '<div class="lt-p-src"><b>号从哪来</b><span>' + esc(res.src) + '</span></div>';
+    }
     if (res.summary && res.summary.length) {
       html += '<div class="lt-p-sumgrid">' + res.summary.map(function (s) {
         return '<div class="lt-p-sum"><span>' + esc(s.k) + '</span><b>' + esc(s.v) + '</b><small>' + esc(s.sub || '') + '</small></div>';
@@ -2413,6 +2443,10 @@
     if (res.count) {
       if (res.layout === 'list' || res.count > 8) {
         var mark = res.mark || [];
+        if (mark.length) {
+          html += '<p class="lt-p-legend">下划线的是胆码 <em class="lt-p-dan">' + mark.map(pad2).join(' ') + '</em>，每一注都带着它；它不开出来，这 ' +
+            res.count + ' 注全废。这不是「必出」，是「必须发生才有效」。</p>';
+        }
         html += '<div class="lt-p-list">' + res.tickets.map(function (t, i) {
           return '<div class="lt-p-row"><span>' + pad2(i + 1) + '</span><b>' + t.main.map(function (n) {
             return mark.indexOf(n) > -1 ? '<em class="lt-p-dan">' + pad2(n) + '</em>' : pad2(n);

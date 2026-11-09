@@ -1390,6 +1390,12 @@
   .lt-p-table tr:last-child td{border-bottom:0}
   .lt-p-table td.k{font-weight:650}
   .lt-p-note{margin:10px 0 0;color:var(--lt-soft);font-size:11px;line-height:1.85}
+  .lt-p-src{margin:0 0 14px;padding:10px 13px;border-left:3px solid var(--lt-accent);border-radius:0 9px 9px 0;
+    background:var(--lt-wash);color:var(--lt-ink);font-size:12px;line-height:1.9}
+  .lt-p-src b{display:block;margin-bottom:3px;color:var(--lt-accent);font-size:10px;letter-spacing:.08em}
+  .lt-p-legend{margin:0 0 9px;padding:9px 12px;border-radius:9px;background:rgba(226,86,106,.07);
+    color:var(--lt-soft);font-size:11.5px;line-height:1.8}
+  .lt-p-legend em{font-style:normal}
   .lt-p-small{margin:9px 0 0;color:var(--lt-soft);font-size:10.5px;line-height:1.7}
   .lt-p-truth{margin-top:14px;padding:16px 18px;border:1px solid #dfd3a9;border-radius:14px;
     background:#fff9e8;color:#66552b;font-size:12.5px;line-height:1.9}
@@ -2035,7 +2041,7 @@ window.onerror = function (msg, url, line) {
   'use strict';
 
   // 版本号统一在此维护；localStorage 键沿用 v11 不变，切勿改名以免丢失用户数据
-  var APP_VERSION = '15.0.1';
+  var APP_VERSION = '15.0.2';
   // 送货单拍照识别：视觉模型默认名、兼容别名与各项安全上限
   var DEFAULT_VISION_MODEL = 'deepseek-flash';
   var VISION_MODEL_FALLBACK = 'deepseek-v4-flash-vision-exp';
