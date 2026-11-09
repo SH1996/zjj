@@ -271,7 +271,7 @@
   .toolbar { display: flex; flex-direction: column; gap: 14px; margin-top: 36px; }
 
   /* ===== 首页：底部分类导航 ===== */
-  .home-nav{display:grid;grid-template-columns:repeat(5,1fr);gap:4px;margin-top:22px;
+  .home-nav{display:grid;grid-template-columns:repeat(6,1fr);gap:3px;margin-top:22px;
     background:var(--card);border:1px solid var(--line);border-radius:18px;padding:8px;
     box-shadow:var(--card-edge),var(--shadow-1);}
   .hn-item{display:flex;flex-direction:column;align-items:center;gap:2px;border:none;
@@ -280,7 +280,7 @@
     -webkit-tap-highlight-color:transparent;}
   .hn-item:hover{background:var(--g100);}
   .hn-item:active{background:var(--g100);transform:scale(.96);}
-  .hn-name{font-size:12px;letter-spacing:.08em;color:var(--g800);}
+  .hn-name{font-size:11.5px;letter-spacing:.06em;color:var(--g800);}
   .hn-count{font-size:16px;font-weight:700;color:var(--g600);line-height:1.2;}
 
   /* ===== 笔记独立页面 ===== */
@@ -296,6 +296,7 @@
   .np-spacer{width:42px;}
   .toolbar.np-toolbar{margin-top:14px;}
   body.np-locked{overflow:hidden;}
+  body.jl-locked{overflow:hidden;}
   
   .search-wrap { position: relative; display: flex; align-items: center; }
   .search-wrap input {
@@ -339,6 +340,10 @@
   /* ===== v14.0 店铺总览：固定布局 + 折叠送货单 + 收银 ===== */
   .tool-btn.cash-btn{color:var(--g700);border-color:var(--g300);background:var(--g100);}
   .tool-btn.cash-btn:hover{background:var(--g200);border-color:var(--g400);}
+  .tool-btn.jl-btn{color:var(--jl-acc,#a8532a);border-color:rgba(201,114,47,.34);background:rgba(201,114,47,.07);}
+  .tool-btn.jl-btn:hover{background:rgba(201,114,47,.14);border-color:rgba(201,114,47,.5);}
+  .tool-btn.jl-btn small{color:inherit;opacity:.72;}
+  [data-theme="dark"] .tool-btn.jl-btn{color:#e0a571;border-color:rgba(224,140,74,.34);background:rgba(224,140,74,.1);}
 
   .notes-page.shop-mode{overflow:hidden;display:flex;flex-direction:column;padding-bottom:0;}
   .notes-page.shop-mode .np-head{position:static;flex:none;}
@@ -1560,6 +1565,301 @@
   @media(max-width:360px){.lt-big-balls{gap:5px}.lt-big-balls b{width:32px;height:32px;font-size:14px}}
   @media(prefers-reduced-motion:reduce){.lottery-lab.open{animation:none}}
 
+  /* ===== v15.2 接龙：拆楼栋 / 配箱子 / 算金额 / 送达凭证 ===== */
+  .jl-ov{
+    --jl-bg:#fdf8f1; --jl-panel:#fff; --jl-ink:#3a2a1c; --jl-soft:#8a7259;
+    --jl-faint:#b09b83; --jl-line:#ecdfcd; --jl-wash:#f7ecdc;
+    --jl-acc:#c9722f; --jl-acc2:#a8532a; --jl-ok:#3f7a52; --jl-warn:#a8651f;
+    position:fixed; inset:0; z-index:1400; display:none; overflow-y:auto;
+    -webkit-overflow-scrolling:touch;
+    background:radial-gradient(circle at 100% 0, var(--jl-wash), transparent 44%), var(--jl-bg);
+    color:var(--jl-ink); font-family:inherit;
+  }
+  .jl-ov.open{display:block;animation:jlIn .22s ease-out both;}
+  @keyframes jlIn{from{opacity:0;transform:translateY(10px)}to{opacity:1;transform:none}}
+  [data-theme="dark"] .jl-ov{
+    --jl-bg:#1a1512; --jl-panel:#2b241d; --jl-ink:#f0e5d8; --jl-soft:#b39a80;
+    --jl-faint:#8b7560; --jl-line:#4a3c30; --jl-wash:#33281e;
+    --jl-acc:#e89556; --jl-acc2:#c9722f; --jl-ok:#7fbb93; --jl-warn:#e0a967;
+  }
+  .jl-wrap{max-width:760px;margin:0 auto;padding:0 16px 60px;}
+  .jl-top{position:sticky;top:0;z-index:6;display:flex;align-items:center;gap:10px;
+    padding:14px 16px 12px;max-width:760px;margin:0 auto;
+    background:color-mix(in srgb,var(--jl-bg) 92%,transparent);backdrop-filter:blur(14px);
+    border-bottom:1px solid var(--jl-line);}
+  .jl-back{width:36px;height:36px;flex:0 0 auto;border:1px solid var(--jl-line);background:var(--jl-panel);
+    border-radius:11px;color:var(--jl-ink);font-size:22px;line-height:1;cursor:pointer;padding:0 0 4px;
+    display:grid;place-items:center;}
+  .jl-back-x{border:none;background:transparent;pointer-events:none;}
+  .jl-back.jl-x{font-size:19px;padding:0 0 2px;color:var(--jl-soft);}
+  .jl-head{flex:1;min-width:0;}
+  .jl-head b{display:block;font-size:17px;letter-spacing:.06em;font-weight:600;}
+  .jl-head small{display:block;margin-top:2px;font-size:11.5px;color:var(--jl-soft);
+    white-space:nowrap;overflow:hidden;text-overflow:ellipsis;}
+  .jl-topbtn{border:1px solid var(--jl-line);background:var(--jl-panel);color:var(--jl-acc);
+    border-radius:10px;padding:7px 13px;font-size:13px;cursor:pointer;font-family:inherit;flex:0 0 auto;}
+  .jl-body{max-width:760px;margin:0 auto;padding:16px 16px 60px;box-sizing:border-box;}
+
+  .jl-lead{background:var(--jl-panel);border:1px solid var(--jl-line);border-radius:14px;padding:13px 15px;}
+  .jl-lead p{margin:0;font-size:13px;line-height:1.85;color:var(--jl-soft);}
+  .jl-lead b{color:var(--jl-ink);font-weight:600;}
+
+  .jl-paste{margin-top:12px;}
+  .jl-paste textarea{width:100%;min-height:196px;border:1px solid var(--jl-line);border-radius:14px;
+    background:var(--jl-panel);color:var(--jl-ink);padding:14px;font-size:13px;line-height:1.85;
+    font-family:ui-monospace,SFMono-Regular,Menlo,monospace;resize:vertical;outline:none;box-sizing:border-box;}
+  .jl-paste textarea:focus{border-color:var(--jl-acc);box-shadow:0 0 0 3px rgba(201,114,47,.12);}
+  .jl-paste textarea::placeholder{color:var(--jl-faint);}
+
+  .jl-row-inline{display:flex;align-items:center;gap:10px;margin-top:10px;flex-wrap:wrap;}
+  .jl-date{display:flex;align-items:center;gap:8px;font-size:12.5px;color:var(--jl-soft);}
+  .jl-date input{border:1px solid var(--jl-line);background:var(--jl-panel);color:var(--jl-ink);
+    border-radius:9px;padding:6px 9px;font-size:13px;font-family:inherit;}
+
+  .jl-actions{display:flex;gap:9px;margin-top:12px;}
+  .jl-primary{flex:1;border:none;border-radius:12px;padding:13px 18px;font-size:14.5px;font-weight:600;
+    font-family:inherit;color:#fff;cursor:pointer;
+    background:linear-gradient(135deg,var(--jl-acc),var(--jl-acc2));
+    box-shadow:0 8px 20px -8px rgba(168,83,42,.55);}
+  .jl-primary:disabled{opacity:.6;cursor:default;}
+  .jl-ghost{border:1px solid var(--jl-line);background:var(--jl-panel);color:var(--jl-ink);
+    border-radius:12px;padding:12px 16px;font-size:13.5px;font-family:inherit;cursor:pointer;}
+  .jl-danger{border:1px solid rgba(168,101,82,.55);background:rgba(168,101,82,.07);color:#a05840;
+    border-radius:12px;padding:12px 16px;font-size:13px;font-family:inherit;cursor:pointer;}
+  [data-theme="dark"] .jl-danger{color:#e5a08a;border-color:rgba(229,160,138,.42);background:rgba(229,160,138,.08);}
+
+  .jl-hint{margin:10px 0 0;font-size:11.5px;line-height:1.8;color:var(--jl-soft);}
+  .jl-note{margin:12px 0 0;font-size:12.5px;line-height:1.9;color:var(--jl-soft);
+    background:var(--jl-wash);border-radius:12px;padding:11px 13px;}
+  .jl-sec-title{margin:22px 0 10px;font-size:12px;letter-spacing:.16em;color:var(--jl-faint);}
+
+  .jl-kpi-row{display:grid;grid-template-columns:repeat(4,1fr);gap:1px;background:var(--jl-line);
+    border:1px solid var(--jl-line);border-radius:14px;overflow:hidden;}
+  .jl-kpi{background:var(--jl-panel);padding:13px 8px;text-align:center;}
+  .jl-kpi b{display:block;font-size:20px;font-weight:600;letter-spacing:-.01em;
+    font-variant-numeric:tabular-nums;}
+  .jl-kpi span{display:block;margin-top:3px;font-size:10.5px;color:var(--jl-faint);
+    white-space:nowrap;overflow:hidden;text-overflow:ellipsis;}
+  .jl-kpi-amt b{color:var(--jl-acc);font-size:19px;}
+
+  .jl-tabs{display:flex;gap:4px;margin-top:14px;background:var(--jl-wash);border-radius:12px;padding:4px;}
+  .jl-tabs button{flex:1;border:none;background:transparent;color:var(--jl-soft);font-family:inherit;
+    font-size:13px;padding:9px 4px;border-radius:9px;cursor:pointer;position:relative;}
+  .jl-tabs button.on{background:var(--jl-panel);color:var(--jl-ink);
+    box-shadow:0 2px 8px -4px rgba(58,42,28,.3);font-weight:600;}
+  .jl-tabs button i{display:inline-block;margin-left:4px;min-width:15px;height:15px;line-height:15px;
+    border-radius:8px;background:var(--jl-acc);color:#fff;font-size:9.5px;font-style:normal;
+    vertical-align:2px;padding:0 4px;}
+
+  .jl-alert{margin-top:12px;background:rgba(201,114,47,.08);border:1px solid rgba(201,114,47,.26);
+    border-radius:12px;padding:11px 13px;cursor:pointer;}
+  .jl-alert b{display:block;font-size:12.5px;color:var(--jl-warn);font-weight:600;}
+  .jl-alert span{display:block;margin-top:4px;font-size:11.5px;line-height:1.7;color:var(--jl-soft);}
+  .jl-alert-soft{background:var(--jl-wash);border-color:var(--jl-line);cursor:default;}
+  .jl-alert-soft b{color:var(--jl-soft);}
+
+  .jl-bld{margin-top:10px;border:1px solid var(--jl-line);border-radius:14px;overflow:hidden;
+    background:var(--jl-panel);}
+  .jl-bld-h{display:grid;grid-template-columns:auto 1fr auto auto;align-items:center;gap:9px;
+    width:100%;border:none;background:transparent;font-family:inherit;text-align:left;
+    padding:13px 14px;cursor:pointer;color:var(--jl-ink);}
+  .jl-bld-k{font-size:15px;font-weight:600;letter-spacing:.03em;}
+  .jl-bld-m{font-size:11.5px;color:var(--jl-soft);white-space:nowrap;overflow:hidden;text-overflow:ellipsis;}
+  .jl-bld-h em{font-style:normal;font-size:13px;font-variant-numeric:tabular-nums;color:var(--jl-acc);}
+  .jl-caret{font-style:normal;font-size:14px;color:var(--jl-faint);width:14px;text-align:center;}
+  .jl-rows{border-top:1px solid var(--jl-line);}
+
+  .jl-orow{display:grid;grid-template-columns:44px minmax(48px,auto) 46px 1fr auto;
+    align-items:center;gap:8px;padding:11px 14px;border-bottom:1px solid var(--jl-line);
+    cursor:pointer;font-size:12.5px;}
+  .jl-orow:last-child{border-bottom:none;}
+  .jl-orow:active{background:var(--jl-wash);}
+  .jl-no{font-style:normal;color:var(--jl-faint);font-size:11px;font-variant-numeric:tabular-nums;}
+  .jl-name{font-weight:500;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;}
+  .jl-room{color:var(--jl-soft);font-size:11.5px;font-variant-numeric:tabular-nums;}
+  .jl-room-x{color:var(--jl-faint);}
+  .jl-goods{min-width:0;color:var(--jl-soft);line-height:1.6;}
+  .jl-gi{display:inline-block;margin-right:9px;}
+  .jl-gi:last-child{margin-right:0;}
+  .jl-goods b{color:var(--jl-ink);font-weight:500;font-variant-numeric:tabular-nums;}
+  .jl-goods u{display:block;text-decoration:none;font-size:10.5px;color:var(--jl-faint);margin-top:2px;}
+  .jl-orow em{font-style:normal;font-variant-numeric:tabular-nums;color:var(--jl-ink);white-space:nowrap;}
+  .jl-warn{color:var(--jl-warn) !important;font-style:normal;font-size:11.5px;}
+
+  .jl-set{display:flex;align-items:center;gap:12px;flex-wrap:wrap;margin-top:12px;}
+  .jl-cap{display:flex;align-items:center;gap:7px;font-size:12.5px;color:var(--jl-soft);}
+  .jl-cap input{width:58px;border:1px solid var(--jl-line);background:var(--jl-panel);color:var(--jl-ink);
+    border-radius:9px;padding:6px 8px;font-size:13px;font-family:inherit;text-align:center;}
+  .jl-seg{display:flex;gap:3px;background:var(--jl-wash);border-radius:10px;padding:3px;margin-left:auto;}
+  .jl-seg button{border:none;background:transparent;color:var(--jl-soft);font-family:inherit;
+    font-size:12.5px;padding:6px 12px;border-radius:8px;cursor:pointer;}
+  .jl-seg button.on{background:var(--jl-panel);color:var(--jl-ink);font-weight:600;}
+
+  .jl-boxes{display:grid;grid-template-columns:repeat(auto-fit,minmax(210px,1fr));gap:10px;margin-top:12px;}
+  .jl-box{background:var(--jl-panel);border:1px solid var(--jl-line);border-radius:14px;padding:13px 14px;}
+  .jl-box-h{display:flex;align-items:baseline;gap:8px;}
+  .jl-box-h b{font-size:14px;font-weight:600;}
+  .jl-box-h span{font-size:12px;color:var(--jl-soft);font-variant-numeric:tabular-nums;}
+  .jl-box-h i{margin-left:auto;font-style:normal;font-size:11px;color:var(--jl-faint);
+    font-variant-numeric:tabular-nums;}
+  .jl-box-h i.full{color:var(--jl-warn);font-weight:600;}
+  .jl-box-h i.thin{color:var(--jl-faint);}
+  .jl-box-bar{height:5px;background:var(--jl-wash);border-radius:3px;margin-top:9px;overflow:hidden;}
+  .jl-box-bar i{display:block;height:100%;border-radius:3px;
+    background:linear-gradient(90deg,var(--jl-acc),var(--jl-acc2));}
+  .jl-box-b{display:flex;flex-wrap:wrap;gap:5px;margin-top:10px;}
+  .jl-chip{font-size:11.5px;background:var(--jl-wash);border-radius:7px;padding:3px 8px;color:var(--jl-ink);}
+  .jl-box-f{margin-top:9px;font-size:11px;color:var(--jl-faint);}
+
+  .jl-card{margin-top:8px;border:1px solid var(--jl-line);border-radius:12px;background:var(--jl-panel);}
+  .jl-card summary{display:flex;align-items:center;gap:10px;padding:11px 14px;cursor:pointer;
+    list-style:none;font-size:13px;}
+  .jl-card summary::-webkit-details-marker{display:none;}
+  .jl-card summary b{font-weight:600;}
+  .jl-card summary span{color:var(--jl-soft);font-size:11.5px;}
+  .jl-card summary i{margin-left:auto;font-style:normal;font-size:11px;color:var(--jl-faint);}
+  .jl-card-b{border-top:1px solid var(--jl-line);}
+  .jl-crow{display:grid;grid-template-columns:40px 54px 1fr auto;gap:8px;align-items:center;
+    padding:9px 14px;border-bottom:1px solid var(--jl-line);font-size:12px;}
+  .jl-crow:last-child{border-bottom:none;}
+  .jl-crow i{font-style:normal;color:var(--jl-faint);font-size:10.5px;font-variant-numeric:tabular-nums;}
+  .jl-crow b{font-variant-numeric:tabular-nums;font-weight:500;}
+  .jl-crow span{color:var(--jl-soft);}
+  .jl-crow em{font-style:normal;color:var(--jl-soft);font-size:11.5px;text-align:right;}
+  .jl-crow em b{color:var(--jl-ink);}
+
+  .jl-money-top{display:flex;align-items:baseline;gap:10px;margin-top:14px;flex-wrap:wrap;}
+  .jl-money-top span{font-size:12px;color:var(--jl-soft);letter-spacing:.1em;}
+  .jl-money-top b{font-size:30px;font-weight:600;color:var(--jl-acc);font-variant-numeric:tabular-nums;
+    letter-spacing:-.02em;}
+  .jl-money-top i{font-style:normal;font-size:11.5px;color:var(--jl-warn);}
+
+  .jl-tb{width:100%;border-collapse:collapse;margin-top:12px;font-size:12.5px;}
+  .jl-tb th{text-align:left;font-weight:400;color:var(--jl-faint);font-size:11px;
+    padding:8px 6px;border-bottom:1px solid var(--jl-line);}
+  .jl-tb th:nth-child(2),.jl-tb th:nth-child(3),.jl-tb th:nth-child(4){text-align:right;}
+  .jl-tb td{padding:9px 6px;border-bottom:1px solid var(--jl-line);}
+  .jl-tb td:nth-child(2),.jl-tb td:nth-child(3),.jl-tb td:nth-child(4){text-align:right;
+    font-variant-numeric:tabular-nums;}
+  .jl-tb tfoot td{border-bottom:none;font-weight:600;padding-top:11px;}
+  .jl-price{width:62px;border:1px solid var(--jl-line);background:var(--jl-panel);color:var(--jl-ink);
+    border-radius:8px;padding:5px 7px;font-size:12.5px;font-family:inherit;text-align:right;}
+
+  .jl-people{display:flex;flex-direction:column;gap:1px;background:var(--jl-line);
+    border:1px solid var(--jl-line);border-radius:12px;overflow:hidden;}
+  .jl-prow{display:grid;grid-template-columns:42px minmax(56px,auto) 1fr auto;gap:9px;align-items:center;
+    background:var(--jl-panel);padding:9px 13px;font-size:12px;}
+  .jl-prow i{font-style:normal;color:var(--jl-faint);font-size:10.5px;}
+  .jl-prow b{font-weight:500;}
+  .jl-prow span{color:var(--jl-soft);font-size:11.5px;}
+  .jl-prow em{font-style:normal;font-variant-numeric:tabular-nums;}
+
+  .jl-shot-head p{margin:12px 0 0;font-size:12.5px;line-height:1.85;color:var(--jl-soft);}
+  .jl-shots{display:grid;grid-template-columns:repeat(auto-fill,minmax(128px,1fr));gap:10px;margin-top:12px;}
+  .jl-shot{position:relative;border-radius:12px;overflow:hidden;background:var(--jl-panel);
+    border:1px solid var(--jl-line);aspect-ratio:1;}
+  .jl-shot img{width:100%;height:100%;object-fit:cover;display:block;}
+  .jl-shot span i{font-style:normal;opacity:.72;margin-left:5px;font-size:9px;}
+  .jl-shot span{position:absolute;left:0;right:0;bottom:0;padding:5px 7px;font-size:10.5px;color:#fff;
+    background:linear-gradient(transparent,rgba(20,12,6,.82));white-space:nowrap;
+    overflow:hidden;text-overflow:ellipsis;}
+  .jl-shot button{position:absolute;top:4px;right:4px;width:22px;height:22px;border-radius:50%;
+    border:none;background:rgba(20,12,6,.6);color:#fff;font-size:14px;line-height:1;cursor:pointer;
+    display:grid;place-items:center;padding:0;}
+  .jl-shot-add{display:flex;flex-direction:column;align-items:center;justify-content:center;gap:4px;
+    aspect-ratio:1;border:1.5px dashed var(--jl-line);border-radius:12px;cursor:pointer;
+    color:var(--jl-soft);background:transparent;}
+  .jl-shot-add input{display:none;}
+  .jl-shot-add b{font-size:24px;font-weight:300;line-height:1;color:var(--jl-acc);}
+  .jl-shot-add span{font-size:11px;}
+  .jl-shot-actions{display:grid;grid-template-columns:minmax(0,1fr) auto;gap:9px;margin-top:14px;}
+  .jl-shot-actions .jl-primary{padding:14px 18px;}
+  .jl-proof{margin-top:16px;}
+  .jl-proof img{width:100%;border-radius:14px;border:1px solid var(--jl-line);display:block;
+    box-shadow:0 12px 30px -18px rgba(58,42,28,.5);}
+  .jl-proof-acts{display:flex;gap:9px;margin-top:11px;}
+  .jl-proof-acts a{text-align:center;text-decoration:none;display:block;line-height:1.4;}
+
+  .jl-hist{display:flex;align-items:center;gap:10px;padding:12px 14px;margin-top:8px;
+    background:var(--jl-panel);border:1px solid var(--jl-line);border-radius:13px;cursor:pointer;}
+  .jl-hist-sm{padding:10px 13px;}
+  .jl-hist-main{flex:1;min-width:0;}
+  .jl-hist-date{font-size:13.5px;font-weight:600;letter-spacing:.02em;}
+  .jl-hist-date small{display:inline-block;margin-left:7px;font-weight:400;font-size:11px;
+    color:var(--jl-faint);max-width:130px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;
+    vertical-align:1px;}
+  .jl-hist-meta{margin-top:3px;font-size:11.5px;color:var(--jl-soft);}
+  .jl-hist-right{display:flex;align-items:center;gap:7px;flex:0 0 auto;}
+  .jl-hist-right b{font-size:13px;font-weight:600;color:var(--jl-acc);font-variant-numeric:tabular-nums;}
+  .jl-hist-right span{color:var(--jl-faint);font-size:16px;}
+  .jl-month{margin:20px 0 6px;font-size:11.5px;color:var(--jl-faint);letter-spacing:.1em;}
+  .jl-month i{margin-left:8px;font-style:normal;}
+
+  .jl-empty{margin-top:26px;text-align:center;font-size:13px;line-height:2;color:var(--jl-soft);}
+  .jl-empty span{font-size:11.5px;color:var(--jl-faint);}
+  .jl-errbar{margin-bottom:12px;background:rgba(168,101,82,.09);border:1px solid rgba(168,101,82,.3);
+    color:#a86552;border-radius:11px;padding:10px 13px;font-size:12px;line-height:1.7;}
+  .jl-detail-acts{display:flex;gap:9px;margin-top:20px;}
+  .jl-detail-acts button{flex:1;}
+  .jl-foot-note{margin-top:26px;padding-top:14px;border-top:1px solid var(--jl-line);
+    font-size:11px;line-height:1.9;color:var(--jl-faint);}
+
+  /* 单条编辑抽屉 */
+  .jl-mask{position:fixed;inset:0;z-index:1500;background:rgba(24,16,10,.42);
+    display:flex;align-items:flex-end;justify-content:center;padding:0;
+    --jl-panel:#fff; --jl-ink:#3a2a1c; --jl-soft:#8a7259; --jl-line:#ecdfcd;
+    --jl-acc:#c9722f; --jl-acc2:#a8532a; --jl-wash:#f7ecdc;}
+  [data-theme="dark"] .jl-mask{
+    --jl-panel:#2b241d; --jl-ink:#f0e5d8; --jl-soft:#b39a80; --jl-line:#4a3c30;
+    --jl-acc:#e89556; --jl-acc2:#c9722f; --jl-wash:#33281e;
+    background:rgba(0,0,0,.6);}
+  .jl-sheet-edit{width:100%;max-width:520px;max-height:88vh;overflow-y:auto;
+    background:var(--jl-panel,#fff);color:var(--jl-ink,#3a2a1c);
+    border-radius:18px 18px 0 0;padding:18px 18px calc(20px + env(safe-area-inset-bottom));
+    animation:jlUp .22s ease-out both;}
+  @keyframes jlUp{from{transform:translateY(18px);opacity:.6}to{transform:none;opacity:1}}
+  .jl-ehead{display:flex;align-items:center;justify-content:space-between;margin-bottom:14px;}
+  .jl-ehead b{font-size:15px;font-weight:600;}
+  .jl-ehead button{border:none;background:transparent;font-size:22px;line-height:1;color:var(--jl-soft,#8a7259);
+    cursor:pointer;padding:0 4px;}
+  .jl-efield{display:grid;grid-template-columns:52px 1fr;align-items:center;gap:10px;margin-bottom:10px;
+    font-size:12.5px;color:var(--jl-soft,#8a7259);}
+  .jl-efield-top{align-items:start;}
+  .jl-efield input,.jl-efield select{border:1px solid var(--jl-line,#ecdfcd);background:transparent;
+    color:var(--jl-ink,#3a2a1c);border-radius:9px;padding:8px 10px;font-size:13px;font-family:inherit;
+    width:100%;box-sizing:border-box;}
+  .jl-egoods{display:flex;flex-direction:column;gap:6px;width:100%;}
+  .jl-erow{display:grid;grid-template-columns:1fr 64px;gap:6px;}
+  .jl-erow input{border:1px solid var(--jl-line,#ecdfcd);background:transparent;color:var(--jl-ink,#3a2a1c);
+    border-radius:9px;padding:7px 9px;font-size:12.5px;font-family:inherit;width:100%;box-sizing:border-box;}
+  .jl-addgood{width:100%;margin-bottom:12px;padding:8px;font-size:12px;border-radius:10px;}
+  .jl-eacts{display:flex;gap:9px;margin-top:12px;position:sticky;bottom:0;
+    background:var(--jl-panel);padding:10px 0 2px;}
+  .jl-eacts .jl-primary{flex:1;}
+
+  @media (max-width:560px){
+    .jl-wrap{padding:0 12px 48px;}
+    .jl-top{padding:11px 12px 10px;}
+    .jl-head b{font-size:16px;}
+    .jl-kpi{padding:11px 5px;}
+    .jl-kpi b{font-size:18px;}
+    .jl-kpi-amt b{font-size:16.5px;}
+    .jl-kpi span{font-size:9.5px;}
+    .jl-tabs button{font-size:12.5px;padding:8px 2px;}
+    .jl-orow{grid-template-columns:38px minmax(42px,auto) 40px 1fr auto;gap:6px;padding:10px 11px;
+      font-size:12px;}
+    .jl-boxes{grid-template-columns:1fr;}
+    .jl-crow{grid-template-columns:34px 48px 1fr auto;gap:6px;padding:8px 11px;font-size:11.5px;}
+    .jl-tb{font-size:12px;}
+    .jl-price{width:54px;}
+    .jl-money-top b{font-size:26px;}
+    .jl-shot span{font-size:9px;padding:4px 5px;}
+  }
+  @media(prefers-reduced-motion:reduce){
+    .jl-ov.open,.jl-sheet-edit{animation:none;}
+  }
+
+
 </style>
 </head>
 <body>
@@ -1649,6 +1949,14 @@
           <span>收银</span>
         </button>
 
+        <!-- 接龙：微信接龙拆成楼栋、配泡沫箱、算金额、拍送达凭证 -->
+        <button class="tool-btn jl-btn" id="jlBtn" type="button" aria-label="接龙拆单">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round">
+            <path d="M4 6.5h10M4 12h10M4 17.5h6.5"/><path d="M15 16.6l2.1 2.1 4-4.6"/>
+          </svg>
+          <span>接龙<small>拆单</small></span>
+        </button>
+
         <!-- 知识库（店铺类）：文字 / 图片 / 语音 / 视频，归档进店铺分类 -->
         <button class="tool-btn kb-btn" id="kbBtn" type="button" aria-label="知识库 店铺类">
           <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round">
@@ -1681,6 +1989,9 @@
     </button>
     <button class="hn-item" data-view="shop" type="button">
       <span class="hn-name">店铺</span><b class="hn-count" id="neShop">0</b>
+    </button>
+    <button class="hn-item" data-view="jielong" type="button">
+      <span class="hn-name">接龙</span><b class="hn-count" id="neJielong">0</b>
     </button>
     <button class="hn-item" data-view="trash" type="button">
       <span class="hn-name">垃圾</span><b class="hn-count" id="neTrash">0</b>
@@ -2042,12 +2353,15 @@
   <div class="focus-content md-render" id="focusContent"></div>
 </div>
 
+<div class="jl-ov" id="jlOv" role="dialog" aria-modal="true" aria-label="接龙拆单"></div>
+
 <div class="lottery-lab" id="lotteryLab" role="dialog" aria-modal="true" aria-labelledby="lotteryTitle" hidden></div>
 
 <div class="toast" id="toast"></div>
 
 <script src="lottery-data.js"></script>
 <script src="lottery.js"></script>
+<script src="jielong.js"></script>
 <script>
 
 window.onerror = function (msg, url, line) {
@@ -2064,7 +2378,7 @@ window.onerror = function (msg, url, line) {
   'use strict';
 
   // 版本号统一在此维护；localStorage 键沿用 v11 不变，切勿改名以免丢失用户数据
-  var APP_VERSION = '15.1.0';
+  var APP_VERSION = '15.2.0';
   // 送货单拍照识别：视觉模型默认名、兼容别名与各项安全上限
   var DEFAULT_VISION_MODEL = 'deepseek-flash';
   var VISION_MODEL_FALLBACK = 'deepseek-v4-flash-vision-exp';
@@ -2076,7 +2390,7 @@ window.onerror = function (msg, url, line) {
   var LS_CONFIG = 'bamboo.v11.config';
   var LS_NOTES  = 'bamboo.v11.notes';
   var LS_THEME  = 'bamboo.v11.theme';
-  var VIEW = { ACTIVE: 'active', DONE: 'done', TRASH: 'trash', SHOP: 'shop', NOTE: 'note' };
+  var VIEW = { ACTIVE: 'active', DONE: 'done', TRASH: 'trash', SHOP: 'shop', NOTE: 'note', JIELONG: 'jielong' };
 
   // 置顶不是独立分类，而是笔记内部的一个排序标记：带 #置顶 的笔记归入「笔记」，并排在最前
   function isPinned(n) {
@@ -2096,6 +2410,7 @@ window.onerror = function (msg, url, line) {
     var isShop = hasShopTag(n) || isCashNote(n);
     if (n.status === VIEW.DONE) return isShop ? 'shop' : 'done';
     if (isShop) return 'shop';
+    if (hasJielongTag(n)) return 'jielong';
     if (hasLotteryTag(n) || n.remindAt) return 'active';
     return 'note';
   }
@@ -2161,6 +2476,9 @@ window.onerror = function (msg, url, line) {
 
     els.shopBillBtn = $('shopBillBtn');
     els.lotteryBtn = $('lotteryBtn');
+    els.jlBtn = $('jlBtn');
+    els.jlOv = $('jlOv');
+    els.neJielong = $('neJielong');
     els.shopMask = $('shopMask');
     els.shopDate = $('shopDate');
     els.shopCust = $('shopCust');
@@ -3635,7 +3953,7 @@ window.onerror = function (msg, url, line) {
   }
 
   function updateCounts() {
-    var c = { note: 0, active: 0, done: 0, shop: 0, trash: 0 };
+    var c = { note: 0, active: 0, done: 0, shop: 0, trash: 0, jielong: 0 };
     for (var i = 0; i < state.notes.length; i++) {
       var cat = noteCategory(state.notes[i]);
       if (c[cat] === undefined) continue; // 店铺账本等内部记录不计入分类
@@ -3651,6 +3969,15 @@ window.onerror = function (msg, url, line) {
     if (els.neDone)    els.neDone.textContent = c.done;
     if (els.neShop)    els.neShop.textContent = c.shop;
     if (els.neTrash)   els.neTrash.textContent = c.trash;
+    if (els.neJielong) els.neJielong.textContent = c.jielong;
+  }
+
+  function hasJielongTag(n) {
+    if (!n || !Array.isArray(n.tags)) return false;
+    for (var i = 0; i < n.tags.length; i++) {
+      if (String(n.tags[i]).trim() === '接龙') return true;
+    }
+    return false;
   }
 
   function hasShopTag(n) {
@@ -3911,7 +4238,7 @@ window.onerror = function (msg, url, line) {
 
         if (noteCategory(n) !== state.view) continue;
 
-        if (kw && n.text.toLowerCase().indexOf(kw) === -1
+        if (kw && (window.JieLong ? window.JieLong.stripMark(n.text) : n.text).toLowerCase().indexOf(kw) === -1
             && (n.tags || []).join(' ').toLowerCase().indexOf(kw) === -1) continue;
 
         list.push(n);
@@ -4893,7 +5220,7 @@ window.onerror = function (msg, url, line) {
     }
     acts += '</div>';
 
-    var renderedText = renderMarkdown(n.text, kw);
+    var renderedText = renderMarkdown(window.JieLong ? window.JieLong.stripMark(n.text) : n.text, kw);
 
     // 只有「笔记」分类带这个入口：待办、店铺、完成、垃圾桶各说各的事，不掺和
     var loHtml = '';
@@ -5122,6 +5449,124 @@ window.onerror = function (msg, url, line) {
     scheduleSync();
   }
 
+
+  // ===== v15.2 接龙：拆单 / 配箱 / 金额 / 送达凭证 =====
+  // 记录本身存成一条带 #接龙 的笔记：跟着笔记一起同步、备份、搜索、删除
+  function jlListByPrefix(prefix) {
+    return kbOpenDB().then(function (db) {
+      return new Promise(function (resolve, reject) {
+        var tx, st;
+        try { tx = db.transaction(KB_DB_STORE, 'readonly'); st = tx.objectStore(KB_DB_STORE); }
+        catch (e) { reject(e); return; }
+        var keysReq = st.getAllKeys();
+        keysReq.onerror = function () { reject(keysReq.error || new Error('读不到照片')); };
+        keysReq.onsuccess = function () {
+          var all = keysReq.result || [];
+          var keys = [];
+          for (var i = 0; i < all.length; i++) {
+            if (String(all[i]).indexOf(prefix) === 0) keys.push(all[i]);
+          }
+          if (!keys.length) { resolve([]); return; }
+          var out = [], left = keys.length;
+          keys.forEach(function (k) {
+            var g = st.get(k);
+            g.onsuccess = function () {
+              var blob = g.result;
+              if (blob) {
+                var seg = String(k).split(':');
+                out.push({
+                  key: k,
+                  at: seg[2] ? new Date(parseInt(seg[2], 10)).toISOString() : '',
+                  building: seg[3] ? decodeURIComponent(seg[3]) : '送达',
+                  url: URL.createObjectURL(blob)
+                });
+              }
+              if (--left === 0) resolve(out);
+            };
+            g.onerror = function () { if (--left === 0) resolve(out); };
+          });
+        };
+      });
+    });
+  }
+
+  function jlRemoveNote(id) {
+    var keep = [], purged = '';
+    for (var i = 0; i < state.notes.length; i++) {
+      if (state.notes[i].id !== id) keep.push(state.notes[i]);
+      else purged = state.notes[i].text || '';
+    }
+    state.notes = keep;
+    addTombstone(id);
+    addOps('purge', purged);
+    saveLocal();
+    scheduleSync();
+    updateCounts();
+  }
+
+  function jieLongDeps() {
+    return {
+      getNotes: function () { return state.notes; },
+      addNote: function (text, tags) {
+        var now = new Date().toISOString();
+        var id = uid();
+        state.notes.unshift({
+          id: id, text: text, createdAt: now, updatedAt: now,
+          status: VIEW.ACTIVE, remindAt: null, repeat: 'none', reminded: false,
+          remindDay: null, doneAt: null, deletedAt: null, tags: tags || []
+        });
+        addOps('add', text);
+        saveLocal();
+        scheduleSync();
+        updateCounts();
+        return id;
+      },
+      updateNote: function (id, text) {
+        var n = findNote(id);
+        if (!n) return;
+        n.text = text;
+        n.updatedAt = new Date().toISOString();
+        addOps('update', text);
+        saveLocal();
+        scheduleSync();
+      },
+      removeNote: jlRemoveNote,
+      close: closeJieLong,
+      hasAI: hasAI,
+      askAI: function (prompt) { return aiPlain(prompt, 0.2); },
+      toast: toast,
+      compressImage: function (f) { return kbCompressImage(f, 1500, 0.84); },
+      putPhoto: kbPutBlob,
+      getPhoto: kbGetBlob,
+      delPhoto: kbDelBlob,
+      listPhotos: jlListByPrefix
+    };
+  }
+
+  function openJieLong(historyFirst) {
+    if (!window.JieLong) { toast('接龙模块没能加载，刷新一下试试'); return; }
+    var ov = els.jlOv;
+    if (!ov) return;
+    if (!ov.__mounted) {
+      try {
+        window.JieLong.mount(ov, jieLongDeps());
+        ov.__mounted = true;
+      } catch (e) {
+        toast('接龙模块启动失败：' + (e && e.message ? e.message : '未知'));
+        return;
+      }
+    }
+    ov.classList.add('open');
+    document.body.classList.add('jl-locked');
+    window.JieLong.open();
+    if (historyFirst) window.JieLong.showHistory();
+  }
+
+  function closeJieLong() {
+    if (els.jlOv) els.jlOv.classList.remove('open');
+    document.body.classList.remove('jl-locked');
+  }
+
   function handleListClick(e) {
     var el = e.target;
     var isAction = false;
@@ -5189,6 +5634,7 @@ window.onerror = function (msg, url, line) {
     var el = e.target;
     while (el && el !== els.homeNav) {
       if (el.getAttribute && el.getAttribute('data-view')) {
+        if (el.getAttribute('data-view') === 'jielong') { openJieLong(false); return; }
         state.view = el.getAttribute('data-view');
         syncTabs();
         openNotesPage();
@@ -6997,6 +7443,9 @@ window.onerror = function (msg, url, line) {
     els.lotteryBtn.addEventListener('click', function () {
       if (!window.LotteryLab || !window.LotteryLab.open()) toast('彩票模块未能加载，请刷新后重试');
     });
+
+    // 接龙：拆单、配箱、送达凭证
+    if (els.jlBtn) els.jlBtn.addEventListener('click', function () { openJieLong(false); });
     if (window.LotteryLab) {
       try {
         window.LotteryLab.init({

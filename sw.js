@@ -1,12 +1,13 @@
 /* 竹间记 · Service Worker
    策略：页面网络优先（保证更新），静态资源缓存优先；只管同源 GET，
    GitHub / AI 等 API 请求一律直连，绝不缓存。 */
-var CACHE = 'bamboo-v15-1-0';
+var CACHE = 'bamboo-v15-2-0';
 var SHELL = [
   './',
   './index.html',
   './lottery-data.js',
   './lottery.js',
+  './jielong.js',
   './manifest.json',
   './icons/icon-192.png',
   './icons/icon-512.png',
