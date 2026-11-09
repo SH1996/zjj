@@ -666,6 +666,158 @@
     };
   }
 
+
+  /* ---------- 1b. 谁在买这种号 ---------- */
+  // 按号码特征归类，配一段人物画像。画像依公开购彩习惯编写，是想象出来的典型，
+  // 不是销量统计；它只帮人看懂「这一注站在人堆的哪一边」。
+  var STORY = {
+    birthday: {
+      label: '一家人的生日',
+      variants: [
+        { who: '把一家人的生日凑成六个号',
+          text: '爸爸三月，妈妈十一月，孩子六月，再加两个日子，刚好凑满。写这张票的时候心里是热的，可全国同一天生日的人太多——真中了一等奖，往往几十个人一起分。' },
+        { who: '照着抽屉里那张纸填',
+          text: '纸上记着四个日子：结婚、老大出生、老二出生、老人寿辰。每次买都照抄。它最大的问题不是不准，是太准了——跟你想得一模一样的人，少说也有几万个。' },
+        { who: '年年买同一组生日号',
+          text: '这组号他买了十几年，一期没落。不是相信它会出，是怕万一出了自己没买。可这十几年里，买同样一组号的人只多不少。' }
+      ]
+    },
+    big: {
+      label: '只从 30 往上挑的老彩民',
+      variants: [
+        { who: '买了二十年，早就不看小号',
+          text: '他说小号是给过生日的人用的，他不凑那个热闹。三十往上的号摊在票面上，别人看着别扭，他反而踏实——越不像开奖号，越没人跟他抢。' },
+        { who: '号码看着怪，他心里有数',
+          text: '头一回买的时候他也写 1、2、3。后来听说有人中了头奖跟三十几个人分，从此只从 30 往上挑。丑是丑了点，可丑得清静。' },
+        { who: '专挑别人嫌大的那几个号',
+          text: '32、33 这种号，很多人一辈子没往票上写过——超出一个月的天数，看着就不像。他要的就是这个：没人写，才没人分。' }
+      ]
+    },
+    oddEven: {
+      label: '整张票一个调',
+      variants: [
+        { who: '整张票没有一个__TYPE__数',
+          text: '朋友看了笑他：开奖机还能专挑__TYPE2__数？他也不争。开奖机不认识什么叫「像」，只认识球。可正因为大家觉得不像，这一把反而没人跟着买。' },
+        { who: '就爱写六个__TYPE2__数',
+          text: '不为别的，看着齐。彩票站老板说这种票一周能见好几张，不算稀奇，但也确实比不过生日号那一堆。' },
+        { who: '号码清一色，图个整齐',
+          text: '整齐是他的偏好，不是他的判断。他说反正概率一样，那就挑个自己看着舒服的——顺手还避开了一堆人不爱选的路。' }
+      ]
+    },
+    run: {
+      label: '顺着日历写下来的号',
+      variants: [
+        { who: '一路连下去，图省事',
+          text: '1、2、3、4、5、6——好写也好记。彩票站里这种票最常见：大爷报数，店主一个一个按。跟的人多，是因为它太好写了。' },
+        { who: '连着写，一眼能记住',
+          text: '他不记号码，只记「从十几开始连着六个」。这种方式省脑子，也省不了钱——连号是最好写的一种票，写的人自然多。' },
+        { who: '觉得连号「像开奖号」',
+          text: '电视上开出来的号，常常真有连着的。于是有人专挑连号买。其实任何一注的连号机会都一样，只是连着写的人多，中了分的人也多。' }
+      ]
+    },
+    tail: {
+      label: '认尾数的那一派',
+      variants: [
+        { who: '尾数要整整齐齐',
+          text: '3、13、23、33，尾数一个样。他说这样「有整体感」。这种票在票面上很显眼，跟着挑的人也不少。' },
+        { who: '专挑同一个尾数',
+          text: '尾数一样，号码看着像一串。老彩民里这么买的人不少，算是一种小小的仪式感，也算一种小小的拥挤。' },
+        { who: '号码排得齐才舒服',
+          text: '他不看走势，只看顺眼。尾数一致就是顺眼。顺眼的代价是：觉得顺眼的人不止他一个。' }
+      ]
+    },
+    repeat: {
+      label: '照着上期抄的',
+      variants: [
+        { who: '上期的号，这期接着买',
+          text: '心里那句话是：它总能再出来一次吧。这话不对，但很多人这么想。所以上期开过的号，下一期总有人接着买。' },
+        { who: '差一个号，舍不得换',
+          text: '上期就差一个，这期觉得该轮到它了。这种心情很普遍，跟着买的人也多——开奖机没有记忆，人有。' },
+        { who: '相信热号会热下去',
+          text: '刚开过的号在眼里是「活的」，于是接着买。其实每个球下期被抽到的机会一样，只是很多人不愿意相信这一点。' }
+      ]
+    },
+    noEarly: {
+      label: '绕开生日段的老手',
+      variants: [
+        { who: '一个 1–12 的号都没放',
+          text: '不是不喜欢小号，是知道那一段最挤。生日、纪念日、车牌尾号，全往 1–12 里挤。他把这一段整个让出去，号码看着散，分钱的人少。' },
+        { who: '把生日段整段让掉',
+          text: '他的规矩很简单：1 到 12 一个不碰。别人问那少了一半号怎么办，他说少的是最挤的一半，不亏。' },
+        { who: '只在中后段慢慢挑',
+          text: '13 到 33，一个号一个号地看。这一带不是没人买，是比生日段松得多——松一点，就够了。' }
+      ]
+    },
+    'default': {
+      label: '散着买的老手',
+      variants: [
+        { who: '不连号、不同尾、不扎堆',
+          text: '看着像随手撒的一把，其实每一处都避开了一点：不写生日段，不连着写，不凑同一个尾数。没有哪一处特别聪明，合起来就是少人走的那条路。' },
+        { who: '号码看着没什么规律',
+          text: '正因为没什么规律，也就没什么人跟他撞。这注不好记，可他从来不用记——票存在手机里，开奖那天自然会提醒他。' },
+        { who: '挑号只有一个原则：别扎堆',
+          text: '问他不扎堆是什么意思，他说：别人爱写的，我就不写。听着像废话，可这就是全部方法。' }
+      ]
+    }
+  };
+
+  function classifyTicket(main, game, prevMain) {
+    var list = main.slice().sort(function (a, b) { return a - b; });
+    var early = list.filter(function (n) { return n <= 12; }).length;
+    var big = list.filter(function (n) { return n > 31; }).length;
+    var odd = list.filter(function (n) { return n % 2; }).length;
+    var runs = 0, runMax = 1, cur = 1, i;
+    for (i = 1; i < list.length; i++) {
+      if (list[i] === list[i - 1] + 1) { cur++; if (cur > runMax) runMax = cur; }
+      else { if (cur >= 2) runs++; cur = 1; }
+    }
+    if (cur >= 2) runs++;
+    if (cur > runMax) runMax = cur;
+    var tail = {}, tailMax = 0;
+    for (i = 0; i < list.length; i++) tail[list[i] % 10] = (tail[list[i] % 10] || 0) + 1;
+    Object.keys(tail).forEach(function (k) { if (tail[k] > tailMax) tailMax = tail[k]; });
+
+    if (early >= 4) return 'birthday';
+    if (big >= (game.mainPick >= 6 ? 4 : 3)) return 'big';
+    if (odd === 0 || odd === list.length) return 'oddEven';
+    // 尾数凑成三个比一组两连更显眼，先判同尾
+    if (tailMax >= 3) return 'tail';
+    if (runs > 0 || runMax >= 3) return 'run';
+    if (tailRepeat(list, prevMain) >= 2) return 'repeat';
+    if (early === 0) return 'noEarly';
+    return 'default';
+  }
+
+  function fillType(t, allOdd) {
+    // __TYPE__ 是「缺的那一类」：全奇就是没有偶数
+    return String(t).replace(/__TYPE2__/g, allOdd ? '单' : '双').replace(/__TYPE__/g, allOdd ? '偶' : '奇');
+  }
+
+  // 同一批号码里尽量不重复用同一个故事：优先挑这一批还没用过的变体
+  function pickStory(main, game, prevMain, used) {
+    var key = classifyTicket(main, game, prevMain);
+    var book = STORY[key] || STORY['default'];
+    var h = 7, i;
+    for (i = 0; i < main.length; i++) h = (h * 31 + main[i]) % 9973;
+    var list = book.variants, n = list.length, start = h % n, pick = null, idx;
+    for (i = 0; i < n; i++) {
+      idx = (start + i) % n;
+      if (!used[key + '#' + idx]) { used[key + '#' + idx] = 1; pick = list[idx]; break; }
+    }
+    if (!pick) pick = list[start];
+    var allOdd = main.filter(function (n2) { return n2 % 2; }).length === main.length;
+    var label = key === 'oddEven' ? '专写' + (allOdd ? '奇' : '偶') + '数的怪人' : book.label;
+    return { label: label, who: fillType(pick.who, allOdd), text: fillType(pick.text, allOdd) };
+  }
+
+  function crowdCoda(score) {
+    if (score >= 82) return '这一注，买的人很少。';
+    if (score >= 71) return '这一注，买的人不多。';
+    if (score >= 56) return '这一注，不算冷也不算挤。';
+    if (score >= 40) return '这一注，跟你分钱的人会多一些。';
+    return '这一注，跟你分钱的人不少。';
+  }
+
   /* ---------- 2. 覆盖设计 ---------- */
   function enumerateMasks(v, k, cap) {
     var out = [], cur = [];
@@ -1024,13 +1176,13 @@
   function markup() {
     return ''+
     '<div class="lt-shell">'+
-      '<header class="lt-header"><div class="lt-brand"><span class="lt-logo"><svg viewBox="0 0 24 24" width="22" height="22" aria-hidden="true"><circle cx="9.6" cy="12" r="5.7" fill="#ff5f6d"/><circle cx="14.6" cy="12" r="5.7" fill="#4f86ff"/><circle cx="7.6" cy="9.7" r="1.9" fill="#ffffff" opacity=".55"/><circle cx="12.6" cy="9.7" r="1.9" fill="#ffffff" opacity=".55"/></svg></span><div><h2 id="lotteryTitle">数彩助手</h2><p>复杂分析帮你做，只留一看就懂的号码</p></div></div>'+
+      '<header class="lt-header"><div class="lt-brand"><span class="lt-logo"><svg viewBox="0 0 24 24" width="22" height="22" aria-hidden="true"><circle cx="9.6" cy="12" r="5.7" fill="#ff5f6d"/><circle cx="14.6" cy="12" r="5.7" fill="#4f86ff"/><circle cx="7.6" cy="9.7" r="1.9" fill="#ffffff" opacity=".55"/><circle cx="12.6" cy="9.7" r="1.9" fill="#ffffff" opacity=".55"/></svg></span><div><h2 id="lotteryTitle">数彩助手</h2><p>不猜号码，只挑没人抢的</p></div></div>'+
       '<div class="lt-header-actions"><button class="lt-icon" id="ltHelp" type="button" aria-label="使用指南" title="使用指南"><svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M9.09 9a3 3 0 0 1 5.83 1c0 2-3 3-3 3"/><circle cx="12" cy="17" r="1" fill="currentColor" stroke="none"/></svg></button><button class="lt-icon" id="ltClose" type="button" aria-label="关闭数彩助手"><svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" aria-hidden="true"><path d="M6 6l12 12M18 6L6 18"/></svg></button></div></header>'+
       '<div class="lt-body">'+
       '<div class="lt-responsible lt-tiny">娱乐统计，不是中奖承诺：每注中奖概率相同，历史数据不能提高概率。这里能做的只有两件——中了少分钱、圈中兜下限。理性娱乐、量力而行。</div>'+
       '<section id="ltHelpPanel" class="lt-help" hidden><div class="lt-help-head"><h3>傻瓜式使用指南</h3><button id="ltHelpClose" type="button" aria-label="收起使用指南">收起</button></div>'+
       '<ol class="lt-steps">'+
-      '<li><b>选号</b>：点「挑一组不挤的号码」，出来的是最不挤的几注，每注标着冷门度和缘由。<b>中奖概率不变</b>，变的是中了以后分钱的人少。</li>'+
+      '<li><b>选号</b>：点「挑一组不挤的号码」，出来的是最不挤的几注。每注标着冷门度、缘由，还有一段「谁在买这种号」——<b>中奖概率不变</b>，变的是中了以后分钱的人少。</li>'+
       '<li><b>选彩种</b>：顶部切换「双色球」或「超级大乐透」，两个彩种互不影响。</li>'+
       '<li><b>覆盖</b>：圈一个号池，算出最少几注能兜住下限。表里写着前提概率——大多数期这个保证轮不到生效，先看那一列。</li>'+
       '<li><b>体检</b>：逐期回测 + 置换检验 + 号码偏差审计。结论允许是「没优势」，真没有就写没有。</li>'+
@@ -1052,7 +1204,7 @@
         '<div id="ltPanePick">'+
         '<section class="lt-hero">'+
           '<h3>同样的一等奖概率，挑一注少人买的</h3>'+
-          '<p class="lt-hero-sub">每注中奖概率完全一样，这是摇奖机定的。能动手的是另一件事：避开生日号、连号这些挤成一堆的地方——中了少跟人分钱。</p>'+
+          '<p class="lt-hero-sub">每注中奖概率完全一样，这是摇奖机定的。能动手的是另一件事：避开生日号、连号这些挤成一堆的地方——中了少跟人分钱。每注下面还写着，买这种号的一般是什么人。</p>'+
           '<div class="lt-count-choice" role="group" aria-label="选择注数">'+
             '<button type="button" id="ltPick1" data-count="1">1 注</button>'+
             '<button type="button" id="ltPick3" data-count="3">3 注</button>'+
@@ -1071,7 +1223,7 @@
         '<section id="ltSimpleResult" hidden>'+
           '<div class="lt-result-head"><div><span class="lt-eyebrow">YOUR PICKS</span><h3 id="ltResultTitle">挑好了，都是偏冷的</h3></div>'+
           '<div class="lt-result-actions"><button id="ltSimpleCopy" type="button">复制号码</button><button id="ltSimplePendAll" type="button">＋ 全部加入待办</button><button id="ltSimpleReroll" class="lt-ai" type="button">换一组</button></div></div>'+
-          '<div class="lt-plain-note">红球在前、蓝球在后。这几注是按「有多挤」挑的——<b>中奖概率和随手买一注完全一样</b>，不一样的只是万一中了，跟你分钱的人少。</div>'+
+          '<div class="lt-plain-note">红球在前、蓝球在后。这几注是按「有多挤」挑的——<b>中奖概率和随手买一注完全一样</b>，不一样的只是万一中了，跟你分钱的人少。每注下面那段「谁在买这种号」，是按常见选号习惯编的画像，不是销量统计。</div>'+
           '<div id="ltSimpleTickets" class="lt-simple-tickets"></div>'+
         '</section>'+
         '<div id="ltStatus" class="lt-status" role="status" aria-live="polite"></div>'+
@@ -1079,7 +1231,7 @@
         '<div id="ltPaneCover" hidden>'+
         '<section class="lt-cover">'+
           '<div class="lt-cover-head"><span class="lt-eyebrow">COVERING DESIGN</span><h3>预算内的覆盖设计</h3>'+
-          '<p>先圈一个号码池，再用尽量少的注数把它铺满：<b>只要开奖号里有 t 个落在你的池子里，就保证至少有一注中 m 个。</b>提高的是「条件命中」——池子没圈住，这个保证就不存在，所以下面会一并算给你看池子命中的真实概率。</p></div>'+
+          '<p>先圈一个号码池（默认按冷门度挑，不是随机圈），再用尽量少的注数把它铺满：<b>只要开奖号里有 t 个落在你的池子里，就保证至少有一注中 m 个。</b>提高的是「条件命中」——池子没圈住，这个保证就不存在，所以下面会一并算给你看池子命中的真实概率。</p></div>'+
           '<div class="lt-cover-controls">'+
             '<label>号池大小<select id="ltPoolSize"><option value="9">9 个号</option><option value="10">10 个号</option><option value="11">11 个号</option><option value="12" selected>12 个号</option></select></label>'+
             '<label>保证等级<select id="ltGuarantee"></select></label>'+
@@ -1114,7 +1266,7 @@
       '<div class="lt-two-col"><section class="lt-panel"><div class="lt-panel-head"><div><span class="lt-eyebrow">DISTRIBUTION</span><h3 id="ltMainFreqTitle">号码频率与遗漏</h3></div><span class="lt-tag">点击号码看细节</span></div><div id="ltMainFreq" class="lt-ball-grid"></div><h4 id="ltSubFreqTitle" class="lt-subhead"></h4><div id="ltSubFreq" class="lt-ball-grid lt-sub-grid"></div><p class="lt-note">颜色表示近期标准化频率，数字下方为当前遗漏期数。遗漏只是距上次出现的距离，不代表“该出了”。</p></section>'+
       '<section class="lt-panel"><span class="lt-eyebrow">STRUCTURE</span><h3>组合结构画像</h3><div id="ltStructure" class="lt-structure"></div><h4 class="lt-subhead">高频共现号码对</h4><div id="ltPairs" class="lt-pairs"></div><p class="lt-note">共现经过支持度与期望频次对照；小样本的高提升度不等于稳定规律。</p></section></div>'+
       '<section class="lt-panel lt-candidate-panel"><div class="lt-panel-head"><div><span class="lt-eyebrow">CANDIDATES</span><h3>娱乐候选组合</h3></div><div><button id="ltCopy" type="button">复制完整报告</button><button id="ltAi" class="lt-ai" type="button">✨ DeepSeek 交叉解读</button></div></div>'+
-      '<div class="lt-responsible lt-compact">候选由所选模式与复现种子确定。“画像依据”只描述它与历史样本的相似程度，<b>不是中奖率、不是推荐购买</b>。</div><div id="ltCandidates" class="lt-candidates"></div><div id="ltAiPanel" class="lt-ai-panel" hidden><h4>AI 解读（仅基于上方计算结果）</h4><div id="ltAiText"></div></div></section>'+
+      '<div class="lt-responsible lt-compact">候选由所选模式与复现种子确定：冷门优先按「中了跟多少人分」挑号，统计画像按与历史样本的相似度打分。<b>两条路都不改变中奖概率，也都不是购买建议</b>。</div><div id="ltCandidates" class="lt-candidates"></div><div id="ltAiPanel" class="lt-ai-panel" hidden><h4>AI 解读（仅基于上方计算结果）</h4><div id="ltAiText"></div></div></section>'+
       '<section class="lt-panel"><div class="lt-panel-head"><div><span class="lt-eyebrow">WALK-FORWARD TEST</span><h3>逐期回测 vs 纯随机</h3></div><span class="lt-tag">无前视偏差</span></div><p class="lt-note">每一个目标期只使用该期之前的数据训练，并与同数量随机组合、理论随机期望对照。回测用于检验方法，不用于挑选“最好使”的号码。</p><div id="ltBacktest"></div></section>'+
       '<section class="lt-panel"><div class="lt-panel-head"><div><span class="lt-eyebrow">SOURCE RECORDS</span><h3>最近开奖记录</h3></div><span id="ltHistoryCount" class="lt-tag"></span></div><div class="lt-table-wrap"><table><thead><tr><th>期号</th><th>日期</th><th id="ltHistoryMainHead">主区</th><th id="ltHistorySubHead">副区</th></tr></thead><tbody id="ltHistory"></tbody></table></div></section>'+
       '<details class="lt-method"><summary>方法、公式与科学性边界</summary><div><p><b>频率：</b>同时观察近期与长期频次，并用 Beta 先验收缩，降低小样本极端值；卡方 p 值只用于描述样本与均匀分布的一致程度，不能推出下一期倾向。</p><p><b>结构：</b>统计和值、跨度、奇偶、三区分区、连号和相邻期重复；候选的结构得分是与历史画像的相似度，不是概率。</p><p><b>共现：</b>号码对同时出现次数与支持度、独立期望并列展示，并使用平滑后的比值参与组合多样性计算。</p><p><b>回测：</b>滚动训练，绝不把目标期或未来数据喂给模型；同时展示纯随机模拟和超几何分布理论期望。若统计画像偶尔领先，也可能只是抽样波动。</p><p><b>AI：</b>点击后才把统计摘要和候选发给你配置的 DeepSeek；不发送笔记、凭据或完整历史数据。AI 只生成文字解读，核心结果不依赖 AI 也能完整使用。</p><p><b>规则来源：</b><a href="https://www.cwl.gov.cn/fcpz/yxjs/ssq" target="_blank" rel="noopener noreferrer">双色球官方规则</a> · <a href="https://www.lottery.gov.cn/tzgg/20190202/72410.html" target="_blank" rel="noopener noreferrer">大乐透官方规则</a>。历史接口属于官网内部接口，并非有 SLA 的开放 API。</p></div></details>'+
@@ -1199,7 +1351,7 @@
   }
 
   // ===== 傻瓜模式 =====
-  // 娱乐个性化：五行 / 星座 / 生肖映射（只影响展示与推荐指数，不改号码生成、不改概率）
+  // 娱乐个性化：五行 / 星座 / 生肖映射（只影响展示与「你的标签」标记，不改号码生成、不改概率）
   var WX_ORDER=['木','火','土','金','水'];
   var SIGNS=[['白羊座','火'],['金牛座','土'],['双子座','金'],['巨蟹座','水'],['狮子座','火'],['处女座','土'],['天秤座','金'],['天蝎座','水'],['射手座','火'],['摩羯座','土'],['水瓶座','金'],['双鱼座','水']];
   var ZODIAC=[['鼠','水'],['牛','土'],['虎','木'],['兔','木'],['龙','土'],['蛇','火'],['马','火'],['羊','土'],['猴','金'],['鸡','金'],['狗','土'],['猪','水']];
@@ -1237,6 +1389,7 @@
     if(target.length>0 && !rows.some(function(r){return r.fit;})){
       rows.slice().sort(function(a,b){return b.crowd.score-a.crowd.score;})[0].fit=true;
     }
+    var usedStory={};
     var items=rows.map(function(r){
       var i=r.i, c=r.c, crowd=r.crowd, fit=r.fit;
       var balls=c.main.map(function(n){return '<b class="red">'+pad2(n)+'</b>';}).join('')+'<i>+</i>'+c.sub.map(function(n){return '<b class="blue">'+pad2(n)+'</b>';}).join('');
@@ -1244,6 +1397,13 @@
         return '<li class="'+f.dir+'">'+esc(f.text)+'</li>';
       }).join('');
       if(!factors) factors='<li class="cold">号码分布分散，没有明显的拥挤特征。</li>';
+      var story=pickStory(c.main,s.analysis.game,prev,usedStory);
+      var storyHtml='<div class="lt-story">'+
+        '<div class="lt-story-head"><span class="lt-story-tag">谁在买这种号</span><b>'+esc(story.label)+'</b></div>'+
+        '<p class="lt-story-who">'+esc(story.who)+'</p>'+
+        '<p class="lt-story-text">'+esc(story.text)+'</p>'+
+        '<p class="lt-story-coda">'+esc(crowdCoda(crowd.score))+'</p>'+
+      '</div>';
       var inPending = isPending(c);
       var copyBtn = '<button class="lt-big-copy-one" type="button" data-idx="'+i+'">复制这注</button>';
       var pendBtn = inPending ? '<button class="lt-big-pending added" type="button" data-idx="'+i+'" disabled>已加入待办 ✓</button>'
@@ -1261,12 +1421,13 @@
           '<div class="lt-crowd-head"><b>冷门度 '+crowd.score+'</b><span class="lt-crowd-level lt-lv-'+(crowd.score>=71?'cold':crowd.score>=56?'mid':'hot')+'">'+crowd.level+'</span><span class="lt-crowd-people">'+esc(crowd.people)+'</span></div>'+
           '<div class="lt-crowd-bar" role="img" aria-label="冷门度 '+crowd.score+' 分"><i style="width:'+crowd.score+'%"></i></div>'+
           '<ul class="lt-crowd-factors">'+factors+'</ul>'+
+          storyHtml+
           (sameTxt?'<p class="lt-crowd-same">'+esc(sameTxt)+' · 多注一起买时互相补位</p>':'')+
           (wxTag?'<p class="lt-crowd-same">'+wxTag+'</p>':'')+
         '</div></article>';
     });
     $('ltSimpleTickets').innerHTML=items.join('');
-    setText('ltResultTitle','挑好了 '+s.candidates.length+' 注，都避开了最挤的那一堆');
+    setText('ltResultTitle','这 '+s.candidates.length+' 注，买的人都少');
   }
   function rerenderSimple() {
     if(!ui.simple.candidates.length)return;
@@ -1277,7 +1438,7 @@
   }
   function runSimple() {
     var my=++ui.simple.runId;
-    var steps=['读取最近开奖记录…','给每个号码算「受欢迎程度」…','估算这一注会被多少人买…','避开 1–12 的生日号段…','避开连号 · 同尾 · 上期重号…','挑出最不挤的几注…','检查几注之间是否雷同…','好了，接着往下看 ✓'];
+    var steps=['读取最近开奖记录…','给每个号码算「受欢迎程度」…','估算这一注会被多少人买…','避开 1–12 的生日号段…','避开连号 · 同尾 · 上期重号…','挑出最不挤的几注…','翻一翻买这种号的人都是谁…','好了，接着往下看 ✓'];
     $('ltSimpleResult').hidden=true;
     $('ltScan').hidden=false;
     setText('ltScanText',steps[0]);
@@ -1295,7 +1456,7 @@
         $('ltScan').hidden=true;
         renderSimpleTickets();
         $('ltSimpleResult').hidden=false;
-        setText('ltStatus','基于 '+analysis.draws.length+' 期真实开奖，从中挑了 '+candidates.length+' 注最不挤的组合。中奖概率和随手买一注完全一样，区别只在万一中了，分钱的人少。');
+        setText('ltStatus','翻过 '+analysis.draws.length+' 期开奖，挑出 '+candidates.length+' 注从头到尾避开人堆的。它们不是算出来的「准号」——中奖概率和随手买一注一模一样，不一样的是万一中了，分钱的人少。');
         return;
       }
       setText('ltScanText',steps[i]);
@@ -1672,6 +1833,7 @@
     crowdProfile:crowdProfile,wheelDesign:wheelDesign,backtestVerdict:backtestVerdict,biasAudit:biasAudit,
     signFlipP:signFlipP,describeDiffs:describeDiffs,studentTTwoTail:studentTTwoTail,
     numPopularity:numPopularity,popcount:popcount,autoPool:autoPool,
+    classifyTicket:classifyTicket,pickStory:pickStory,crowdCoda:crowdCoda,STORY:STORY,
     buildReport:buildReport,buildAiPrompt:buildAiPrompt,
     chiSquareP:chiSquareP,combination:combination,hypergeometric:hypergeometric,
     structureOf:structureOf,rngFrom:rngFrom,
