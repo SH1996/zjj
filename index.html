@@ -1396,6 +1396,29 @@
   .lt-p-legend{margin:0 0 9px;padding:9px 12px;border-radius:9px;background:rgba(226,86,106,.07);
     color:var(--lt-soft);font-size:11.5px;line-height:1.8}
   .lt-p-legend em{font-style:normal}
+  .lt-p-airow{display:flex;align-items:center;gap:10px;flex-wrap:wrap;margin:0 0 14px;padding:10px 13px;
+    border-radius:10px;border:1px dashed var(--lt-line);background:var(--lt-panel)}
+  .lt-p-aiflag{display:flex;align-items:center;gap:7px;font-size:12px;color:var(--lt-ink);cursor:pointer}
+  .lt-p-aiflag input{width:14px;height:14px;accent-color:var(--lt-accent);cursor:pointer}
+  .lt-p-aiflag b{color:var(--lt-accent);font-size:12.5px}
+  .lt-p-aicost{margin-left:auto;font-size:10.5px;color:var(--lt-soft)}
+  .lt-p-aiwhy{font-size:11.5px;line-height:1.8;color:var(--lt-soft)}
+  .lt-p-aibadge{display:flex;align-items:center;gap:8px;flex-wrap:wrap;margin:0 0 10px;font-size:10.5px;color:var(--lt-soft)}
+  .lt-p-aibadge span{padding:3px 9px;border-radius:999px;border:1px solid var(--lt-accent);
+    background:var(--lt-wash);color:var(--lt-accent);letter-spacing:.05em;font-size:9.5px}
+  .lt-p-aibadge b{color:var(--lt-accent);font-size:11px}
+  .lt-p-aibadge i{font-style:normal;opacity:.8}
+  .lt-p-ainote{margin:0 0 13px;padding:10px 13px;border-radius:9px;border-left:3px solid #d69e2e;
+    background:rgba(214,158,46,.14);color:var(--lt-ink);font-size:11.5px;line-height:1.8}
+  .lt-p-read{background:linear-gradient(120deg,var(--lt-wash),var(--lt-panel))}
+  .lt-p-aireason{margin:9px 0 0;padding:8px 11px;border-radius:8px;background:var(--lt-wash);
+    color:var(--lt-ink);font-size:11px;line-height:1.8}
+  .lt-p-aireason b{display:block;margin-bottom:2px;color:var(--lt-accent);font-size:9.5px;letter-spacing:.09em}
+  .lt-p-whybox{margin:10px 0 0;padding:10px 13px;border:1px solid var(--lt-line);border-radius:10px;background:var(--lt-panel)}
+  .lt-p-whybox summary{font-size:11.5px;color:var(--lt-accent);cursor:pointer}
+  .lt-p-whybox ol{margin:9px 0 0;padding-left:18px;font-size:11px;line-height:1.85;color:var(--lt-soft)}
+  .lt-p-whybox li{margin:0 0 7px}
+  .lt-p-whybox b{display:block;margin-bottom:1px;color:var(--lt-ink);font-size:10.5px;letter-spacing:.02em}
   .lt-p-small{margin:9px 0 0;color:var(--lt-soft);font-size:10.5px;line-height:1.7}
   .lt-p-truth{margin-top:14px;padding:16px 18px;border:1px solid #dfd3a9;border-radius:14px;
     background:#fff9e8;color:#66552b;font-size:12.5px;line-height:1.9}
@@ -2041,7 +2064,7 @@ window.onerror = function (msg, url, line) {
   'use strict';
 
   // 版本号统一在此维护；localStorage 键沿用 v11 不变，切勿改名以免丢失用户数据
-  var APP_VERSION = '15.0.2';
+  var APP_VERSION = '15.1.0';
   // 送货单拍照识别：视觉模型默认名、兼容别名与各项安全上限
   var DEFAULT_VISION_MODEL = 'deepseek-flash';
   var VISION_MODEL_FALLBACK = 'deepseek-v4-flash-vision-exp';
@@ -6978,6 +7001,7 @@ window.onerror = function (msg, url, line) {
       try {
         window.LotteryLab.init({
           hasAI: hasAI,
+          aiModel: function () { return (state.config && state.config.aiModel) || ''; },
           explain: function (prompt) { return aiPlain(prompt, 0.2); },
           toast: toast,
           addPending: addLotteryPending,

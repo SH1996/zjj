@@ -1175,6 +1175,387 @@
   // 每个函数都返回同一套结构，UI 只负责画。全部只做三件事之一：
   // 改变分钱人数、改变覆盖与成本、把真相摊开。没有任何一个动中奖概率。
 
+  /* ==================== 2e·AI 选号层 ====================
+     AI 只负责「挑哪几注」；算钱、算覆盖、算概率、校验合法性，全部在本机。
+     号码错了整张票就废，所以 AI 的输出一律要过本地校验：不合格退回重挑，两次不合格降级本地算法。
+     这一步不是不信任模型，是因为「合规」这件事不该由模型自觉。 */
+
+  var AI_PLAY_IDS = { hide: 1, big: 1, run: 1, dan: 1, two: 1, budget: 1, hold: 1, wheel: 1, compound: 1, blue: 1 };
+
+  function aiReady() {
+    try { return !!(ui.opts && ui.opts.hasAI && ui.opts.hasAI() && ui.opts.explain); }
+    catch (e) { return false; }
+  }
+  function aiModelName() {
+    try { return (ui.opts && ui.opts.aiModel && ui.opts.aiModel()) || 'AI'; }
+    catch (e) { return 'AI'; }
+  }
+  function aiSecs(ms) { return ms < 1000 ? '不到 1 秒' : (ms / 1000).toFixed(1) + ' 秒'; }
+  function aiPct(arr, p) {
+    var a = arr.slice().sort(function (x, y) { return x - y; });
+    return a.length ? a[Math.min(a.length - 1, Math.floor(a.length * p))] : 0;
+  }
+
+  // 喂给 AI 的「数据包」：全部历史 + 频次 + 遗漏 + 结构分布。给全量，不替它筛选。
+  function aiStats(st) {
+    var g = st.game, draws = st.draws.slice(0, 120), seg = Math.ceil(g.mainMax / 3);
+    var cnt = {}, gap = {}, subCnt = {}, n, i;
+    for (n = 1; n <= g.mainMax; n++) { cnt[n] = 0; gap[n] = -1; }
+    for (n = 1; n <= g.subMax; n++) subCnt[n] = 0;
+    var sums = [], odds = [], zones = [0, 0, 0], consec = 0, repSum = 0, repN = 0;
+    draws.forEach(function (d, idx) {
+      var s = 0, odd = 0;
+      d.main.forEach(function (x) {
+        cnt[x]++;
+        if (gap[x] < 0) gap[x] = idx;
+        s += x;
+        if (x % 2) odd++;
+        zones[Math.min(2, Math.floor((x - 1) / seg))]++;
+      });
+      d.sub.forEach(function (x) { subCnt[x] = (subCnt[x] || 0) + 1; });
+      sums.push(s); odds.push(odd);
+      if (maxRun(d.main) >= 2) consec++;
+      if (draws[idx + 1]) { repSum += intersectionCount(d.main, draws[idx + 1].main); repN++; }
+    });
+    var L = [];
+    L.push('彩种：' + g.name + '；主区 ' + g.mainPick + ' 个（1–' + g.mainMax + '），副区 ' + g.subPick + ' 个（1–' + g.subMax + '）');
+    L.push('历史：最近 ' + draws.length + ' 期，新到旧（期号 主区 + 副区）');
+    draws.forEach(function (d) { L.push(d.issue + ' ' + d.main.map(pad2).join(' ') + ' + ' + d.sub.map(pad2).join(' ')); });
+    var a = [], b = [], c = [];
+    for (n = 1; n <= g.mainMax; n++) a.push(pad2(n) + '=' + cnt[n]);
+    for (n = 1; n <= g.mainMax; n++) b.push(pad2(n) + '=' + (gap[n] < 0 ? '-' : gap[n]));
+    for (n = 1; n <= g.subMax; n++) c.push(pad2(n) + '=' + subCnt[n]);
+    L.push('主区出现次数：' + a.join(' '));
+    L.push('主区当前遗漏（期）：' + b.join(' '));
+    L.push('副区出现次数：' + c.join(' '));
+    L.push('和值：中位 ' + aiPct(sums, 0.5) + '，10%–90% 区间 ' + aiPct(sums, 0.1) + '–' + aiPct(sums, 0.9));
+    L.push('奇数个数均值：' + mean(odds).toFixed(2));
+    L.push('三区均值（1–' + seg + ' / ' + (seg + 1) + '–' + (2 * seg) + ' / ' + (2 * seg + 1) + '–' + g.mainMax + '）：' +
+      (zones[0] / draws.length).toFixed(1) + ' / ' + (zones[1] / draws.length).toFixed(1) + ' / ' + (zones[2] / draws.length).toFixed(1));
+    L.push('含连号的期数：' + Math.round(consec / draws.length * 100) + '%');
+    L.push('与上一期重号均值：' + (repN ? repSum / repN : 0).toFixed(2) + ' 个');
+    return L.join('\n');
+  }
+
+  // 每一格交给 AI 的具体任务。允许它不同意默认的「最冷优先」，但要求写清理由。
+  function aiTask(playId, prm, st) {
+    var g = st.game;
+    if (playId === 'hide') {
+      return { shape: 'picks', count: clamp(Number(prm.count) || 5, 1, 8),
+        text: '挑 N 注，目标不是「更容易中」，是「万一中了，跟你分钱的人少」。请避开大多数人的写法：1–12 段（生日月/日）、连号、同尾号（如 03 13 23）、与上一期重复的号、全奇或全偶。' };
+    }
+    if (playId === 'big') {
+      return { shape: 'picks', count: clamp(Number(prm.count) || 3, 1, 5),
+        text: '只在最大的 12 个号（' + Math.max(1, g.mainMax - 11) + '–' + g.mainMax + '）里挑 N 注，别用区间外的号。理由是这一段没人在生日里写。' };
+    }
+    if (playId === 'run') {
+      return { shape: 'picks', count: clamp(Number(prm.count) || 3, 1, 5),
+        text: '每注必须含一段 ' + clamp(Number(prm.runLen) || 3, 2, 4) + ' 连号（如 05 06 07）。其余几个号尽量挑冷门、且不要和别的注撞太多。' };
+    }
+    if (playId === 'two') {
+      return { shape: 'picks', count: 1, text: '只挑 1 注，最不像别人会写的那一注。' };
+    }
+    if (playId === 'budget') {
+      return { shape: 'picks', count: clamp(Math.floor((Number(prm.budget) || 20) / 2), 1, 50),
+        text: '按预算挑 N 注（预算 ÷ 2），全部尽量冷门，别扎堆。' };
+    }
+    if (playId === 'hold') {
+      return { shape: 'picks', count: 1,
+        text: '挑 1 注用来长期守号：要有记忆点（方便你记住），但不能是生日、连号这种大众写法——守十年才发现一堆人跟你一样，就白守了。' };
+    }
+    if (playId === 'dan') {
+      return { shape: 'dan', count: 1,
+        text: '选 2 个胆码 + 8 个拖码。胆码会被放进每一注，所以它是这套票的「命门」：既要尽量不跟别人撞，也别挑一个几乎不会出现的极端号——你自己权衡，并在 read 里说明为什么选这两个。拖码 8 个尽量分散在不同区段。' };
+    }
+    if (playId === 'wheel') {
+      var size = clamp(Number(prm.size) || 12, 9, 12);
+      return { shape: 'pool', count: size,
+        text: '圈 ' + size + ' 个号作为「水域」。圈完之后，本地算法会算出最少几注能保证「池中命中若干 → 至少中若干」。你要做的是：让这片水域尽量覆盖可能出现的位置（三区都别空着），同时别整片压在生日段——那样保证生效时也是跟一堆人分钱。' };
+    }
+    if (playId === 'compound') {
+      var spec = String(prm.spec || (st.key === 'ssq' ? '7' : '6-2'));
+      var mn = st.key === 'ssq' ? clamp(Number(spec) || 7, 7, 8) : clamp(Number(spec.split('-')[0]) || 6, 6, 7);
+      var sn = st.key === 'ssq' ? 1 : clamp(Number((spec.split('-')[1]) || 2), 2, 3);
+      return { shape: 'mainSub', count: mn, subCount: sn,
+        text: '打一张复式票：主区选 ' + mn + ' 个号（会展开成 ' + combination(mn, g.mainPick) + ' 注），副区选 ' + sn +
+          ' 个。这张票的所有组合都会买下来，所以号码要「整片都别太挤」，不要有一半落在生日段。' };
+    }
+    if (playId === 'blue') {
+      return { shape: 'main', count: g.mainPick,
+        text: '这一格是「把副区全买下来」：主区你只选 ' + g.mainPick + ' 个号，副区不用选，全部包掉。主区尽量避开生日段——反正中奖靠副区全包，主区只是决定你能中到哪一档。' };
+    }
+    return { shape: 'picks', count: 1, text: '挑 1 注。' };
+  }
+
+  function buildPickPrompt(st, playId, prm, retryNote) {
+    var g = st.game, t = aiTask(playId, prm, st), want = t.count;
+    var example, rule;
+    if (t.shape === 'dan') {
+      example = '{"dan":[a,b],"tuo":[c,d,e,f,g,h,i,j],"read":"整体判断，120 字内"}';
+      rule = 'dan 恰好 2 个、tuo 恰好 8 个，全部是 1–' + g.mainMax + ' 内不重复整数，dan 与 tuo 不能重叠。';
+    } else if (t.shape === 'pool') {
+      example = '{"pool":[a,b,c,...],"read":"整体判断，120 字内"}';
+      rule = 'pool 恰好 ' + want + ' 个 1–' + g.mainMax + ' 内不重复整数（升序）。';
+    } else if (t.shape === 'mainSub') {
+      example = '{"main":[a,b,c,...],"sub":[d],"read":"整体判断，120 字内"}';
+      rule = 'main 恰好 ' + want + ' 个 1–' + g.mainMax + ' 内不重复整数（升序），sub 恰好 ' +
+        (t.subCount || 1) + ' 个 1–' + g.subMax + ' 内不重复整数。';
+    } else if (t.shape === 'main') {
+      example = '{"main":[a,b,c,...],"read":"整体判断，120 字内"}';
+      rule = 'main 恰好 ' + want + ' 个 1–' + g.mainMax + ' 内不重复整数（升序）。副区不用给，这一格是全包的。';
+    } else {
+      example = '{"picks":[{"main":[1,2,3,4,5,6],"sub":[7],"why":"一句话理由，40 字内"}],"read":"整体判断，120 字内"}';
+      rule = 'main 恰好 ' + g.mainPick + ' 个 1–' + g.mainMax + ' 内不重复整数（升序），sub 恰好 ' + g.subPick +
+        ' 个 1–' + g.subMax + ' 内整数，共 ' + want + ' 注。';
+    }
+    var p = '你是彩票数据分析助手。下面是一份真实历史开奖数据，你要在它上面挑号码，并给出理由。\n\n' +
+      aiStats(st) + '\n\n【这一格要什么】\n' + t.text.replace('N 注', want + ' 注') + '\n\n' +
+      '【输出格式】\n只输出一个 JSON 对象，不要 markdown 代码块，不要任何解释文字。格式：\n' + example + '\n' + rule + '\n\n' +
+      '【硬性要求】\n' +
+      '1. 号码必须是范围内的整数；个数不对、有重复、超范围，这一注就会被丢弃。\n' +
+      '2. 不要声称能提高中奖率，不要用「必出」「稳中」「精准预测」这类词。\n' +
+      '3. 你可以在 read 里指出数据中的现象，但必须承认这些现象不能预测下一期。\n';
+    if (retryNote) p += '\n上次的输出无法使用：' + retryNote + '。这次务必只输出合法 JSON，不要多余文字。\n';
+    return p;
+  }
+
+  function aiInts(arr, max) {
+    if (!Array.isArray(arr)) return [];
+    var seen = {}, out = [], i, x;
+    for (i = 0; i < arr.length; i++) {
+      x = Number(arr[i]);
+      if (x !== Math.floor(x) || x < 1 || x > max || seen[x]) continue;
+      seen[x] = 1; out.push(x);
+    }
+    out.sort(function (a, b) { return a - b; });
+    return out;
+  }
+  function aiShapeCheck(playId, prm, st, tk) {
+    var g = st.game, i;
+    if (playId === 'big') {
+      var from = Math.max(1, g.mainMax - 11);
+      for (i = 0; i < tk.main.length; i++) if (tk.main[i] < from) return '有号不在大号段（' + from + '–' + g.mainMax + '）';
+    }
+    if (playId === 'run') {
+      var runLen = clamp(Number(prm.runLen) || 3, 2, 4);
+      if (maxRun(tk.main) < runLen) return '这一注没有 ' + runLen + ' 连号';
+    }
+    return '';
+  }
+
+  function parseAiPayload(text, st, playId, prm) {
+    var g = st.game, s = String(text || '');
+    var a = s.indexOf('{'), b = s.lastIndexOf('}');
+    if (a < 0 || b <= a) return { ok: false, error: '输出里没有 JSON' };
+    var raw = s.slice(a, b + 1), obj = null;
+    try { obj = JSON.parse(raw); } catch (e) {}
+    if (!obj) { try { obj = JSON.parse(raw.replace(/[“”]/g, '"').replace(/,\s*([}\]])/g, '$1')); } catch (e2) {} }
+    if (!obj) return { ok: false, error: 'JSON 格式不对' };
+    var read = String(obj.read || '').slice(0, 200);
+
+    if (playId === 'dan') {
+      var dan = aiInts(obj.dan, g.mainMax), tuo = aiInts(obj.tuo, g.mainMax), clash;
+      if (dan.length !== 2) return { ok: false, error: '胆码不是 2 个合规号（实际 ' + dan.length + ' 个）' };
+      if (tuo.length !== 8) return { ok: false, error: '拖码不是 8 个合规号（实际 ' + tuo.length + ' 个）' };
+      clash = tuo.filter(function (x) { return dan.indexOf(x) > -1; });
+      if (clash.length) return { ok: false, error: '胆码和拖码有重复号' };
+      return { ok: true, dan: dan, tuo: tuo, read: read };
+    }
+
+    if (playId === 'wheel') {
+      var pool = aiInts(obj.pool, g.mainMax), tw = aiTask(playId, prm, st);
+      if (pool.length !== tw.count) return { ok: false, error: '号池给了 ' + pool.length + ' 个，要求 ' + tw.count + ' 个' };
+      return { ok: true, pool: pool, read: read };
+    }
+    if (playId === 'compound') {
+      var tc = aiTask(playId, prm, st), cm = aiInts(obj.main, g.mainMax), cs = aiInts(obj.sub, g.subMax);
+      if (cm.length !== tc.count) return { ok: false, error: '主区 ' + cm.length + ' 个，要求 ' + tc.count + ' 个' };
+      if (cs.length !== tc.subCount) return { ok: false, error: '副区 ' + cs.length + ' 个，要求 ' + tc.subCount + ' 个' };
+      return { ok: true, main: cm, sub: cs, read: read };
+    }
+    if (playId === 'blue') {
+      var tb = aiTask(playId, prm, st), bm = aiInts(obj.main, g.mainMax);
+      if (bm.length !== tb.count) return { ok: false, error: '主区 ' + bm.length + ' 个，要求 ' + tb.count + ' 个' };
+      return { ok: true, main: bm, read: read };
+    }
+
+    var t = aiTask(playId, prm, st), list = Array.isArray(obj.picks) ? obj.picks : [];
+    var out = [], why = [], seen = {}, i, bad = '';
+    for (i = 0; i < list.length && out.length < t.count; i++) {
+      var it = list[i] || {};
+      var tk = { main: aiInts(it.main, g.mainMax), sub: aiInts(it.sub, g.subMax) };
+      if (tk.main.length !== g.mainPick || tk.sub.length !== g.subPick) { bad = '号码个数不对'; continue; }
+      var key = tk.main.join(',') + '+' + tk.sub.join(',');
+      if (seen[key]) continue;
+      var ck = aiShapeCheck(playId, prm, st, tk);
+      if (ck) { bad = ck; continue; }
+      seen[key] = 1; out.push(tk); why.push(String(it.why || '').slice(0, 90));
+    }
+    if (!out.length) return { ok: false, error: bad || '没有一注符合规则' };
+    if (playId === 'two' || playId === 'hold') { out = out.slice(0, 1); why = why.slice(0, 1); }
+    return { ok: true, tickets: out, why: why, read: read, short: out.length, want: t.count };
+  }
+
+  function askAi(prompt, opts) {
+    var o = opts || ui.opts || {};
+    return new Promise(function (resolve, reject) {
+      var done = false;
+      var timer = setTimeout(function () {
+        if (done) return;
+        done = true; reject(new Error('AI 超时（75 秒）'));
+      }, 75000);
+      var ok = function (v) { if (done) return; done = true; clearTimeout(timer); resolve(v); };
+      var no = function (e) { if (done) return; done = true; clearTimeout(timer); reject(e); };
+      try { o.explain(prompt).then(ok, no); } catch (e) { no(e); }
+    });
+  }
+
+  // 主入口：调一次 → 解析失败就把错误告诉模型再要一次 → 仍失败返回 ok:false 由上层降级
+  function aiChoose(st, playId, prm, opts) {
+    var o = opts || ui.opts || {};
+    var t0 = Date.now();
+    return askAi(buildPickPrompt(st, playId, prm, ''), o).then(function (text) {
+      var r = parseAiPayload(text, st, playId, prm);
+      if (r.ok) { r.ms = Date.now() - t0; r.model = (o.aiModel && o.aiModel()) || 'AI'; r.attempts = 1; return r; }
+      return askAi(buildPickPrompt(st, playId, prm, r.error), o).then(function (text2) {
+        var r2 = parseAiPayload(text2, st, playId, prm);
+        r2.ms = Date.now() - t0; r2.model = (o.aiModel && o.aiModel()) || 'AI'; r2.attempts = 2;
+        if (!r2.ok) r2.error = '两次都没给出合规号码（' + r2.error + '）';
+        return r2;
+      });
+    }).catch(function (e) {
+      return { ok: false, error: (e && e.message) ? e.message : '调用失败', ms: Date.now() - t0,
+        model: (o.aiModel && o.aiModel()) || 'AI', attempts: 1 };
+    });
+  }
+
+  function aiSrcText(st, p, ai) {
+    return '这次号码是 AI 读完全部历史后挑的：先看 ' + Math.min(st.draws.length, 120) + ' 期开奖记录，' +
+      '连同频次、遗漏、和值、三区分布一起交给它，再按「' + p.name + '」的要求逐注给理由。' +
+      '本地只做三件事：校验号码范围与个数、算冷门度和成本、把不合规的注打回去重挑。';
+  }
+
+  // 同一格、同一参数下本地算法会出什么——用来给 AI 的结果做对照，不藏着
+  function localSamePlay(st, playId, prm) {
+    try {
+      if (playId === 'hide') return playHide(st, prm);
+      if (playId === 'big') return playBig(st, prm);
+      if (playId === 'run') return playRun(st, prm);
+      if (playId === 'two') return playTwo(st, prm);
+      if (playId === 'budget') return playBudget(st, prm);
+    } catch (e) {}
+    return null;
+  }
+
+  function assembleAiPicks(st, p, prm, ai) {
+    var g = st.game;
+    var tickets = ai.tickets.map(function (t, i) {
+      return { main: t.main, sub: t.sub, crowd: crowdProfile(t.main, t.sub, g, st.prevMain), why: ai.why[i] || '' };
+    });
+    var scores = tickets.map(function (t) { return t.crowd.score; });
+    var count = tickets.length, cost = count * 2;
+    var short = (ai.want && ai.short < ai.want) ? '（要 ' + ai.want + ' 注，只给了 ' + ai.short + ' 注合规的）' : '';
+    var base = localSamePlay(st, p.id, prm);
+    var baseAvg = (base && base.ok && base.tickets.length) ? Math.round(mean(base.tickets.map(function (t) { return t.crowd.score; }))) : null;
+    var mineAvg = Math.round(mean(scores));
+    var cmp = baseAvg == null ? '满分 100，越高越没人抢'
+      : (mineAvg >= baseAvg ? '本地算法同参数：' + baseAvg + '（AI 更冷）'
+        : '本地算法同参数：' + baseAvg + '（这次 AI 没那么冷）');
+    return {
+      ok: true, id: p.id, tickets: tickets, count: count, cost: cost, ai: ai,
+      headline: 'AI 读完 ' + Math.min(st.draws.length, 120) + ' 期，挑了 ' + count + ' 注',
+      src: aiSrcText(st, p, ai) + ' 它和本地算法最大的区别：本地只认「最冷」，AI 会兼顾三区、和值、重号这些结构——所以它的号码不一定更冷，只是理由更具体。',
+      summary: [
+        { k: '注数 / 成本', v: count + ' 注', sub: '¥' + cost + short },
+        { k: '平均冷门度', v: mineAvg, sub: cmp },
+        { k: '中奖概率', v: '不变', sub: '每注仍是 1/' + st.jackpot.toLocaleString('zh-CN') },
+        { k: 'AI 读了', v: Math.min(st.draws.length, 120) + ' 期', sub: ai.model + ' · ' + aiSecs(ai.ms) }
+      ],
+      truth: 'AI 看完了这 ' + Math.min(st.draws.length, 120) + ' 期，理由也写得挺像回事。但摇奖机的记忆是 0：' +
+        '这 ' + count + ' 注和随手买的 ' + count + ' 注，中奖概率一模一样。它真正改变的只有一件事——万一中了，跟你分钱的人有多少。'
+    };
+  }
+
+  function assembleAiDan(st, p, prm, ai) {
+    var g = st.game, danN = 2, tuoN = 8;
+    var dan = ai.dan, tuo = ai.tuo;
+    var k2 = g.mainPick - danN, t = k2 - 1, m = k2 - 1;
+    var core = coverCore(tuo, k2, t, m, 4000);
+    if (!core.ok) return { ok: false, error: core.error || '这组胆拖没能缩出覆盖' };
+    var tickets = core.tickets.map(function (x) { return { main: uniqueSorted(dan.concat(x)), sub: [] }; });
+    var full = combination(tuoN, k2);
+    attachSub(tickets, g, autoSubPoolByGame(g));
+    var pFull = danProb(g, danN, tuoN, t);
+    return {
+      ok: true, id: 'dan', tickets: tickets, count: tickets.length, cost: tickets.length * 2,
+      dan: dan, tuo: tuo, mark: dan, layout: 'list', ai: ai,
+      headline: 'AI 选了 ' + dan.map(pad2).join(' ') + ' 当胆，' + tuoN + ' 个拖码轮着配',
+      src: aiSrcText(st, p, ai) + ' 胆和拖是 AI 定的，' + full + ' 注缩成 ' + tickets.length + ' 注这一步是本地覆盖算法算的——这一步不能靠猜，漏一种情况就白保了。',
+      summary: [
+        { k: 'AI 选的胆码', v: dan.map(pad2).join(' '), sub: '每注都带着，它俩不开出来就全废' },
+        { k: 'AI 选的拖码', v: tuo.map(pad2).join(' '), sub: '每注 = 2 个胆 + 4 个拖' },
+        { k: '省了多少', v: tickets.length + ' / ' + full + ' 注', sub: '同样保底下限，省 ' + Math.round((1 - tickets.length / full) * 100) + '%' },
+        { k: '前提概率', v: (pFull * 100).toFixed(3) + '%', sub: '2 胆全中 + 拖中 ' + t + ' 个 → 至少 1 注中 ' + (t + danN) + ' 个' }
+      ],
+      truth: '胆码是 AI 在看完 ' + Math.min(st.draws.length, 120) + ' 期后选的，它给的理由可以看。但代价没变：' +
+        '这 2 个号必须开出来，少一个，' + tickets.length + ' 注全废。AI 也改不了这一点。'
+    };
+  }
+
+  function assembleAiHold(st, p, prm, ai) {
+    var tk = ai.tickets[0];
+    var t = [{ main: tk.main, sub: tk.sub, crowd: crowdProfile(tk.main, tk.sub, st.game, null), why: ai.why[0] || '' }];
+    var rp = replay(t, st.draws, st.key);
+    var band = randomReplayBand(st.draws, st.game, 200, 'hold-band-' + st.key);
+    var net = rp.fixedWin - rp.spend;
+    var rank = band.wins.filter(function (w) { return w < rp.fixedWin; }).length / band.wins.length;
+    var rankTxt = rank < 0.2 ? '比大多数随机结果低——这是这一注运气差，不是守号的问题。'
+      : (rank > 0.8 ? '比大多数随机结果高——同样只是运气，不是守号的本事。'
+      : '落在随机结果的正中间，说明守号和每期乱换没有区别。');
+    return {
+      ok: true, id: 'hold', tickets: t, count: 1, cost: 2, ai: ai,
+      headline: 'AI 选了这一注，守 ' + st.draws.length + ' 期',
+      src: aiSrcText(st, p, ai),
+      summary: [
+        { k: '总投入', v: '¥' + rp.spend, sub: st.draws.length + ' 期 × 2 元' },
+        { k: '固定奖回收', v: '¥' + rp.fixedWin, sub: '浮动奖 ' + rp.floatHits + ' 次，不估金额' },
+        { k: '账面', v: (net >= 0 ? '+' : '') + '¥' + net, sub: net >= 0 ? '这组运气不错' : '这才是常态' },
+        { k: '最好的一次', v: rp.best ? rp.best.name : '没中过', sub: rp.best ? (rp.best.issue + ' 期 · ' + rp.best.k + '+' + rp.best.b) : '连末等奖都没有' }
+      ],
+      table: rp.rows.length ? {
+        head: ['期号', '命中', '奖级', '金额'],
+        rows: rp.rows.map(function (r) { return [r.issue, r.k + ' + ' + r.b, r.name, r.amount == null ? '浮动' : '¥' + r.amount]; }),
+        note: '只列四等奖以上；五、六等奖等小奖已计入上面的回收总额。'
+      } : null,
+      truth: '同样 ' + st.draws.length + ' 期，如果每期都换一组随机号，200 次模拟的固定奖回收中位数是 ¥' + band.median +
+        '（10%–90% 区间 ¥' + band.p10 + '–¥' + band.p90 + '）。AI 守的这一注回收 ¥' + rp.fixedWin + '，' + rankTxt +
+        ' AI 选号没有改变这张票的期望——守号的真正好处是「不用每期纠结」。'
+    };
+  }
+
+  // 撒网 / 复式 / 包蓝：AI 定「号」，本地算「注」。这三格的注数必须由数学给，不能让模型估。
+  function applyAiToLocal(st, p, prm, ai) {
+    if (p.id === 'wheel') st.aiPool = ai.pool;
+    else { st.aiMain = ai.main; if (ai.sub) st.aiSub = ai.sub; }
+    var res = runLocal(st, p, prm);
+    if (!res || !res.ok) return res;
+    res.ai = ai;
+    if (p.id === 'wheel') {
+      res.headline = 'AI 圈了 ' + ai.pool.length + ' 个号，' + res.count + ' 注兜底';
+      res.src = aiSrcText(st, p, ai) + ' AI 圈的是 ' + ai.pool.map(pad2).join(' ') +
+        '；注数是覆盖算法算出来的——这一步不能交给模型，少一注就兜不住。';
+    } else if (p.id === 'compound') {
+      res.headline = 'AI 选了票面号，展开 ' + res.count + ' 注';
+      res.src = aiSrcText(st, p, ai) + ' 票面是 ' + ai.main.map(pad2).join(' ') + ' + ' + ai.sub.map(pad2).join(' ') +
+        '；展开成 ' + res.count + ' 注是组合数算的，不是估的。';
+    } else {
+      res.headline = 'AI 选了主区号，副区全包';
+      res.src = aiSrcText(st, p, ai) + ' AI 选的主区是 ' + ai.main.map(pad2).join(' ') +
+        '；副区全包是固定动作，注数由彩种决定，跟选号无关。';
+    }
+    return res;
+  }
+
   function playHide(st, opts) {
     var count = clamp(Number(opts.count) || 5, 1, 8);
     var g = st.game, tickets = pickColdTickets(st.pool, st.subPool, g, count, st.seed + '|hide', { prevMain: st.prevMain });
@@ -1246,7 +1627,7 @@
     var g = st.game, size = clamp(Number(opts.size) || 12, 9, 12);
     var pair = (opts.guarantee || (g.mainPick >= 6 ? '5-4' : '4-3')).split('-');
     var t = Number(pair[0]), m = Number(pair[1]);
-    var pool = st.analysis ? autoPoolBySize(st.analysis, size) : st.pool.slice(0, size);
+    var pool = (st.aiPool && st.aiPool.length) ? st.aiPool.slice() : (st.analysis ? autoPoolBySize(st.analysis, size) : st.pool.slice(0, size));
     var subPool = autoSubPoolByGame(g);
     var r = wheelDesign({ pool: pool, game: g, t: t, m: m, subPool: subPool, subPick: g.subPick });
     if (!r.ok) return r;
@@ -1312,10 +1693,10 @@
   function playBlue(st, opts) {
     var g = st.game, n = 0, tickets = [], i, j;
     if (st.key === 'ssq') {
-      var red = coldestN(st, 6);
+      var red = (st.aiMain && st.aiMain.length) ? st.aiMain.slice() : coldestN(st, 6);
       for (i = 1; i <= 16; i++) tickets.push({ main: red.slice(), sub: [i] });
     } else {
-      var front = coldestN(st, 5);
+      var front = (st.aiMain && st.aiMain.length) ? st.aiMain.slice() : coldestN(st, 5);
       for (i = 1; i <= 12; i++) for (j = i + 1; j <= 12; j++) tickets.push({ main: front.slice(), sub: [i, j] });
     }
     n = tickets.length;
@@ -1391,14 +1772,15 @@
     if (st.key === 'ssq') {
       mainN = clamp(Number(spec) || 7, 7, 8);
       subN = 1;
-      var reds = coldestN(st, mainN);
-      var blue = st.subPool[0];
+      var reds = (st.aiMain && st.aiMain.length) ? st.aiMain.slice() : coldestN(st, mainN);
+      var blue = (st.aiSub && st.aiSub.length) ? st.aiSub[0] : st.subPool[0];
       kSubsets(reds, 6).forEach(function (c) { tickets.push({ main: c, sub: [blue] }); });
     } else {
       var parts = String(spec).indexOf('-') > -1 ? String(spec).split('-') : ['6', '2'];
       mainN = clamp(Number(parts[0]) || 6, 6, 7);
       subN = clamp(Number(parts[1]) || 2, 2, 3);
-      var fronts = coldestN(st, mainN), backs = coldestSub(st, subN);
+      var fronts = (st.aiMain && st.aiMain.length) ? st.aiMain.slice() : coldestN(st, mainN);
+      var backs = (st.aiSub && st.aiSub.length) ? st.aiSub.slice() : coldestSub(st, subN);
       kSubsets(fronts, 5).forEach(function (f) {
         kSubsets(backs, 2).forEach(function (b) { tickets.push({ main: f, sub: b }); });
       });
@@ -1879,7 +2261,7 @@
   var ui={inited:false,openFlag:false,game:'ssq',data:{ssq:[],dlt:[]},analysis:null,candidates:[],bt:null,lastFocus:null,opts:{},tab:'pick',
     cover:{size:12,pool:[],subPool:[],t:5,m:3,result:null},
     simple:{count:5,seed:'竹间-001',analysis:null,candidates:[],bt:null,runId:0},
-    play:{id:null,seed:'',params:{},result:null,tickets:[],prevMain:null}};
+    play:{id:null,seed:'',params:{},result:null,tickets:[],prevMain:null,useAI:true,ai:null}};
   function $(id){return root&&root.document?root.document.getElementById(id):null;}
   function setText(id,text){var e=$(id);if(e)e.textContent=text;}
   function esc(s){return String(s==null?'':s).replace(/[&<>"']/g,function(c){return {'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c];});}
@@ -1969,10 +2351,11 @@
       '<li><b>先选一个格子</b>：十二格按「你最在乎什么」分四组——中了多拿、不漏空、省着买、别被骗。点进去就是那一种买法。</li>'+
       '<li><b>每格都写清两件事</b>：换到了什么（比如「分钱人少」），换不到什么（永远是「中奖概率」）。没有一格敢写「更容易中」。</li>'+
       '<li><b>参数很少</b>：多数格子只有「买几注」一个选择，改完点「开始算」。</li>'+
-      '<li><b>号是怎么来的</b>：全部在这台设备上算出来，不联网、不问 AI、不看走势图。只有一条规则——估算「这一注有多少人会写得跟你一样」：1–12 最挤（能当月份和日期），13–31 次之（只能当日期），32 以上最冷。每格结果上方都有一行「号从哪来」，写明这一格具体怎么挑的。</li>'+
+      '<li><b>号是怎么来的</b>：两条路。默认走本地算法——不联网，只按「这一注有多少人会写得跟你一样」排序：1–12 最挤（能当月份和日期），13–31 次之（只能当日期），32 以上最冷。配了 AI 之后，也可以让它读完全部历史再挑，每注给理由。两条路都不改变中奖概率，只是理由详略不同。</li>'+
       '<li><b>每注都有故事</b>：「谁在买这种号」是按常见选号习惯编的画像，不是销量统计，但它能帮你看懂自己站在人堆哪一边。</li>'+
       '<li><b>选彩种</b>：顶部切换「双色球」或「超级大乐透」，两个彩种互不影响；有些玩法只在某个彩种下成立。</li>'+
       '<li><b>存起来</b>：点「＋ 全部加入待办」，号码连彩种、开奖日一起进首页「待办」，提醒设在<b>开奖前一天 20:00</b>；只想拿号码就点「复制全部」。</li>'+
+      '<li><b>AI 能做到什么、做不到什么</b>：它会读完历史，告诉你它看到了什么，并给每一注写理由。但它改不了「摇奖机没有记忆」——AI 选号、本地算法、随手机选，中奖概率完全一样，只在「中了跟几个人分钱」上有差别。回测和体检两格不让 AI 插手，因为那两格只验算、不出号。</li>'+
       '<li><b>想看门道</b>：右上角「专业数据」，频率、结构、逐期回测和完整报告都在那里。</li>'+
       '<li><b>更新开奖</b>：专业数据页点「更新数据」，从官网复制最新记录粘贴导入。</li>'+
       '</ol>'+
@@ -2235,7 +2618,7 @@
           '<div class="lt-g-intro-r"><b>12</b><span>种买法</span><em>全部不改变中奖概率</em></div>' +
         '</div>' +
         '<div id="ltGridBody"></div>' +
-        '<div class="lt-g-foot">所有号码都在你这台设备上算出来——不联网、不问 AI、不看走势图，用的是「这种号有多少人会写」的一套经验规则。每一格底下写着两行小字：左边「换到了什么」，右边「换不到什么」。没有一格敢写「更容易中」。</div>' +
+        '<div class="lt-g-foot">号码有两条来路，都不改变中奖概率：<b>本地算法</b>（不联网，只按「多少人会写这个号」排）和 <b>AI 选号</b>（读完全部历史再挑，每一注给理由）。每一格底下写着两行小字：左边「换到了什么」，右边「换不到什么」。没有一格敢写「更容易中」。</div>' +
       '</div>' +
       '<div id="ltPlayView" class="lt-p-view" hidden>' +
         '<div class="lt-p-bar">' +
@@ -2251,6 +2634,7 @@
           '<div class="lt-p-tags" id="ltPlayTags"></div>' +
         '</header>' +
         '<section class="lt-p-params" id="ltPlayParams"></section>' +
+        '<div class="lt-p-airow" id="ltPlayAiRow"></div>' +
         '<div class="lt-p-go-wrap">' +
           '<button class="lt-p-go" id="ltPlayGo" type="button">开始算</button>' +
           '<button class="lt-p-reroll" id="ltPlayReroll" type="button">换一组</button>' +
@@ -2309,6 +2693,7 @@
       '<span class="lt-p-tag good">换到：' + esc(p.changed) + '</span>' +
       '<span class="lt-p-tag bad">换不到：' + esc(p.not) + '</span>';
     renderPlayParams(p);
+    renderAiRow(p);
     $('ltPlayGo').textContent = p.id === 'backtest' ? '跑回测' : (p.id === 'checkup' ? '做体检' : '开始算');
     var rerollable = ['hide', 'big', 'run', 'two', 'budget', 'compound', 'hold'];
     $('ltPlayReroll').hidden = rerollable.indexOf(p.id) === -1;
@@ -2366,6 +2751,29 @@
     host.innerHTML = html;
   }
 
+  // AI 开关：只在「挑几注」的格子里出现。覆盖/枚举/组合那些格子不进 AI，是因为它们要的是数学保证。
+  function renderAiRow(p) {
+    var el = $('ltPlayAiRow');
+    if (!el) return;
+    if (!AI_PLAY_IDS[p.id]) {
+      el.innerHTML = '<span class="lt-p-aiwhy">这一格不出号码：它只拿历史验算，AI 不参与挑号。</span>';
+      return;
+    }
+    if (!aiReady()) {
+      el.innerHTML = '<span class="lt-p-aiwhy">还没配 AI，现在用本地算法出号。想让 AI 读历史数据再挑，去设置里填好接口、密钥和模型名，回来点「开始算」就会走 AI。</span>';
+      return;
+    }
+    var n = 0;
+    try { n = currentDraws().length; } catch (e) { n = 0; }
+    el.innerHTML = '<label class="lt-p-aiflag"><input type="checkbox" id="ltPlayUseAI"' + (ui.play.useAI ? ' checked' : '') +
+      '><span>让 AI 读 <b>' + n + '</b> 期开奖数据来挑这一格</span></label>' +
+      '<span class="lt-p-aicost">本地只认「最冷」；AI 会兼顾结构 · 每次点「开始算」调用 1 次 ' + esc(aiModelName()) + '</span>';
+    bind('ltPlayUseAI', 'change', function () {
+      ui.play.useAI = !!this.checked;
+      notify(ui.play.useAI ? '已切到 AI 选号，点「开始算」。' : '已切回本地算法。');
+    });
+  }
+
   function buildPlayState() {
     var draws = currentDraws();
     var analysis = analyze(draws, ui.game, 60);
@@ -2381,6 +2789,27 @@
     };
   }
 
+  function runLocal(st, p, prm) {
+    var res;
+    try {
+      if (p.id === 'hide') res = playHide(st, prm);
+      else if (p.id === 'big') res = playBig(st, prm);
+      else if (p.id === 'run') res = playRun(st, prm);
+      else if (p.id === 'wheel') res = playWheel(st, prm);
+      else if (p.id === 'dan') res = playDan(st, prm);
+      else if (p.id === 'blue') res = playBlue(st, prm);
+      else if (p.id === 'two') res = playTwo(st, prm);
+      else if (p.id === 'budget') res = playBudget(st, prm);
+      else if (p.id === 'compound') res = playCompound(st, prm);
+      else if (p.id === 'backtest') res = playBacktest(st, prm);
+      else if (p.id === 'checkup') res = playCheckup(st, prm);
+      else if (p.id === 'hold') res = playHold(st, prm);
+    } catch (e) {
+      res = { ok: false, error: '算的时候出了点问题：' + e.message };
+    }
+    return res;
+  }
+
   function runPlay() {
     var p = PLAY_MAP[ui.play.id];
     if (!p) return;
@@ -2389,29 +2818,18 @@
     $('ltPlayLoading').hidden = false;
     $('ltPlayResult').hidden = true;
     $('ltPlayTruth').hidden = true;
-    setText('ltPlayLoadText', p.id === 'backtest' ? '正在逐期回测，每一期都只用它之前的数据…'
-      : (p.id === 'checkup' ? '正在做卡方检验、热号延续和遗漏分箱…' : '正在从几万种组合里挑…'));
-    var go = function () {
-      var st = buildPlayState();
-      ui.play.prevMain = st.prevMain;
-      var prm = ui.play.params[p.id] || {};
-      var res;
-      try {
-        if (p.id === 'hide') res = playHide(st, prm);
-        else if (p.id === 'big') res = playBig(st, prm);
-        else if (p.id === 'run') res = playRun(st, prm);
-        else if (p.id === 'wheel') res = playWheel(st, prm);
-        else if (p.id === 'dan') res = playDan(st, prm);
-        else if (p.id === 'blue') res = playBlue(st, prm);
-        else if (p.id === 'two') res = playTwo(st, prm);
-        else if (p.id === 'budget') res = playBudget(st, prm);
-        else if (p.id === 'compound') res = playCompound(st, prm);
-        else if (p.id === 'backtest') res = playBacktest(st, prm);
-        else if (p.id === 'checkup') res = playCheckup(st, prm);
-        else if (p.id === 'hold') res = playHold(st, prm);
-      } catch (e) {
-        res = { ok: false, error: '算的时候出了点问题：' + e.message };
-      }
+
+    var st = buildPlayState();
+    ui.play.prevMain = st.prevMain;
+    var prm = ui.play.params[p.id] || {};
+    var useAI = !!(AI_PLAY_IDS[p.id] && ui.play.useAI && aiReady());
+
+    setText('ltPlayLoadText', useAI
+      ? 'AI 正在读 ' + st.draws.length + ' 期数据，挑号并写理由…（可能要十几秒）'
+      : (p.id === 'backtest' ? '正在逐期回测，每一期都只用它之前的数据…'
+        : (p.id === 'checkup' ? '正在做卡方检验、热号延续和遗漏分箱…' : '正在从几万种组合里挑…')));
+
+    var done = function (res) {
       btn.disabled = false;
       $('ltPlayLoading').hidden = true;
       if (!res || !res.ok) {
@@ -2422,7 +2840,24 @@
       ui.play.result = res;
       renderPlayResult(p, res);
     };
-    setTimeout(go, 40);
+
+    if (!useAI) { setTimeout(function () { done(runLocal(st, p, prm)); }, 40); return; }
+
+    aiChoose(st, p.id, prm).then(function (r) {
+      var res = null;
+      if (r.ok) {
+        if (p.id === 'dan') res = assembleAiDan(st, p, prm, r);
+        else if (p.id === 'hold') res = assembleAiHold(st, p, prm, r);
+        else if (p.id === 'wheel' || p.id === 'compound' || p.id === 'blue') res = applyAiToLocal(st, p, prm, r);
+        else res = assembleAiPicks(st, p, prm, r);
+      }
+      if (!res || !res.ok) {
+        // AI 给了号但本地装配失败（例如胆拖缩不出覆盖）也要退回本地，不能让用户看到半成品
+        res = runLocal(st, p, prm) || { ok: false, error: '没算出来' };
+        res.aiNote = { failed: true, error: (r.ok ? 'AI 的号码本地验算没过' : r.error), model: r.model || aiModelName() };
+      }
+      done(res);
+    });
   }
 
   function renderPlayResult(p, res) {
@@ -2432,6 +2867,16 @@
       (res.count ? '<div class="lt-p-result-actions">' +
         '<button type="button" id="ltPlayCopy">复制全部</button>' +
         '<button type="button" id="ltPlayPend">＋ 全部加入待办</button></div>' : '') + '</div>';
+    if (res.aiNote && res.aiNote.failed) {
+      html += '<div class="lt-p-ainote">AI 这次没给出可用号码（' + esc(res.aiNote.error) + '），下面这组是本地算法出的，规则和以前一样。</div>';
+    }
+    if (res.ai && res.ai.ok) {
+      html += '<div class="lt-p-aibadge"><span>AI 选号</span><b>' + esc(res.ai.model) + '</b>' +
+        '<i>' + aiSecs(res.ai.ms) + '</i>' + (res.ai.attempts > 1 ? '<i>重挑 1 次</i>' : '') + '</div>';
+    }
+    if (res.ai && res.ai.read) {
+      html += '<div class="lt-p-src lt-p-read"><b>AI 怎么想的</b><span>' + esc(res.ai.read) + '</span></div>';
+    }
     if (res.src) {
       html += '<div class="lt-p-src"><b>号从哪来</b><span>' + esc(res.src) + '</span></div>';
     }
@@ -2453,7 +2898,15 @@
           }).join(' ') + '</b>' +
             (t.sub.length ? '<i>+</i><b class="blue">' + t.sub.map(pad2).join(' ') + '</b>' : '') + '</div>';
         }).join('') + '</div>' +
-        '<p class="lt-p-small">' + res.count + ' 注，合计 ¥' + (res.cost || res.count * 2) + '。注数多的时候不逐注讲故事——故事是给「就买几注」的人看的。</p>';
+        '<p class="lt-p-small">' + res.count + ' 注，合计 ¥' + (res.cost || res.count * 2) + '。注数多的时候不逐注讲故事——故事是给「就买几注」的人看的。</p>' +
+        (function () {
+          var ws = res.tickets.filter(function (t) { return t.why; });
+          if (!ws.length) return '';
+          return '<details class="lt-p-whybox"><summary>AI 给每一注的理由（' + ws.length + ' 条）</summary><ol>' +
+            ws.map(function (t) {
+              return '<li><b>' + t.main.map(pad2).join(' ') + (t.sub.length ? ' + ' + t.sub.map(pad2).join(' ') : '') + '</b>' + esc(t.why) + '</li>';
+            }).join('') + '</ol></details>';
+        })();
       } else {
         var used = {};
         html += '<div class="lt-p-cards">' + res.tickets.map(function (t, i) {
@@ -2502,6 +2955,7 @@
       '<div class="lt-p-crowd"><b>冷门度 ' + cp.score + '</b><span class="lt-p-lv">' + cp.level + '</span>' +
         '<span class="lt-p-crowdbar"><i style="width:' + cp.score + '%"></i></span></div>' +
       '<ul class="lt-p-factors">' + factors + '</ul>' +
+      (t.why ? '<p class="lt-p-aireason"><b>AI 的理由</b>' + esc(t.why) + '</p>' : '') +
       '<details class="lt-p-story"><summary>谁在买这种号 · ' + esc(story.label) + '</summary>' +
         '<p class="who">' + esc(story.who) + '</p><p>' + esc(story.text) + '</p>' +
         '<p class="coda">' + esc(crowdCoda(cp.score)) + '</p></details>' +
@@ -2664,6 +3118,7 @@
     numPopularity:numPopularity,popcount:popcount,autoPool:autoPool,
     classifyTicket:classifyTicket,pickStory:pickStory,crowdCoda:crowdCoda,STORY:STORY,
     buildReport:buildReport,buildAiPrompt:buildAiPrompt,
+    __ai:{choose:aiChoose,parse:parseAiPayload,prompt:buildPickPrompt,assemble:assembleAiPicks,stats:aiStats},
     prizeOf:prizeOf,ticketHit:ticketHit,singleFixedEV:singleFixedEV,replay:replay,
     coverCore:coverCore,pickColdTickets:pickColdTickets,runTickets:runTickets,
     maxRun:maxRun,shapeShare:shapeShare,hotColdPersistence:hotColdPersistence,gapPersistence:gapPersistence,
