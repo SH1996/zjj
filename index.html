@@ -1683,6 +1683,8 @@
   .jl-gi:last-child{margin-right:0;}
   .jl-goods b{color:var(--jl-ink);font-weight:500;font-variant-numeric:tabular-nums;}
   .jl-goods u{display:block;text-decoration:none;font-size:10.5px;color:var(--jl-faint);margin-top:2px;}
+  .jl-goods u.jl-infer{display:inline-block;background:var(--jl-wash);color:var(--jl-acc2);
+    border-radius:6px;padding:1px 6px;font-size:10px;margin-top:3px;}
   .jl-orow em{font-style:normal;font-variant-numeric:tabular-nums;color:var(--jl-ink);white-space:nowrap;}
   .jl-warn{color:var(--jl-warn) !important;font-style:normal;font-size:11.5px;}
 
@@ -1710,6 +1712,17 @@
   .jl-box-b{display:flex;flex-wrap:wrap;gap:5px;margin-top:10px;}
   .jl-chip{font-size:11.5px;background:var(--jl-wash);border-radius:7px;padding:3px 8px;color:var(--jl-ink);}
   .jl-box-f{margin-top:9px;font-size:11px;color:var(--jl-faint);}
+  .jl-box-w{margin-top:8px;font-size:11px;line-height:1.7;color:var(--jl-soft);}
+
+  /* AI 建议条：装箱页顶部 */
+  .jl-aiwire{display:flex;align-items:center;gap:10px;margin-top:10px;padding:11px 13px;
+    background:var(--jl-panel);border:1px solid var(--jl-line);border-radius:12px;}
+  .jl-aiwire>div{flex:1;min-width:0;}
+  .jl-aiwire b{display:block;font-size:12.5px;font-weight:600;}
+  .jl-aiwire span{display:block;margin-top:2px;font-size:11px;color:var(--jl-faint);}
+  .jl-aiwire button{flex:0 0 auto;border:1px solid var(--jl-line);background:var(--jl-wash);
+    color:var(--jl-acc);border-radius:9px;padding:7px 12px;font-size:12px;font-family:inherit;cursor:pointer;}
+  .jl-aiwire button:disabled{opacity:.55;}
 
   .jl-card{margin-top:8px;border:1px solid var(--jl-line);border-radius:12px;background:var(--jl-panel);}
   .jl-card summary{display:flex;align-items:center;gap:10px;padding:11px 14px;cursor:pointer;
@@ -1757,7 +1770,9 @@
   .jl-shot-head p{margin:12px 0 0;font-size:12.5px;line-height:1.85;color:var(--jl-soft);}
   .jl-shots{display:grid;grid-template-columns:repeat(auto-fill,minmax(128px,1fr));gap:10px;margin-top:12px;}
   .jl-shot{position:relative;border-radius:12px;overflow:hidden;background:var(--jl-panel);
-    border:1px solid var(--jl-line);aspect-ratio:1;}
+    border:1px solid var(--jl-line);aspect-ratio:1;cursor:pointer;}
+  .jl-shot-un{border:1.5px dashed var(--jl-acc);}
+  .jl-shot-un span{background:rgba(201,114,47,.88);font-weight:600;}
   .jl-shot img{width:100%;height:100%;object-fit:cover;display:block;}
   .jl-shot span i{font-style:normal;opacity:.72;margin-left:5px;font-size:9px;}
   .jl-shot span{position:absolute;left:0;right:0;bottom:0;padding:5px 7px;font-size:10.5px;color:#fff;
@@ -1836,6 +1851,20 @@
   .jl-eacts{display:flex;gap:9px;margin-top:12px;position:sticky;bottom:0;
     background:var(--jl-panel);padding:10px 0 2px;}
   .jl-eacts .jl-primary{flex:1;}
+
+  /* 给照片选楼栋 */
+  .jl-pick-lead{margin:2px 0 12px;font-size:11.5px;line-height:1.75;color:var(--jl-soft,#8a7259);}
+  .jl-picks{display:grid;grid-template-columns:repeat(auto-fill,minmax(94px,1fr));gap:8px;}
+  .jl-picks button{border:1px solid var(--jl-line,#ecdfcd);background:transparent;color:var(--jl-ink,#3a2a1c);
+    border-radius:11px;padding:10px 8px;font-size:13px;font-family:inherit;cursor:pointer;}
+  .jl-picks button i{display:block;margin-top:2px;font-style:normal;font-size:10px;color:var(--jl-faint,#b09b83);}
+  .jl-picks button.on{border-color:var(--jl-acc,#c9722f);color:var(--jl-acc,#c9722f);
+    background:var(--jl-wash,#f7ecdc);font-weight:600;}
+  .jl-pickfree{display:flex;gap:8px;margin-top:12px;}
+  .jl-pickfree input{flex:1;min-width:0;border:1px solid var(--jl-line,#ecdfcd);background:transparent;
+    color:var(--jl-ink,#3a2a1c);border-radius:10px;padding:9px 11px;font-size:12.5px;font-family:inherit;}
+  .jl-pickfree button{flex:0 0 auto;border:1px solid var(--jl-line,#ecdfcd);background:var(--jl-wash,#f7ecdc);
+    color:var(--jl-acc,#c9722f);border-radius:10px;padding:9px 12px;font-size:12px;font-family:inherit;cursor:pointer;}
 
   @media (max-width:560px){
     .jl-wrap{padding:0 12px 48px;}
@@ -2378,7 +2407,7 @@ window.onerror = function (msg, url, line) {
   'use strict';
 
   // 版本号统一在此维护；localStorage 键沿用 v11 不变，切勿改名以免丢失用户数据
-  var APP_VERSION = '15.2.1';
+  var APP_VERSION = '15.3.0';
   // 送货单拍照识别：视觉模型默认名、兼容别名与各项安全上限
   var DEFAULT_VISION_MODEL = 'deepseek-flash';
   var VISION_MODEL_FALLBACK = 'deepseek-v4-flash-vision-exp';
@@ -5533,7 +5562,7 @@ window.onerror = function (msg, url, line) {
       removeNote: jlRemoveNote,
       close: closeJieLong,
       hasAI: hasAI,
-      askAI: function (prompt) { return aiPlain(prompt, 0.2); },
+      askAI: function (prompt, opts) { return aiPlain(prompt, 0.2, opts); },
       toast: toast,
       compressImage: function (f) { return kbCompressImage(f, 1500, 0.84); },
       putPhoto: kbPutBlob,
@@ -6416,12 +6445,15 @@ window.onerror = function (msg, url, line) {
   }
 
   // 普通对话（不发工具）
-  function aiPlain(prompt, temp) {
+  // opts.maxTokens：拆单/排箱这类长 JSON 要给足，否则会被截断成半截 JSON
+  function aiPlain(prompt, temp, opts) {
     var cfg = state.config;
+    var body = { model: cfg.aiModel, messages: [{ role: 'user', content: prompt }], temperature: temp == null ? 0.4 : temp };
+    if (opts && opts.maxTokens) body.max_tokens = opts.maxTokens;
     return fetchTimeout(cfg.aiUrl, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json', 'Authorization': 'Bearer ' + cfg.aiKey },
-      body: JSON.stringify({ model: cfg.aiModel, messages: [{ role: 'user', content: prompt }], temperature: temp == null ? 0.4 : temp })
+      body: JSON.stringify(body)
     }, 90000).then(function (res) {
       if (!res.ok) throw new Error('请求失败(' + res.status + ')');
       return res.json();
@@ -6593,13 +6625,17 @@ window.onerror = function (msg, url, line) {
   }
 
   function soulCap(text) {
-    return String(text || '').replace(/^["「'\s]+|["」'\s]+$/g, '').slice(0, 40);
+    var s = String(text || '').replace(/^["「'\s]+|["」'\s]+$/g, '').trim();
+    // 模型偶尔会吐 JSON 或空话，别把这种直接放到首页
+    if (!s || /^[\[{]/.test(s) || /"(orders|title|choices)"\s*:/.test(s)) return '';
+    return s.slice(0, 40);
   }
 
   function renderSoulText(text, mode) {
     if (!els.soulCard || !els.soulText) return;
     els.soulCard.style.display = '';
-    els.soulText.textContent = '竹语：' + soulCap(text);
+    var line = soulCap(text) || localSoulMessage(buildSoulStats());
+    els.soulText.textContent = '竹语：' + line;
     els.soulText.style.animation = 'none';
     void els.soulText.offsetWidth;
     els.soulText.style.animation = '';

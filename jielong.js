@@ -1,6 +1,7 @@
 /* 竹间记 · 接龙
  * 把微信群接龙文本拆成结构化订单：分楼栋、配泡沫箱、算金额、合成送达凭证。
- * 边界：解析以本地规则为主，AI 只在规则识别不出来时兜底；两者都不改金额口径。
+ * v15.3：以 AI 为主拆单（认规格、认总价/单价、按名字补楼栋、给装箱建议）；
+ *        本地规则负责兜底与守恒校验——AI 说怎么装，件数对不对由本地算。
  */
 (function (root, factory) {
   var api = factory(root);
@@ -282,14 +283,40 @@
   }
 
   // 补齐：分组、金额、装箱
+  function round2(n) { return Math.round((Number(n) || 0) * 100) / 100; }
+
+  // 原文没写楼栋的人，用历史记录里的住处补上
+  function fillMissingBuildings(record, residents) {
+    if (!residents) return 0;
+    var n = 0;
+    var orders = record.orders || [];
+    for (var i = 0; i < orders.length; i++) {
+      var o = orders[i];
+      if (o.building || !o.name) continue;
+      var hit = residents[o.name];
+      if (!hit || !hit.building) continue;
+      o.building = hit.building;
+      if (!o.room && hit.room) o.room = hit.room;
+      o.buildingFrom = 'history';
+      n++;
+    }
+    return n;
+  }
+
   function finalize(record, opts) {
     opts = opts || {};
     var price = opts.price || {};
     var settings = opts.settings || {};
     var orders = record.orders || [];
 
+    for (var z0 = 0; z0 < orders.length; z0++) {
+      if (orders[z0].buildingFrom !== 'history') orders[z0].buildingFrom = '';
+    }
+    if (opts.residents) fillMissingBuildings(record, opts.residents);
+
     // 金额
     var missing = {};
+    var fromTotal = 0;
     for (var i = 0; i < orders.length; i++) {
       var o = orders[i];
       var amount = 0;
@@ -299,22 +326,55 @@
         var p = price[it.name];
         var unit = (p && typeof p.unit === 'number') ? p.unit : null;
         if (it.unit != null) unit = it.unit;
-        if (unit == null) { unknown = true; missing[it.name] = true; }
+        if (unit == null) { unknown = true; } else {
+          it.amount = round2(unit * it.qty);
+          amount += it.amount;
+        }
         it.unit = unit;
-        it.amount = unit == null ? null : unit * it.qty;
-        amount += it.amount || 0;
+        if (unit == null) it.amount = null;
       }
-      o.amount = unknown ? null : amount;
-      o.missingPrice = unknown;
+
+      // 原文写的是「这一单多少钱」：以总价为准，不再逼你逐样填单价
+      if (o.total != null && o.total >= 0) {
+        o.amount = round2(o.total);
+        o.missingPrice = false;
+        o.payMode = 'total';
+        fromTotal++;
+        // 只有一种商品时，能安心反推单价（多商品均摊会算出假价，不做）
+        if (o.items.length === 1 && o.items[0].qty > 0) {
+          var d = round2(o.total / o.items[0].qty);
+          if (o.items[0].unit == null) o.items[0].unit = d;
+          o.items[0].amount = round2(o.total);
+          if (d > 0 && d < 1000) o.items[0].derivedUnit = d;
+        }
+      } else {
+        o.amount = unknown ? null : round2(amount);
+        o.missingPrice = unknown;
+        o.payMode = unknown ? '' : 'unit';
+        for (var k = 0; k < o.items.length; k++) {
+          if (o.items[k].unit == null) missing[o.items[k].name] = true;
+        }
+      }
     }
 
     var buildings = groupByBuilding(orders);
     var totals = sumTotals(orders, buildings);
+    totals.fromTotal = fromTotal;
     var plan = planBoxes(buildings, {
       cap: Number(settings.cap) || DEFAULT_CAP,
       maxBoxes: Number(settings.maxBoxes) || MAX_BOXES,
       forced: settings.boxMode || 'auto'
     });
+    // AI 排的箱：过校验才用，过不了就用本地这套（件数守恒不能破）
+    if (opts.aiBoxes) {
+      var ai = useAiBoxes(plan, opts.aiBoxes, buildings, plan.cap);
+      if (ai) {
+        plan = ai;
+        plan.ai = true;
+      } else {
+        plan.aiRejected = true;
+      }
+    }
 
     record.buildings = buildings;
     record.totals = totals;
@@ -327,7 +387,8 @@
 
   function cupCount(order) {
     var n = 0;
-    for (var i = 0; i < order.items.length; i++) n += order.items[i].qty || 0;
+    var its = (order && order.items) || [];
+    for (var i = 0; i < its.length; i++) n += its[i].qty || 0;
     return n;
   }
 
@@ -512,6 +573,83 @@
     return { mode: boxes.length, cap: cap, total: total, boxes: boxes, overflow: overflow, reason: reason.join('') };
   }
 
+  /* AI 给的箱子方案：AI 决定「先装哪几栋、怎么顺路」，本地负责按容量切箱。
+   * 这样一栋 21 件、箱子只装得下 16 件时，AI 的方案照样能用——从中间切开，一杯不丢。
+   * 楼栋漏了、重了、超过三个箱子，整份作废回落到本地算法。
+   */
+  function useAiBoxes(base, suggestion, buildings, cap) {
+    if (Array.isArray(suggestion)) suggestion = { boxes: suggestion };   // 兼容只存了箱子数组的旧数据
+    if (!suggestion || !Array.isArray(suggestion.boxes) || !suggestion.boxes.length) return null;
+    if (!base || !base.mode) return null;
+
+    var map = {};
+    for (var i = 0; i < buildings.length; i++) {
+      if (buildings[i].cups > 0) map[buildings[i].key] = buildings[i];
+    }
+
+    var seen = {}, seq = [];
+    for (var s = 0; s < suggestion.boxes.length; s++) {
+      var one = suggestion.boxes[s] || {};
+      var ks = Array.isArray(one.buildings) ? one.buildings : [];
+      var why = trim(one.why);
+      for (var j = 0; j < ks.length; j++) {
+        var fb = findBuilding(String(ks[j]));
+        var k = fb && map[fb.key] ? fb.key : null;
+        if (!k || seen[k]) return null;
+        seen[k] = 1;
+        var bl = map[k];
+        for (var q = 0; q < bl.orders.length; q++) seq.push({ key: k, order: bl.orders[q], why: why });
+      }
+    }
+    var keysAll = Object.keys(map);
+    for (var a = 0; a < keysAll.length; a++) if (!seen[keysAll[a]]) return null;
+    if (!seq.length) return null;
+
+    var boxes = [];
+    var cur = null;
+    function openBox(why) {
+      cur = { cups: 0, orders: [], buildings: [], parts: {}, why: why || '' };
+      boxes.push(cur);
+    }
+    openBox(seq[0].why);
+    for (var t = 0; t < seq.length; t++) {
+      var it = seq[t];
+      var n = cupCount(it.order);
+      if (cur.cups > 0 && cur.cups + n > cap) openBox(it.why);
+      cur.cups += n;
+      cur.orders.push(it.order);
+      cur.parts[it.key] = (cur.parts[it.key] || 0) + n;
+      if (cur.buildings.indexOf(it.key) < 0) cur.buildings.push(it.key);
+    }
+
+    boxes = boxes.filter(function (x) { return x.cups > 0; });
+    if (!boxes.length || boxes.length > MAX_BOXES) return null;
+    var sum = boxes.reduce(function (x, b) { return x + b.cups; }, 0);
+    if (sum !== base.total) return null;
+
+    // 同一句理由被拆到两箱时只留第一箱的，免得两箱写一样的话
+    var usedWhy = {};
+
+    for (var z = 0; z < boxes.length; z++) {
+      if (boxes[z].why) {
+        if (usedWhy[boxes[z].why]) boxes[z].why = '';
+        else usedWhy[boxes[z].why] = 1;
+      }
+      boxes[z].idx = z + 1;
+      boxes[z].rooms = boxes[z].orders.map(function (o) { return o.room || ''; }).filter(Boolean).sort();
+      boxes[z].fill = Math.round(boxes[z].cups / cap * 100);
+      boxes[z].buildings.sort(function (p1, p2) {
+        var ra = buildingRank(p1), rb = buildingRank(p2);
+        if (ra.g !== rb.g) return ra.g - rb.g;
+        return ra.n - rb.n;
+      });
+    }
+
+    var advice = trim(suggestion.advice);
+    var reason = 'AI 按楼栋和送餐动线排的：' + (advice || ('每箱装 ' + Math.ceil(base.total / boxes.length) + ' 件左右，一栋尽量不拆开'));
+    return { mode: boxes.length, cap: cap, total: base.total, boxes: boxes, overflow: [], reason: reason, advice: advice };
+  }
+
   /* 送餐卡：一栋一张，按楼层排好，一路送下去不用来回跑 */
   function deliveryCards(buildings, opts) {
     opts = opts || {};
@@ -567,6 +705,7 @@
   }
   // 从过往接龙里学单价：同一个商品，取最近一次定过的价
   // 手动在价格本里填的优先（readPrice 覆盖 history）
+  // v15.3：这一单只写了「总价 38」也能学——单商品时用 38 ÷ 件数 反推单价
   function learnedPrices(listFn) {
     var rows = typeof listFn === 'function' ? listFn() : [];
     var book = {};
@@ -574,16 +713,74 @@
       var d = rows[i].data;
       if (!d || !d.orders) continue;
       for (var j = 0; j < d.orders.length; j++) {
-        var its = d.orders[j].items || [];
+        var o = d.orders[j];
+        var its = o.items || [];
         for (var k = 0; k < its.length; k++) {
           var it = its[k];
-          if (it && it.unit != null && !book[it.name]) {
-            book[it.name] = { unit: it.unit, from: 'history', at: rows[i].date || '' };
+          if (!it || book[it.name]) continue;
+          var u = it.unit;
+          if (u == null && it.derivedUnit != null) u = it.derivedUnit;
+          if (u == null && o.total != null && its.length === 1 && it.qty > 0) {
+            u = round2(o.total / it.qty);
+          }
+          if (u != null && u >= 0 && u < 1000) {
+            book[it.name] = { unit: u, from: 'history', at: rows[i].date || '' };
           }
         }
       }
     }
     return book;
+  }
+
+  /* 住户簿：名字 → 常住的楼栋房号。
+   * 有人接龙忘写楼栋，就靠这个按名字补——次数多的楼栋优先，房号取最近一次。
+   */
+  function residentBook(listFn) {
+    var rows = typeof listFn === 'function' ? listFn() : [];
+    var tmp = {};
+    for (var i = rows.length - 1; i >= 0; i--) {   // 从旧到新扫，新的覆盖旧的
+      var d = rows[i].data;
+      if (!d || !d.orders) continue;
+      for (var j = 0; j < d.orders.length; j++) {
+        var o = d.orders[j];
+        var nm = trim(o.name);
+        if (!nm || !o.building) continue;
+        if (!tmp[nm]) tmp[nm] = { name: nm, count: {}, room: '', at: '' };
+        var t = tmp[nm];
+        t.count[o.building] = (t.count[o.building] || 0) + 1;
+        if (o.room) t.room = o.room;
+        t.at = rows[i].date || t.at;
+      }
+    }
+    var out = {};
+    var names = Object.keys(tmp);
+    for (var n = 0; n < names.length; n++) {
+      var r = tmp[names[n]];
+      var best = '', bc = 0;
+      var ks = Object.keys(r.count);
+      for (var k = 0; k < ks.length; k++) {
+        if (r.count[ks[k]] >= bc) { bc = r.count[ks[k]]; best = ks[k]; }
+      }
+      out[names[n]] = { building: best, room: r.room, hits: bc, at: r.at };
+    }
+    return out;
+  }
+
+  // 给 AI 看的住户名单，只保留常出现的，别把 prompt 撑爆
+  function residentsText(book) {
+    var list = [];
+    var names = Object.keys(book || {});
+    for (var i = 0; i < names.length; i++) {
+      var r = book[names[i]];
+      if (!r || !r.building) continue;
+      list.push({ name: names[i], building: r.building, room: r.room || '', hits: r.hits || 1 });
+    }
+    list.sort(function (a, b) { return b.hits - a.hits; });
+    var out = [];
+    for (var j = 0; j < list.length && j < 80; j++) {
+      out.push(list[j].name + '→' + list[j].building + (list[j].room ? list[j].room : ''));
+    }
+    return out.join('；');
   }
 
   function effectivePrice(listFn) {
@@ -614,19 +811,29 @@
 
   /* ==================== 7. AI 兜底 ==================== */
 
-  function buildPrompt(text, game) {
-    return '你是接龙订单识别助手。下面是一段微信群接龙原文，请把它拆成结构化订单。\n\n' +
+  function buildPrompt(text, residents) {
+    var res = '';
+    if (typeof residents === 'string') res = residents;
+    else if (residents && typeof residents === 'object') res = residentsText(residents);
+
+    return '你是早餐接龙的拆单助手。下面是一条微信群接龙原文，请拆成结构化订单。\n\n' +
+      (res ? '【这群人的历史住处】（原文没写楼栋时按名字查这里补，buildingFrom 填 "history"；原文写了就填 "text"，不要改）\n' + res + '\n\n' : '') +
       '【原文】\n' + String(text).slice(0, 6000) + '\n\n' +
-      '【输出格式】只输出一个 JSON 对象，不要 markdown 代码块，不要任何解释文字。\n' +
-      '{"title":"这一单的标题，可能为空","orders":[{"no":1,"name":"张三","building":"3栋","room":"301","items":[{"name":"豆浆","qty":1}],"note":""}]}\n\n' +
-      '【硬性要求】\n' +
-      '1. no 是接龙里的序号，没有就按顺序从 1 编。\n' +
-      '2. building 统一写成「3栋」「12栋」「A栋」这种形式；原文没写楼栋就填空字符串，不要瞎猜。\n' +
-      '3. items 里的 name 只用原文出现过的商品；没写商品就留空数组，不要编造。\n' +
-      '4. qty 必须是 1–99 的整数；原文写「两份」就填 2，没写数量就填 1。\n' +
-      '5. room 是房号，原文没有就填空字符串。\n' +
-      '6. 原文里不是订单的行（如「#接龙」、日期、说明）不要出现在 orders 里。\n' +
-      '7. 不要修改人名，也不要合并两条订单。\n';
+      '【输出格式】只输出一个 JSON 对象，不要 markdown 代码块，不要任何解释。\n' +
+      '{"title":"","orders":[{"no":1,"name":"张三","building":"3栋","room":"301","buildingFrom":"text","items":[{"name":"豆浆","qty":2,"unit":5}],"total":null,"note":""}]}\n\n' +
+      '【金额：末尾的数字要分清是哪种，这是最容易错的地方】\n' +
+      '1.「张三 豆浆2杯 10元」——10 是这一单的总价 → total:10，items 里的 unit 留空。\n' +
+      '2.「豆浆 5元/杯」「豆浆5元」且这一行只有这一样——5 是单价 → items[0].unit:5，total 留空。\n' +
+      '3.「豆浆2」——2 是数量不是钱 → qty:2，unit 和 total 都留空。\n' +
+      '4. 一行里两样以上商品、末尾只给一个数 → 当总价填 total，不要硬摊成单价。\n' +
+      '5. 完全没写钱的，unit 和 total 都留空，绝对不要猜价格。\n\n' +
+      '【其它硬性要求】\n' +
+      '6. no 是接龙里的序号；没有就按顺序从 1 编。\n' +
+      '7. building 统一写成「3栋」「12栋」「A栋」这种形式。原文没写、历史住处里也没有，就填空字符串。\n' +
+      '8. items 的 name 只用原文出现过的商品，不要编造；「豆浆玉米汁各一」要拆成两条，各 qty 1。\n' +
+      '9. qty 必须是 1–99 的整数；「两份」填 2，没写数量填 1。\n' +
+      '10. 不是订单的行（#接龙、日期、说明、接龙格式提示）不要进 orders。\n' +
+      '11. 不要改人名，也不要把两个人合并成一条。\n';
   }
 
   function parseAiPayload(text, opts) {
@@ -658,9 +865,13 @@
           var q = parseInt(it.qty, 10);
           if (!nm) continue;
           if (!(q > 0 && q < 100)) q = 1;
-          items.push({ name: nm, qty: q, unit: null });
+          var u = parseFloat(it.unit);
+          if (!(u >= 0 && u < 1000)) u = null;
+          items.push({ name: nm, qty: q, unit: u, fromText: u != null });
         }
       }
+      var total = parseFloat(o.total);
+      if (!(total >= 0 && total < 100000)) total = null;
       if (!name && !items.length && !bd) continue;
       out.push({
         no: parseInt(o.no, 10) || (out.length + 1),
@@ -668,7 +879,9 @@
         name: name,
         building: bd ? normBuilding(bd.replace(/(栋|幢|号楼|座|#)$/, ''), '') : '',
         room: trim(o.room),
+        buildingFrom: trim(o.buildingFrom) === 'history' ? 'history' : '',
         items: items,
+        total: total,
         note: trim(o.note),
         conf: 0.9,
         issues: [],
@@ -676,16 +889,48 @@
       });
     }
     if (!out.length) return { ok: false, error: '一条订单都没识别出来' };
-    return {
-      ok: true,
-      record: finalize({
-        date: opts.date || todayStr(),
-        title: trim(obj.title) || '',
-        orders: out,
-        source: 'ai',
-        conf: 0.9
-      }, opts)
-    };
+    var rec = finalize({
+      date: opts.date || todayStr(),
+      title: trim(obj.title) || '',
+      orders: out,
+      source: 'ai',
+      conf: 0.9
+    }, opts);
+    if (obj.boxes && Array.isArray(obj.boxes)) rec.boxAi = obj.boxes;
+    return { ok: true, record: rec };
+  }
+
+  /* 让 AI 看着这一单排箱：只回「哪几栋放一箱、为什么」，件数本地自己算 */
+  function buildBoxPrompt(record, cap) {
+    var b = record.buildings || [];
+    var lines = [];
+    for (var i = 0; i < b.length; i++) {
+      var rooms = b[i].orders.map(function (o) { return o.room || '?'; }).join(' ');
+      lines.push(b[i].key + '：' + b[i].cups + ' 件，' + b[i].orders.length + ' 单，房号 ' + (rooms || '—'));
+    }
+    return '你是早餐配送的装箱助手。我骑电动车送学校，有 3 个泡沫箱，每箱最多装 ' + cap + ' 件杯装（豆浆、玉米汁，容易洒）。\n\n' +
+      '这一单的楼栋：\n' + lines.join('\n') + '\n合计 ' + record.totals.cups + ' 件。\n\n' +
+      '【怎么排更合理】\n' +
+      '1. 尽量让一栋的货在同一箱，送到一栋只开一个箱子。\n' +
+      '2. 3 个箱子够装就别硬用 3 个；装不下才用 3 个。\n' +
+      '3. 相邻楼栋、件数少的可以合并到一箱。\n' +
+      '4. 每箱不能超过 ' + cap + ' 件，所有楼栋都必须出现且只出现一次。\n\n' +
+      '【输出】只输出 JSON，不要解释：\n' +
+      '{"boxes":[{"buildings":["3栋","12栋"],"why":"这两栋挨着，一共 9 件"}],"advice":"两句话说明为什么这么装"}\n';
+  }
+
+  function parseBoxPayload(text, opts) {
+    var s = String(text || '').replace(/^\uFEFF/, '').trim();
+    s = s.replace(/^```(?:json)?\s*/i, '').replace(/\s*```$/, '');
+    var a = s.indexOf('{'), b = s.lastIndexOf('}');
+    if (a < 0 || b <= a) return null;
+    var obj = null;
+    try { obj = JSON.parse(s.slice(a, b + 1)); }
+    catch (e) {
+      try { obj = JSON.parse(s.slice(a, b + 1).replace(/,\s*([}\]])/g, '$1').replace(/[“”]/g, '"')); } catch (e2) { return null; }
+    }
+    if (!obj || !Array.isArray(obj.boxes)) return null;
+    return { boxes: obj.boxes, advice: trim(obj.advice) };
   }
 
   /* ==================== 8. 文本回写（存进笔记用） ==================== */
@@ -703,13 +948,16 @@
       orders: record.orders.map(function (o) {
         return {
           no: o.no, name: o.name, building: o.building, room: o.room,
-          items: o.items.map(function (i) { return { name: i.name, qty: i.qty, unit: i.unit }; }),
+          buildingFrom: o.buildingFrom || '',
+          items: o.items.map(function (i) { return { name: i.name, qty: i.qty, unit: i.unit, fromText: !!i.fromText }; }),
+          total: o.total == null ? null : o.total,
           note: o.note || '', manual: !!o.manual
         };
       }),
       photos: (record.photos || []).map(function (p) {
         return { key: p.key, building: p.building, at: p.at };
-      })
+      }),
+      boxAi: record.boxAi || null
     };
     return plain + '\n' + MARK + JSON.stringify(data);
   }
@@ -750,7 +998,8 @@
         }
         lines.push('  #' + o.no + ' ' + (o.name || '（无名字）') + (o.room ? ' ' + o.room : '') +
           '　' + (parts.length ? parts.join(' ') : '（没写商品）') +
-          (o.amount != null ? '　¥' + money(o.amount) : '') +
+          (o.amount != null ? '　' + (o.payMode === 'total' ? '总价 ¥' : '¥') + money(o.amount) : '') +
+          (o.buildingFrom === 'history' ? '　楼栋按记录补' : '') +
           (o.note ? '　注：' + o.note : ''));
       }
     }
@@ -783,6 +1032,7 @@
     noteId: null,
     photos: [],       // [{key, building, at, url}]
     busy: false,
+    boxBusy: false,   // AI 正在排箱
     err: '',
     boxMode: 'auto',
     cap: 0,
@@ -843,11 +1093,11 @@
   function viewHome() {
     var h = '';
     h += '<div class="jl-lead">' +
-      '<p>把微信群接龙<b>最后一条</b>整段粘进来。它会把单子拆成楼栋、算好金额、配好箱子。</p>' +
+      '<p>把微信群接龙<b>最后一条</b>整段粘进来。AI 会拆成楼栋、认规格和价钱、配好箱子。</p>' +
       '</div>';
 
     h += '<div class="jl-paste">' +
-      '<textarea id="jlText" placeholder="#接龙&#10;11月9日 早餐&#10;1. 张三 3栋301 豆浆1 玉米汁2&#10;2. 李四 5栋 502 豆浆x2"></textarea>' +
+      '<textarea id="jlText" placeholder="#接龙&#10;11月9日 早餐&#10;1. 张三 3栋301 豆浆2杯 玉米汁1 共12元&#10;2. 李四 502 豆浆x2（忘写楼栋）"></textarea>' +
       '</div>';
 
     h += '<div class="jl-row-inline">' +
@@ -855,16 +1105,20 @@
       esc(V.date || todayStr()) + '"></label>' +
       '</div>';
 
+    var ai = !!(D && D.hasAI());
     h += '<div class="jl-actions">' +
-      '<button type="button" class="jl-primary" data-act="parse">识别这一单</button>' +
-      (D && D.hasAI() ? '<button type="button" class="jl-ghost" data-act="parse-ai">用 AI 读</button>' : '') +
+      '<button type="button" class="jl-primary" data-act="' + (ai ? 'parse-ai' : 'parse') + '"' +
+      (V.busy ? ' disabled' : '') + '>' +
+      (V.busy ? '正在读这一单…' : (ai ? 'AI 识别这一单' : '识别这一单')) + '</button>' +
+      (ai ? '<button type="button" class="jl-ghost" data-act="parse"' + (V.busy ? ' disabled' : '') + '>不联网，本地拆</button>' : '') +
       '</div>';
 
-    if (!D || !D.hasAI()) {
-      h += '<p class="jl-hint">先按本地规则拆（很快、不花钱）。现在还没配 AI，遇到特别乱的格式可能拆不准——' +
-        '到右上角「设置」填接口、密钥、模型就能用。</p>';
+    if (!ai) {
+      h += '<p class="jl-hint">还没配 AI，只能按字面拆：规格写得乱、只写「共 12 元」的那种会拆不准。' +
+        '到右上角「设置」填接口和密钥就能用 AI。</p>';
     } else {
-      h += '<p class="jl-hint">先按本地规则拆，很快也不花钱；格式太乱、名字商品粘在一起时，再点「用 AI 读」。</p>';
+      h += '<p class="jl-hint">AI 会认「两杯/两份」这类规格，分清末尾是<b>总价</b>还是<b>单价</b>，' +
+        '忘写楼栋的按名字从过往记录里补。要等十几秒，正常。</p>';
     }
 
     var hist = listRecords().slice(0, 3);
@@ -955,7 +1209,8 @@
       '</div>';
 
     h += '<div class="jl-foot-note">' +
-      '楼栋、金额、装箱都在这台设备上算出来。AI 只在你说「用 AI 读」时参与拆单，改不了价格口径。' +
+      'AI 负责认人和规格、分清总价还是单价、按名字补楼栋、给装箱建议；' +
+      '件数和金额的核对始终在这台设备上算，价格本也只存在本机。' +
       '</div>';
     return h;
   }
@@ -972,8 +1227,16 @@
         '</div>';
     }
 
-    var noBld = 0;
-    for (var z = 0; z < r.orders.length; z++) if (!r.orders[z].building) noBld++;
+    var noBld = 0, inferred = 0;
+    for (var z = 0; z < r.orders.length; z++) {
+      if (!r.orders[z].building) noBld++;
+      if (r.orders[z].buildingFrom === 'history') inferred++;
+    }
+    if (inferred) {
+      h += '<div class="jl-alert jl-alert-soft">' +
+        '<b>' + inferred + ' 条没写楼栋，已按名字补上</b>' +
+        '<span>取自他们最近几次接龙的住处，标着「按记录」的就是补的，点开能改</span></div>';
+    }
     if (noBld) {
       h += '<div class="jl-alert jl-alert-soft">' +
         '<b>' + noBld + ' 条没写楼栋</b><span>已归到「未写楼栋」，点单条可以补</span></div>';
@@ -998,12 +1261,14 @@
   }
 
   function orderRow(o) {
-    var amt = o.amount == null ? '<em class="jl-warn">待定价</em>' : '<em>¥' + money(o.amount) + '</em>';
+    var amt = o.amount == null ? '<em class="jl-warn">待定价</em>'
+      : '<em>' + (o.payMode === 'total' ? '总价 ¥' : '¥') + money(o.amount) + '</em>';
     return '<div class="jl-orow" data-act="edit" data-no="' + o.no + '">' +
       '<i class="jl-no">#' + o.no + '</i>' +
       '<b class="jl-name">' + (o.name ? esc(o.name) : '<em class="jl-warn">无名</em>') + '</b>' +
       (o.room ? '<span class="jl-room">' + esc(o.room) + '</span>' : '<span class="jl-room jl-room-x">—</span>') +
-      '<span class="jl-goods">' + itemText(o) + (o.note ? '<u>' + esc(o.note) + '</u>' : '') + '</span>' +
+      '<span class="jl-goods">' + itemText(o) + (o.note ? '<u>' + esc(o.note) + '</u>' : '') +
+      (o.buildingFrom === 'history' ? '<u class="jl-infer">楼栋按记录</u>' : '') + '</span>' +
       amt +
       '</div>';
   }
@@ -1027,6 +1292,19 @@
       return h;
     }
 
+    if (D && D.hasAI()) {
+      h += '<div class="jl-aiwire">' +
+        '<div><b>装箱建议' + (p.ai ? ' · AI 排的' : '') + '</b>' +
+        '<span>' + (p.ai ? '件数本地核过，一栋尽量不拆' : '按楼栋和送餐动线排，少开箱') + '</span></div>' +
+        '<button type="button" data-act="aibox"' + (V.boxBusy ? ' disabled' : '') + '>' +
+        (V.boxBusy ? '正在看…' : (p.ai ? '重排' : '让 AI 排')) + '</button>' +
+        '</div>';
+      if (p.aiRejected) {
+        h += '<div class="jl-alert jl-alert-soft"><b>AI 的装法有一栋漏了或超了</b>' +
+          '<span>已按本地规则重装，件数不会少</span></div>';
+      }
+    }
+
     h += '<div class="jl-boxes">';
     for (var i = 0; i < p.boxes.length; i++) {
       var b = p.boxes[i];
@@ -1036,8 +1314,13 @@
         '<i class="' + (fill >= 95 ? 'full' : (fill < 50 ? 'thin' : '')) + '">' + b.fill + '%</i></div>' +
         '<div class="jl-box-bar"><i style="width:' + fill + '%"></i></div>' +
         '<div class="jl-box-b">' + b.buildings.map(function (k) {
-          return '<span class="jl-chip">' + esc(k) + '</span>';
+          var part = b.parts && b.parts[k];
+          var tot = 0;
+          for (var q2 = 0; q2 < r.buildings.length; q2++) if (r.buildings[q2].key === k) tot = r.buildings[q2].cups;
+          var tag = (part && tot && part < tot) ? k + '（' + part + ' 件）' : k;
+          return '<span class="jl-chip">' + esc(tag) + '</span>';
         }).join('') + '</div>' +
+        (b.why ? '<div class="jl-box-w">' + esc(b.why) + '</div>' : '') +
         (b.orders.length ? '<div class="jl-box-f">' + b.orders.length + ' 单，一栋一栋送</div>' : '') +
         '</div>';
     }
@@ -1074,7 +1357,8 @@
     var t = r.totals;
     var h = '';
     h += '<div class="jl-money-top"><span>合计</span><b>' + amtLabel(t.amount, t.unknownAmount) + '</b>' +
-      (t.unknownAmount ? '<i>' + t.unknownAmount + ' 单还没定价，没算进来</i>' : '') + '</div>';
+      (t.unknownAmount ? '<i>' + t.unknownAmount + ' 单还没定价，没算进来</i>' : '') +
+      (t.fromTotal ? '<i>' + t.fromTotal + ' 单按原文总价记，不用逐样填单价</i>' : '') + '</div>';
 
     h += '<table class="jl-tb"><thead><tr><th>商品</th><th>数量</th><th>单价</th><th>小计</th></tr></thead><tbody>';
     for (var i = 0; i < t.items.length; i++) {
@@ -1102,7 +1386,8 @@
       var o = all[k];
       h += '<div class="jl-prow"><i>#' + o.no + '</i><b>' + esc(o.name || '无名') + '</b>' +
         '<span>' + esc(o.building || '—') + (o.room ? ' ' + esc(o.room) : '') + '</span>' +
-        (o.amount == null ? '<em class="jl-warn">待定价</em>' : '<em>¥' + money(o.amount) + '</em>') + '</div>';
+        (o.amount == null ? '<em class="jl-warn">待定价</em>'
+          : '<em>' + (o.payMode === 'total' ? '总价 ¥' : '¥') + money(o.amount) + '</em>') + '</div>';
     }
     h += '</div>';
     return h;
@@ -1111,27 +1396,36 @@
   function tabProof(r) {
     var h = '';
     h += '<div class="jl-shot-head">' +
-      '<p>每送完一处拍一张。全部拍完点下面，会拼成一张长图，直接发群里当凭证。</p>' +
+      '<p>每送完一处拍一张，也可以从相册里选。点照片能改它是哪一栋——拼图时按你说的标。</p>' +
       '</div>';
 
     h += '<div class="jl-shots">';
     for (var i = 0; i < V.photos.length; i++) {
       var p = V.photos[i];
-      h += '<div class="jl-shot">' +
+      var un = !p.building;
+      h += '<div class="jl-shot' + (un ? ' jl-shot-un' : '') + '" data-act="pickbld" data-k="' + esc(p.key) + '">' +
         '<img src="' + esc(p.url) + '" alt="">' +
-        '<span>' + esc(p.building) + (p.at ? '<i>' + hhmm(p.at) + '</i>' : '') + '</span>' +
+        '<span class="jl-shot-tag">' + (un ? '点这里选楼栋'
+          : esc(p.building) + (p.at ? '<i>' + hhmm(p.at) + '</i>' : '')) + '</span>' +
         '<button type="button" data-act="delphoto" data-k="' + esc(p.key) + '" aria-label="删除">×</button>' +
         '</div>';
     }
     h += '<label class="jl-shot-add">' +
-      '<input type="file" accept="image/*" capture="environment" id="jlShotInput">' +
-      '<b>+</b><span>拍照</span></label>';
+      '<input type="file" accept="image/*" capture="environment" id="jlShotCam">' +
+      '<b>+</b><span>拍照</span></label>' +
+      '<label class="jl-shot-add">' +
+      '<input type="file" accept="image/*" id="jlShotPick" multiple>' +
+      '<b>+</b><span>相册</span></label>';
     h += '</div>';
+
+    var unCount = 0;
+    for (var u = 0; u < V.photos.length; u++) if (!V.photos[u].building) unCount++;
 
     if (V.photos.length) {
       h += '<div class="jl-shot-actions">' +
         '<button type="button" class="jl-primary" data-act="compose"' +
-        (V.busy ? ' disabled' : '') + '>' + (V.busy ? '正在拼…' : '合成送达凭证') + '</button>' +
+        (V.busy || unCount ? ' disabled' : '') + '>' +
+        (V.busy ? '正在拼…' : (unCount ? '先给 ' + unCount + ' 张选楼栋' : '合成送达凭证')) + '</button>' +
         '<button type="button" class="jl-ghost" data-act="clearshots">全部重拍</button>' +
         '</div>';
     } else {
@@ -1256,18 +1550,17 @@
 
   function rebuild() {
     if (!V.record) return;
-    var price = effectivePrice(listRecords);
-    var settings = readSettings();
-    settings.cap = V.cap || settings.cap || DEFAULT_CAP;
-    settings.boxMode = V.boxMode === 'auto' ? '' : V.boxMode;
+    var opts = parseOpts();
+    opts.aiBoxes = V.record.boxAi;
     V.record = finalize({
       id: V.record.id,
       date: V.record.date,
       title: V.record.title,
       orders: V.record.orders,
       source: V.record.source,
-      photos: V.record.photos
-    }, { price: price, settings: settings });
+      photos: V.record.photos,
+      boxAi: V.record.boxAi
+    }, opts);
     paint();
     if (V.view === 'detail' && V.tab === 'proof') updateProofBadge();
   }
@@ -1284,6 +1577,59 @@
     if (!silent) toast('已存到「接龙」分类');
   }
 
+  // 这一单的解析参数：价格本、箱子设置、以及「谁住哪儿」的历史住户簿
+  function parseOpts() {
+    var price = effectivePrice(listRecords);
+    var settings = readSettings();
+    settings.cap = V.cap || settings.cap || DEFAULT_CAP;
+    settings.boxMode = V.boxMode === 'auto' ? '' : V.boxMode;
+    return { date: V.date, price: price, settings: settings, residents: residentBook(listRecords) };
+  }
+
+  // AI 在原文里认出来的单价，记进价格本——下一单同样的商品就不用再问
+  function learnPrices(rec) {
+    if (!rec || !rec.orders) return;
+    for (var i = 0; i < rec.orders.length; i++) {
+      var its = rec.orders[i].items || [];
+      for (var j = 0; j < its.length; j++) {
+        var it = its[j];
+        // 只学「原文里写出来的价」或「总价反推的价」，不把历史填进来的价再写回去
+        var u = it.fromText ? it.unit : (it.derivedUnit != null ? it.derivedUnit : null);
+        if (u == null || !(u > 0 && u < 1000)) continue;
+        var own = readPrice();   // 每样重新读，别把这一轮刚学的价再覆盖回去
+        if (own[it.name] && own[it.name].from === 'manual') continue;   // 手填的最大，绝不覆盖
+        if (own[it.name] && Number(own[it.name].unit) === Number(u)) continue;
+        setPrice(it.name, u, 'learned');
+      }
+    }
+  }
+
+  // 拆完顺手让 AI 看一眼怎么装箱（不阻塞，失败就静默用本地方案）
+  function kickBoxAI(rec) {
+    if (!D || !D.hasAI() || !rec) return;
+    V.boxBusy = true;
+    if (V.view === 'detail' && V.tab === 'box') paint();
+    var token = rec;
+    D.askAI(buildBoxPrompt(rec, rec.plan.cap), { maxTokens: 900 }).then(function (out) {
+      if (V.record !== token) return;
+      V.boxBusy = false;
+      var s = parseBoxPayload(out);
+      var ai = s ? useAiBoxes(rec.plan, s, rec.buildings, rec.plan.cap) : null;
+      if (ai) {
+        ai.ai = true;
+        rec.plan = ai;
+        rec.boxAi = s;
+        persist(true);
+      } else if (s) {
+        rec.plan.aiRejected = true;
+      }
+      if (V.view === 'detail') paint();
+    }).catch(function () {
+      V.boxBusy = false;
+      if (V.view === 'detail') paint();
+    });
+  }
+
   function doParse(useAi) {
     var ta = HOST.querySelector('#jlText');
     var text = ta ? ta.value : V.text;
@@ -1292,13 +1638,12 @@
     V.date = currentDate();
     V.err = '';
     V.busy = true;
+    V.tab = 'bld';
     paint();
 
-    var price = effectivePrice(listRecords);
-    var settings = readSettings();
-    settings.cap = V.cap || settings.cap || DEFAULT_CAP;
+    var opts = parseOpts();
 
-    var finish = function (rec) {
+    var finish = function (rec, src) {
       V.busy = false;
       if (!rec || !rec.orders.length) {
         V.err = '这一单一条都没拆出来，看看是不是粘错了段落';
@@ -1306,43 +1651,41 @@
         return;
       }
       V.noteId = null;
+      learnPrices(rec);
       applyRecord(rec);
       persist(true);
-      toast('拆出 ' + rec.totals.orders + ' 单，已存进「接龙」');
+      var t = rec.orders.length, b = rec.buildings.length;
+      toast('拆出 ' + t + ' 单 / ' + b + ' 栋，已存进「接龙」');
+      if (src === 'ai') kickBoxAI(rec);
+    };
+
+    var localFallback = function (why) {
+      var local = null;
+      try { local = parseText(text, opts); } catch (e) {}
+      if (local && local.orders.length) {
+        finish(local, 'local');
+        if (why) toast(why);
+      } else {
+        V.busy = false;
+        V.err = 'AI 和本地都没拆出来：' + (why || '格式太乱');
+        paint();
+      }
     };
 
     if (!useAi) {
       var rec = null;
-      try { rec = parseText(text, { date: V.date, price: price, settings: settings }); } catch (e) { rec = null; }
-      setTimeout(function () { finish(rec); }, 60);
+      try { rec = parseText(text, opts); } catch (e) { rec = null; }
+      setTimeout(function () { finish(rec, 'local'); }, 60);
       return;
     }
 
     if (!D || !D.hasAI()) { V.busy = false; V.err = '还没配 AI'; paint(); return; }
-    D.askAI(buildPrompt(text)).then(function (out) {
-      var r = parseAiPayload(out, { date: V.date, price: price, settings: settings });
-      if (r.ok) { finish(r.record); return; }
-      var local = null;
-      try { local = parseText(text, { date: V.date, price: price, settings: settings }); } catch (e) {}
-      if (local && local.orders.length) {
-        finish(local);
-        toast('AI 没拆好，已改用本地规则');
-      } else {
-        V.busy = false;
-        V.err = 'AI 和本地都没拆出来：' + r.error;
-        paint();
-      }
+    D.askAI(buildPrompt(text, opts.residents), { maxTokens: 4000 }).then(function (out) {
+      var r = parseAiPayload(out, opts);
+      if (r.ok) { finish(r.record, 'ai'); return; }
+      localFallback('AI 没拆好（' + r.error + '），已改用本地规则');
     }).catch(function (e) {
-      var local = null;
-      try { local = parseText(text, { date: V.date, price: price, settings: settings }); } catch (e2) {}
-      if (local && local.orders.length) {
-        finish(local);
-        toast('AI 调用失败，已用本地规则');
-      } else {
-        V.busy = false;
-        V.err = 'AI 调用失败：' + (e && e.message ? e.message : '未知');
-        paint();
-      }
+      localFallback('AI 调用失败，已用本地规则');
     });
   }
 
@@ -1352,9 +1695,9 @@
     for (var i = 0; i < rows.length; i++) if (rows[i].id === id) hit = rows[i];
     if (!hit) return;
     var data = hit.data;
-    var price = effectivePrice(listRecords);
-    var settings = readSettings();
-    settings.cap = settings.cap || DEFAULT_CAP;
+    V.date = hit.date || V.date;
+    var opts = parseOpts();
+    opts.aiBoxes = data && data.boxAi ? data.boxAi : null;
     var rec;
     if (data) {
       rec = finalize({
@@ -1364,15 +1707,18 @@
         orders: data.orders.map(function (o) {
           return {
             no: o.no, name: o.name, building: o.building, room: o.room,
-            items: (o.items || []).map(function (i2) { return { name: i2.name, qty: i2.qty, unit: i2.unit }; }),
+            buildingFrom: o.buildingFrom || '',
+            items: (o.items || []).map(function (i2) { return { name: i2.name, qty: i2.qty, unit: i2.unit, fromText: !!i2.fromText }; }),
+            total: o.total == null ? null : o.total,
             note: o.note || '', manual: o.manual
           };
         }),
         source: data.source || 'local',
-        photos: data.photos || []
-      }, { price: price, settings: settings });
+        photos: data.photos || [],
+        boxAi: data.boxAi || null
+      }, opts);
     } else {
-      rec = parseText(stripMark(hit.text), { date: hit.date, price: price, settings: settings });
+      rec = parseText(stripMark(hit.text), opts);
     }
     V.noteId = hit.id;
     V.cap = rec.plan.cap;
@@ -1418,43 +1764,102 @@
     } else if (old) old.parentNode.removeChild(old);
   }
 
-  function addPhoto(file) {
-    if (!file || !V.record) return;
+  var photoSeq = 0;
+
+  // 存一张：楼栋先按「还没拍过的第一栋」预填，拍歪了点一下就能改
+  function addPhoto(file, bld) {
+    if (!file || !V.record) return Promise.resolve(false);
     if (!V.noteId) persist(true);
     var id = V.noteId || 'tmp' + Date.now();
-    var key = photoKey(id) + Date.now() + ':' + encodeURIComponent(guess);
-    var guess = guessBuilding();
-    V.busy = true;
-    paint();
-    D.compressImage(file).then(function (out) {
+    var guess = bld != null ? bld : guessBuilding();
+    var ts = Date.now() + (photoSeq++);
+    var key = photoKey(id) + ts + ':' + encodeURIComponent(guess || '');
+    return D.compressImage(file).then(function (out) {
       return D.putPhoto(key, out.blob).then(function () {
         V.photos.push({
           key: key,
           building: guess,
-          at: new Date().toISOString(),
+          at: new Date(ts).toISOString(),
           url: URL.createObjectURL(out.blob)
         });
-        V.busy = false;
-        V.tab = 'proof';
-        paint();
-        toast('已加上 ' + guess + ' 的照片');
+        return true;
       });
-    }).catch(function (e) {
-      V.busy = false;
-      V.err = '照片存不进去：' + (e && e.message ? e.message : '未知');
-      paint();
     });
   }
 
-  // 这一张属于哪一栋：还没拍过的第一栋
+  // 一次可以来多张（相册多选）
+  function addPhotos(files, bld) {
+    var list = [];
+    for (var i = 0; i < (files || []).length; i++) list.push(files[i]);
+    if (!list.length || !V.record) return;
+    V.busy = true;
+    V.tab = 'proof';
+    V.err = '';
+    paint();
+    var added = 0;
+    var chain = Promise.resolve();
+    list.forEach(function (f) {
+      chain = chain.then(function () {
+        return addPhoto(f, bld).then(function (ok) { if (ok) added++; });
+      }).catch(function () {});
+    });
+    chain.then(function () {
+      V.busy = false;
+      if (added) dropProof();
+      paint();
+      if (added) {
+        persist(true);
+        toast('已加上 ' + added + ' 张，点照片能改楼栋');
+      } else {
+        V.err = '这几张没存进去，换个格式再试';
+        paint();
+      }
+    });
+  }
+
+  // 这一张属于哪一栋：还没拍过的第一栋（「未写楼栋」那种不算一栋）
   function guessBuilding() {
-    if (!V.record) return '送达';
+    if (!V.record) return '';
     var done = {};
     for (var i = 0; i < V.photos.length; i++) done[V.photos[i].building] = 1;
     for (var b = 0; b < V.record.buildings.length; b++) {
-      if (!done[V.record.buildings[b].key]) return V.record.buildings[b].key;
+      var k = V.record.buildings[b].key;
+      if (k === '未写楼栋') continue;
+      if (!done[k]) return k;
     }
-    return V.record.buildings.length ? V.record.buildings[0].key : '送达';
+    return '';
+  }
+
+  // 给一张照片换楼栋：IndexedDB 的 key 里就带着楼栋，所以要换个 key 重存
+  function setPhotoBuilding(key, bld) {
+    var p = null;
+    for (var i = 0; i < V.photos.length; i++) if (V.photos[i].key === key) p = V.photos[i];
+    if (!p) return;
+    var seg = String(key).split(':');
+    var newKey = seg.slice(0, 3).join(':') + ':' + encodeURIComponent(bld || '');
+    V.busy = true;
+    paint();
+    D.getPhoto(key).then(function (blob) {
+      if (!blob) throw new Error('照片读不出来');
+      return D.putPhoto(newKey, blob).then(function () {
+        return D.delPhoto(key);
+      }).then(function () {
+        try { URL.revokeObjectURL(p.url); } catch (e) {}
+        p.key = newKey;
+        p.building = bld || '';
+        p.url = URL.createObjectURL(blob);
+        V.photos = V.photos.slice();
+        V.busy = false;
+        dropProof();
+        paint();
+        persist(true);
+        toast(bld ? '标成 ' + bld : '已清掉楼栋标注');
+      });
+    }).catch(function (e) {
+      V.busy = false;
+      V.err = '改不了这张的楼栋：' + (e && e.message ? e.message : '未知');
+      paint();
+    });
   }
 
   function delPhoto(key) {
@@ -1466,7 +1871,15 @@
       } else keep.push(V.photos[i]);
     }
     V.photos = keep;
+    dropProof();
     paint();
+  }
+
+  // 照片一变，之前拼的图就不作数了
+  function dropProof() {
+    if (V.proofUrl) { try { URL.revokeObjectURL(V.proofUrl); } catch (e) {} }
+    V.proofUrl = '';
+    V.proofBlob = null;
   }
 
   /* ---------- 合成送达凭证 ---------- */
@@ -1494,16 +1907,21 @@
     ctx.closePath();
   }
 
-  function composeProof(photos, meta) {
+  // 合成图的尺寸：只有照片和每张下面的楼栋标注，没有标题栏、没有页脚
+  function proofSize(n) {
     var PAD = 36, W = 1080;
-    var n = photos.length;
-    var cols = n === 1 ? 1 : (n <= 4 ? 2 : 3);
+    var cols = n <= 1 ? 1 : (n <= 4 ? 2 : 3);
     var cellW = Math.floor((W - PAD * (cols + 1)) / cols);
     var cellH = Math.round(cellW * (n === 1 ? 0.75 : 1));
-    var LABEL = 52;
-    var rows = Math.ceil(n / cols);
-    var HEAD = 250, FOOT = 160;
-    var H = HEAD + rows * (cellH + LABEL + PAD) + FOOT;
+    var LABEL = 56;
+    var rows = Math.max(1, Math.ceil(n / cols));
+    var H = PAD + rows * (cellH + LABEL + PAD);
+    return { PAD: PAD, W: W, cols: cols, cellW: cellW, cellH: cellH, LABEL: LABEL, rows: rows, H: H };
+  }
+
+  function composeProof(photos, meta) {
+    var s = proofSize(photos.length);
+    var PAD = s.PAD, W = s.W, cols = s.cols, cellW = s.cellW, cellH = s.cellH, LABEL = s.LABEL, H = s.H;
 
     return Promise.all(photos.map(function (p) { return loadImg(p.url); })).then(function (imgs) {
       var cv = document.createElement('canvas');
@@ -1514,28 +1932,10 @@
       ctx.fillStyle = '#fdf8f0';
       ctx.fillRect(0, 0, W, H);
 
-      var grad = ctx.createLinearGradient(0, 0, W, HEAD);
-      grad.addColorStop(0, '#c9722f');
-      grad.addColorStop(1, '#a8532a');
-      ctx.fillStyle = grad;
-      ctx.fillRect(0, 0, W, HEAD - 36);
-
-      ctx.fillStyle = 'rgba(255,255,255,.92)';
-      ctx.font = '600 32px -apple-system,"PingFang SC","Microsoft YaHei",sans-serif';
-      ctx.fillText('今天我送完了', PAD, 82);
-
-      ctx.fillStyle = '#ffffff';
-      ctx.font = '700 58px -apple-system,"PingFang SC","Microsoft YaHei",sans-serif';
-      ctx.fillText(meta.date, PAD, 156);
-
-      ctx.fillStyle = 'rgba(255,255,255,.9)';
-      ctx.font = '400 29px -apple-system,"PingFang SC","Microsoft YaHei",sans-serif';
-      ctx.fillText(meta.line, PAD, 202);
-
       for (var i = 0; i < imgs.length; i++) {
         var r = Math.floor(i / cols), c = i % cols;
         var x = PAD + c * (cellW + PAD);
-        var y = HEAD + r * (cellH + LABEL + PAD);
+        var y = PAD + r * (cellH + LABEL + PAD);
         var im = imgs[i];
 
         ctx.save();
@@ -1556,26 +1956,14 @@
         while (ctx.measureText(lab).width > cellW - 120 && lab.length > 3) {
           lab = lab.slice(0, lab.length - 2) + '…';
         }
-        ctx.fillText(lab, x + 4, y + cellH + 38);
+        ctx.fillText(lab, x + 4, y + cellH + 40);
 
         ctx.fillStyle = '#8a7259';
         ctx.font = '400 24px -apple-system,"PingFang SC","Microsoft YaHei",sans-serif';
         var tm = hhmm(photos[i].at);
         var tw = ctx.measureText(tm).width;
-        ctx.fillText(tm, x + cellW - tw - 4, y + cellH + 38);
+        ctx.fillText(tm, x + cellW - tw - 4, y + cellH + 40);
       }
-
-      var fy = H - FOOT + 62;
-      ctx.fillStyle = '#e8dccb';
-      ctx.fillRect(PAD, fy - 42, W - PAD * 2, 2);
-
-      ctx.fillStyle = '#3a2a1c';
-      ctx.font = '600 31px -apple-system,"PingFang SC","Microsoft YaHei",sans-serif';
-      ctx.fillText(meta.foot, PAD, fy + 18);
-
-      ctx.fillStyle = '#a89078';
-      ctx.font = '400 23px -apple-system,"PingFang SC","Microsoft YaHei",sans-serif';
-      ctx.fillText('竹间记 · ' + new Date().toLocaleString('zh-CN', { hour12: false }), PAD, fy + 64);
 
       return new Promise(function (resolve, reject) {
         cv.toBlob(function (blob) {
@@ -1588,6 +1976,9 @@
 
   function doCompose() {
     if (!V.photos.length || !V.record) return;
+    var un = 0;
+    for (var i = 0; i < V.photos.length; i++) if (!V.photos[i].building) un++;
+    if (un) { toast('还有 ' + un + ' 张没选楼栋，点照片选一下'); return; }
     V.busy = true;
     V.err = '';
     paint();
@@ -1595,7 +1986,7 @@
     composeProof(V.photos, {
       date: mdLabel(V.record.date),
       line: t.buildings + ' 栋 · ' + t.orders + ' 单 · ' + t.cups + ' 件',
-      foot: '共 ' + V.photos.length + ' 处送达 · 合计 ¥' + money(t.amount)
+      foot: '共 ' + V.photos.length + ' 处送达'
     }).then(function (out) {
       V.busy = false;
       if (V.proofUrl) { try { URL.revokeObjectURL(V.proofUrl); } catch (e) {} }
@@ -1653,6 +2044,8 @@
       '<label class="jl-efield"><span>楼栋</span><select id="jlEBld"><option value="">（不写）</option>' + opt +
       '<option value="__new">+ 新楼栋…</option></select></label>' +
       '<label class="jl-efield"><span>房号</span><input id="jlERoom" value="' + esc(o.room) + '" inputmode="numeric"></label>' +
+      '<label class="jl-efield"><span>这单总价</span><input id="jlETotal" type="number" min="0" step="0.5" value="' +
+      (o.total == null ? '' : o.total) + '" placeholder="原文说共多少就填这"></label>' +
       '<div class="jl-efield jl-efield-top"><span>商品</span><div class="jl-egoods" id="jlEGoods">' + goods + '</div></div>' +
       '<button type="button" class="jl-ghost jl-addgood" data-x="addgood">+ 加一样</button>' +
       '<label class="jl-efield"><span>备注</span><input id="jlENote" value="' + esc(o.note) + '"></label>' +
@@ -1698,8 +2091,13 @@
           if (nv) bv = normBuilding(String(nv).replace(/(栋|幢|号楼|座|#)$/, ''), '');
         }
         o.building = bv || '';
+        o.buildingFrom = 'manual';   // 人改过的，别再拿历史去覆盖
         o.room = mask.querySelector('#jlERoom').value.trim();
         o.note = mask.querySelector('#jlENote').value.trim();
+        var tv = mask.querySelector('#jlETotal').value;
+        var tn = parseFloat(tv);
+        o.total = (trim(tv) !== '' && tn >= 0 && tn < 100000) ? tn : null;
+        var oldUnits = o.items.map(function (x3) { return x3.unit; });
         var names = mask.querySelectorAll('.jl-e-name');
         var qtys = mask.querySelectorAll('.jl-e-qty');
         var items = [];
@@ -1708,7 +2106,7 @@
           var q = parseInt(qtys[i2].value, 10);
           if (!nm) continue;
           if (!(q > 0 && q < 100)) q = 1;
-          items.push({ name: nm, qty: q, unit: null });
+          items.push({ name: nm, qty: q, unit: oldUnits[i2] == null ? null : oldUnits[i2] });
         }
         o.items = items;
         o.manual = true;
@@ -1716,6 +2114,59 @@
         rebuild();
         persist(true);
         toast('改好了');
+      }
+    });
+  }
+
+  /* ---------- 给照片标楼栋 ---------- */
+
+  function pickBuildingFor(key) {
+    if (!V.record) return;
+    var p = null;
+    for (var i = 0; i < V.photos.length; i++) if (V.photos[i].key === key) p = V.photos[i];
+    if (!p) return;
+
+    var seen = {};
+    var picks = [];
+    for (var b = 0; b < V.record.buildings.length; b++) {
+      var k = V.record.buildings[b].key;
+      if (k === '未写楼栋' || seen[k]) continue;
+      seen[k] = 1;
+      picks.push('<button type="button" data-b="' + esc(k) + '"' + (k === p.building ? ' class="on"' : '') + '>' +
+        esc(k) + '<i>' + V.record.buildings[b].cups + ' 件</i></button>');
+    }
+
+    var mask = document.createElement('div');
+    mask.className = 'jl-mask';
+    mask.innerHTML =
+      '<div class="jl-sheet-edit jl-sheet-pick">' +
+      '<div class="jl-ehead"><b>这张是哪一栋</b><button type="button" data-x="close">×</button></div>' +
+      '<p class="jl-pick-lead">标了之后，拼图下面就会写这一栋，按你选的来。</p>' +
+      '<div class="jl-picks">' + picks.join('') + '</div>' +
+      '<div class="jl-pickfree"><input id="jlPickFree" placeholder="不在这几栋？写 7栋 或 A栋">' +
+      '<button type="button" data-x="free">用这个</button></div>' +
+      '<div class="jl-eacts">' +
+      '<button type="button" class="jl-ghost" data-x="none">不标楼栋</button>' +
+      '<button type="button" class="jl-ghost" data-x="close">取消</button>' +
+      '</div></div>';
+
+    document.body.appendChild(mask);
+
+    function close() { if (mask.parentNode) mask.parentNode.removeChild(mask); }
+
+    mask.addEventListener('click', function (ev) {
+      var t = ev.target;
+      var x = t.getAttribute ? t.getAttribute('data-x') : null;
+      var bv = t.getAttribute ? t.getAttribute('data-b') : null;
+      if (t === mask || x === 'close') { close(); return; }
+      if (bv) { close(); setPhotoBuilding(key, bv); return; }
+      if (x === 'none') { close(); setPhotoBuilding(key, ''); return; }
+      if (x === 'free') {
+        var v = mask.querySelector('#jlPickFree').value;
+        if (!trim(v)) { toast('先写个楼栋名'); return; }
+        var nb = normBuilding(String(v).replace(/(栋|幢|号楼|座|#)$/, ''), '');
+        close();
+        setPhotoBuilding(key, nb);
       }
     });
   }
@@ -1778,6 +2229,12 @@
       return;
     }
     if (act === 'delphoto') { delPhoto(btn.getAttribute('data-k')); return; }
+    if (act === 'pickbld') { pickBuildingFor(btn.getAttribute('data-k')); return; }
+    if (act === 'aibox') {
+      if (V.record) V.record.plan.aiRejected = false;
+      kickBoxAI(V.record);
+      return;
+    }
     if (act === 'compose') { doCompose(); return; }
     if (act === 'shareproof') { shareProof(); return; }
     if (act === 'clearshots') {
@@ -1789,8 +2246,8 @@
 
   function onChange(ev) {
     var t = ev.target;
-    if (t.id === 'jlShotInput' && t.files && t.files[0]) {
-      addPhoto(t.files[0]);
+    if ((t.id === 'jlShotCam' || t.id === 'jlShotPick') && t.files && t.files.length) {
+      addPhotos(t.files);
       t.value = '';
       return;
     }
@@ -1852,6 +2309,13 @@
     parseLine: parseLine,
     parseAiPayload: parseAiPayload,
     buildPrompt: buildPrompt,
+    buildBoxPrompt: buildBoxPrompt,
+    parseBoxPayload: parseBoxPayload,
+    useAiBoxes: useAiBoxes,
+    proofSize: proofSize,
+    residentBook: residentBook,
+    residentsText: residentsText,
+    fillMissingBuildings: fillMissingBuildings,
     finalize: finalize,
     groupByBuilding: groupByBuilding,
     sumTotals: sumTotals,
@@ -1868,10 +2332,13 @@
     findItems: findItems,
     findName: findName,
     money: money,
+    amtLabel: amtLabel,
     todayStr: todayStr,
     readPrice: readPrice,
     writePrice: writePrice,
     setPrice: setPrice,
+    learnedPrices: learnedPrices,
+    effectivePrice: effectivePrice,
     readSettings: readSettings,
     writeSettings: writeSettings,
     cupCount: cupCount,
