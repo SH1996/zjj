@@ -48,13 +48,16 @@
     { name: '香辣雪菜包', price: 2, by: '个' },
     { name: '肉沫茄子包', price: 2, by: '个' },
     { name: '香辣海带丝包', price: 2, by: '个' },
-    { name: '香菇冬笋包', price: 2, by: '个' },
+    { name: '香菇冬笋包', price: 2, by: '个', alias: ['香菇竹笋包', '冬笋包', '竹笋包'] },
     { name: '麻辣土豆包', price: 2, by: '个' },
     // 按笼卖，可以半笼
     { name: '小笼包', price: 6, by: '笼', half: true, alias: ['鲜肉小笼包', '酱肉小笼包'] },
     { name: '灌汤小笼包', price: 7, by: '笼', half: true, alias: ['灌汤包'] },
     { name: '玉米鲜肉蒸饺', price: 6, by: '笼', half: true, alias: ['玉米蒸饺', '玉米饺', '鲜肉蒸饺', '蒸饺'] },
     // 其它
+    // 牌子上没写蛋，但店里白水蛋一直是 1.5 一个。名字写法五花八门，全归到这一样，
+    // 免得「白水蛋 1.5」「白鸡蛋 3.5」各存一份，问题清单拿着错的那个去算少给。
+    { name: '白鸡蛋', price: 1.5, by: '个', alias: ['鸡蛋', '白水蛋', '水煮蛋', '水煮鸡蛋', '白蛋', '清水蛋'] },
     { name: '烧麦', price: 1.5, by: '个', alias: ['烧卖'] },
     { name: '玉米', price: 5, by: '个' },
     { name: '老面馒头', price: 1, by: '个' },
@@ -68,7 +71,7 @@
     { name: '黑米粥', price: 2, by: '杯' },
     { name: '南瓜小米粥', price: 2, by: '杯', alias: ['小米粥', '南瓜粥'] },
     { name: '玉米汁', price: 3, by: '个' },
-    { name: '韭菜鸡蛋饼', price: 3, by: '个' },
+    { name: '韭菜鸡蛋饼', price: 3, by: '个', alias: ['鸡蛋饼', '韭菜饼'] },
     { name: '鲜肉饼', price: 3.5, by: '个' },
     { name: '鸡蛋汉堡', price: 5, by: '个' },
     { name: '鸡蛋卷饼', price: 5, by: '个' }
@@ -367,7 +370,7 @@
     var amtCount = money.length + nums.length;
     var amt = money.length ? money[0].val : (nums.length ? nums[0].val : null);
 
-    var out = { items: items, amt: amt, amtCount: amtCount, nums: nums, totalLike: false };
+    var out = { items: items, amt: amt, amtCount: amtCount, nums: nums, moneyCount: money.length, totalLike: false };
 
     // 一样东西给一个数 → 这项的小计；几样东西只给一个数 → 这一单多少钱
     if (amt != null && items.length && amtCount < items.length) out.totalLike = true;
@@ -502,8 +505,10 @@
         if (g2.amt != null && g2.items.length === 1 && one.qty > 0) {
           if (!g2.totalLike) {
             unit = round2(g2.amt / one.qty);
-          } else if (g2.nums && g2.nums.length === 1) {
-            // 「一个豇豆包2 … 4元」：2 是这一样的价，4 是整单总价
+          } else if (g2.nums && g2.nums.length === 1 && g2.moneyCount > 0) {
+            // 「一个豇豆包2 … 4元」：2 是这一样的价，4 元才是整单总价。
+            // 只有同时出现「带元的总价」和「裸数字」时才这么拆；
+            // 光一个行末「3.5」是整单总价，别贴成豆浆单价（会显示成 ¥3.5 冤枉人）。
             unit = round2(g2.nums[0].val / one.qty);
           }
           if (!(unit > 0 && unit < 1000)) unit = null;
@@ -593,13 +598,27 @@
     return n;
   }
 
-  // 「半笼玉米蒸饺」「玉米蒸饺半份」——数量是半，不是一份
-  function rawSaysHalf(raw, name) {
-    var s = String(raw || ''), n = trim(name);
-    if (!s || !n) return false;
-    var q = n.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
-    return new RegExp('半\\s*(?:笼|份|个|杯|碗|屉)?\\s*' + q).test(s) ||
-      new RegExp(q + '\\s*半\\s*(?:笼|份|个|杯|碗|屉)').test(s);
+  /* 半笼兜底：原文写了「半笼」，可 AI 拆单常把 half 弄丢，还会把「玉米饺」
+   * 归一成全称「玉米鲜肉蒸饺」——原来那个拿名字硬套原文的正则就找不着了。
+   * 改成按整单判：这单里能半笼、且只点一份的，就是那一半。 */
+  function applyHalfFromRaw(o) {
+    var raw = String(o.raw || '');
+    if (!raw || !/半\s*(?:笼|屉|份)/.test(raw)) return;
+    var cand = [];
+    for (var i = 0; i < o.items.length; i++) {
+      var t = o.items[i];
+      if (!t.half && canHalf(t.name) && t.qty === 1) cand.push(t);
+    }
+    if (!cand.length) return;
+    var m = /半\s*(?:笼|屉|份)\s*([\u4e00-\u9fa5]{1,10})/.exec(raw);
+    var near = m ? m[1] : '';
+    for (var j = 0; j < cand.length; j++) {
+      var nm = cand[j].name;
+      var core = nm.replace(/^.*?(蒸饺|小笼包|灌汤包)/, '$1');
+      if (near.indexOf(nm) > -1 || (core && core !== nm && near.indexOf(core) > -1) ||
+          (nm.length > 2 && near.indexOf(nm.slice(-2)) > -1)) { cand[j].half = true; return; }
+    }
+    cand[0].half = true;   // 一行里只有一个可半笼的，那就是它
   }
 
   function finalize(record, opts) {
@@ -620,9 +639,9 @@
       var o = orders[i];
       var amount = 0;
       var unknown = false;
+      applyHalfFromRaw(o);   // 原文写了「半笼」就一定要认出来，AI 拆单常丢这个标记
       for (var j = 0; j < o.items.length; j++) {
         var it = o.items[j];
-        if (it.half == null && o.raw) it.half = rawSaysHalf(o.raw, it.name);
         var p = price[it.name];
         var bookUnit = (p && typeof p.unit === 'number') ? p.unit : null;
         if (bookUnit != null && it.half && canHalf(it.name)) bookUnit = round2(bookUnit / 2);
@@ -634,6 +653,14 @@
         if (it.unit != null && it.priceFrom !== 'book') { unit = it.unit; src = it.fromText ? 'text' : 'fixed'; }
         else if (bookUnit != null) { unit = bookUnit; src = 'book'; }
         else { unit = it.unit; src = it.unit != null ? 'fixed' : ''; }
+        /* 半笼：AI 常把整笼价（玉米蒸饺 ¥6）填进来、同时也标了 half，
+         * 金额页就会显示 ¥6、送达清单也按 6 算。按本店半价纠正；
+         * 老板自己在金额页手填的（fixed）不动。 */
+        var moHalf = (it.half && canHalf(it.name)) ? menuOf(it.name) : null;
+        // 手填价一般不动；唯独「半笼却记着整笼价」是明显错数据，按半价纠正
+        if (moHalf && (src !== 'fixed' || Math.abs(Number(unit) - moHalf.unit) < 0.01)) {
+          unit = round2(moHalf.unit / 2); src = 'book';
+        }
         if (unit == null) { unknown = true; } else {
           it.amount = round2(unit * it.qty);
           amount += it.amount;
@@ -1178,10 +1205,11 @@
 
   /* 三档价，从硬到软：
    * 1. 本店价目表——老板定的价，最硬；
-   * 2. 历史价——只补价目表里没有的（油条、红薯、鸡蛋这些）；
+   * 2. 历史价——只补价目表里没有的（油条、红薯、菜角这些）；
    * 3. 金额页手填的——最高，改一次就按你的来。
    * 以前历史价能盖掉本店价：有人写错一次（三个酱肉包 6 元）就被记成 2 元，
-   * 「谁给少了」从此永远查不出来。现在记价时也跳过价目表里有的商品。 */
+   * 「谁给少了」从此永远查不出来。现在记价时也跳过价目表里有的商品，
+   * 自动学来的旧价也不许盖回去（白鸡蛋曾被学成 3.5，店里其实是 1.5）。 */
   function effectivePrice(listFn) {
     var out = {};
     var idx = menuIndex();
@@ -1195,7 +1223,13 @@
     }
     var own = readPrice();
     for (k in own) {
-      if (own.hasOwnProperty(k)) out[k] = { unit: own[k].unit, from: own[k].from || 'manual', at: own[k].at };
+      if (!own.hasOwnProperty(k)) continue;
+      /* 本店价目表里有的商品，不让「以前自动学来的旧价」盖掉。
+       * 例：某单把白鸡蛋学成 3.5 存进价格本，后来店里明确说蛋是 1.5，
+       * 老价还赖着不走，问题清单就会一直拿 3.5 去冤枉人。
+       * 老板自己在金额页手填的（manual）仍然最大，那是他主动改的价。 */
+      if (out[k] && out[k].from === 'menu' && own[k].from !== 'manual') continue;
+      out[k] = { unit: own[k].unit, from: own[k].from || 'manual', at: own[k].at };
     }
     return out;
   }
@@ -1241,7 +1275,8 @@
       '9. qty 必须是 1–99 的整数；「两份」填 2，没写数量填 1。\n' +
       '10. 不是订单的行（#接龙、日期、说明、接龙格式提示）不要进 orders。\n' +
       '11. 不要改人名，也不要把两个人合并成一条。\n' +
-      '12. 「半笼小笼包」「半笼蒸饺」这种：qty 填 1，half 填 true（小笼包、灌汤小笼包、玉米蒸饺都可以半笼）。\n';
+      '12. 「半笼小笼包」「半笼蒸饺」这种：qty 填 1，half 填 true（小笼包、灌汤小笼包、玉米蒸饺都可以半笼）。原文出现「半笼/半份」就一定要给 half:true，别丢。\n' +
+      '13. 单价照【本店价目表】填：白鸡蛋／鸡蛋／白水蛋／白蛋一律 1.5 元一个，不是 3.5；半笼蒸饺 3 元、半笼小笼包 3 元、半笼灌汤小笼包 3.5 元。\n';
   }
 
   function parseAiPayload(text, opts) {
@@ -1307,10 +1342,31 @@
     // AI 也会漏：不认识的包子它干脆不提。本地已经认得「…包」了，补回来
     if (opts.sourceText) {
       try { rescueItems(rawRec, opts.sourceText); } catch (e) { }
+      try { backfillRaw(rawRec, opts.sourceText); } catch (e) { }
+      /* 不在新拆的单上改单价：收款金额得按原文／AI 认出来的算，涨价、特价都算数。
+       * 本店价只用于「问题清单」比价；旧笔记里的错价在 decodeNote 时才校准。 */
     }
     var rec = finalize(rawRec, opts);
     if (obj.boxes && Array.isArray(obj.boxes)) rec.boxAi = obj.boxes;
     return { ok: true, record: rec };
+  }
+
+  /* AI 常常不把原文行带回来。没有原文，问题清单就没了「原句」，
+   * 「半笼」也没处认。本地逐行拆出来的 raw 才是真原文，按序号回填。 */
+  function backfillRaw(record, text) {
+    var local;
+    try { local = parseText(text, { date: record.date }); } catch (e) { return; }
+    if (!local || !local.orders) return;
+    var byNo = {};
+    for (var i = 0; i < local.orders.length; i++) {
+      if (local.orders[i].raw) byNo[local.orders[i].no] = local.orders[i].raw;
+    }
+    for (var j = 0; j < record.orders.length; j++) {
+      var o = record.orders[j];
+      if (byNo[o.no]) o.raw = byNo[o.no];
+      // AI 有时会重新从 1 编号，按 no 就对不上了，退一步按位置兜底
+      else if (!o.raw && local.orders[j] && local.orders[j].raw) o.raw = local.orders[j].raw;
+    }
   }
 
   /* AI 漏商品兜底：只补「AI 完全没有这一样」，不跟 AI 争件数和价钱。
@@ -1336,12 +1392,17 @@
       }
       if (!l || !l.items.length) continue;
 
+      // AI 爱写全称、本地认别名（玉米鲜肉蒸饺 / 玉米饺），不归一就会重复补一份
+      var canon = function (n) {
+        var mo = menuOf(n);
+        return normItemName(mo ? mo.name : n);
+      };
       var have = {};
-      for (k = 0; k < o.items.length; k++) have[o.items[k].name] = true;
+      for (k = 0; k < o.items.length; k++) have[canon(o.items[k].name)] = true;
 
       for (k = 0; k < l.items.length; k++) {
         var it = l.items[k];
-        if (!it.name || have[it.name]) continue;
+        if (!it.name || have[canon(it.name)]) continue;
         if (!(it.qty > 0 && it.qty < 50)) continue;
         o.items.push({
           name: it.name, qty: it.qty,
@@ -1405,7 +1466,7 @@
           no: o.no, name: o.name, building: o.building, room: o.room,
           buildingFrom: o.buildingFrom || '',
           raw: trim(o.raw || '').slice(0, 90),
-          items: o.items.map(function (i) { return { name: i.name, qty: i.qty, unit: i.unit, fromText: !!i.fromText, half: !!i.half, priceFrom: i.priceFrom || '' }; }),
+          items: o.items.map(function (i) { return { name: i.name, qty: i.qty, unit: i.unit, fromText: !!i.fromText, half: i.half == null ? null : !!i.half, priceFrom: i.priceFrom || '' }; }),
           total: o.total == null ? null : o.total,
           note: o.note || '', manual: !!o.manual
         };
@@ -1421,6 +1482,32 @@
     return plain + '\n' + MARK + JSON.stringify(data);
   }
 
+  /* 打开旧笔记时校准单价：v15.10 之前白鸡蛋被学成 ¥3.5、半笼蒸饺按整笼 ¥6 存过，
+   * 那些都是程序／AI 填的，不是老板手填的。本店价目表定了的，一律按表重算，
+   * 不然老板点开旧记录，金额页和问题清单里还挂着错的 3.5。 */
+  function calibrateSavedRecord(rec) {
+    if (!rec || !Array.isArray(rec.orders)) return rec;
+    for (var i = 0; i < rec.orders.length; i++) {
+      var o = rec.orders[i];
+      applyHalfFromRaw(o);                 // 原文写了「半笼」，旧笔记里可能没存下来
+      // 没有原句的（测试造的单、别人手工拼的记录）别乱改人家的单价
+      if (!o.raw) continue;
+      var its = o.items || [];
+      for (var j = 0; j < its.length; j++) {
+        var it = its[j], mo = menuOf(it.name);
+        if (!mo) continue;
+        var h = !!(it.half && mo.half);
+        // 老板手填的最大，不改；唯独「半笼却记着整笼价」是明显错数据
+        if (it.priceFrom === 'fixed' && !(h && Math.abs(Number(it.unit) - mo.unit) < 0.01)) continue;
+        it.unit = round2(mo.unit / (h ? 2 : 1));
+        it.priceFrom = 'book';
+        it.fromText = false;
+        if (it.amount != null && it.qty > 0) it.amount = round2(it.unit * it.qty);
+      }
+    }
+    return rec;
+  }
+
   function decodeNote(text) {
     var s = String(text == null ? '' : text);
     var i = s.lastIndexOf(MARK);
@@ -1429,7 +1516,7 @@
     try {
       var d = JSON.parse(json);
       if (!d || !Array.isArray(d.orders)) return null;
-      return d;
+      return calibrateSavedRecord(d);
     } catch (e) { return null; }
   }
 
@@ -1836,9 +1923,13 @@
 
   function issueKey(it) { return it.no + '|' + it.code; }
 
-  /* 这一样「应该」多少钱：
-   * 原文写了单价就按原文（他说 3 块就是 3 块），没写就按本店价；半笼折半。 */
+  /* 这一样「应该」多少钱：本店价目表里有的，一律按本店价（半笼折半）。
+   * 问题清单写着「按本店价算是」，就得真拿本店价算。以前先信拆单时记下的 it.unit，
+   * 可那个价常常是 AI 照旧价目表／价格本填的——白鸡蛋被填成 3.5，就一直拿 3.5 冤枉人。
+   * 牌子以外的商品（油条、红薯、菜角）没有本店价，才退回原文单价／学来的价。 */
   function expectUnit(it, ref) {
+    var mo = menuOf(it.name);
+    if (mo) return round2(mo.unit / ((it.half && mo.half) ? 2 : 1));
     if (it.unit != null && it.fromText !== false) return it.unit;
     var u = baseUnitOf(it, ref);
     if (u != null) return u;
@@ -1846,7 +1937,7 @@
   }
   // 基准价：本店价目表优先，没有才用价格本里学来的／手填的
   function baseUnitOf(it, ref) {
-    var e = (ref && ref[it.name]) || menuOf(it.name);
+    var e = menuOf(it.name) || (ref && ref[it.name]);
     if (!e || typeof e.unit !== 'number') return null;
     var h = !!it.half && canHalf(it.name);
     return round2(e.unit / (h ? 2 : 1));
@@ -2112,7 +2203,8 @@
     L.push('- 「半笼」「一份」「两个」「x2」是数量，不是钱。');
     L.push('- 名字是昵称、emoji、字母加数字（y2、魚脆²⁵、😴、h、U）都正常，不像真名不代表是错的。');
     L.push('- 楼栋写成 A、G1、G2-、E栋-301、a栋 都算写了，不要判成「没写楼栋」。');
-    L.push('- 「半笼」是半价不是少给：小笼包 ¥3、灌汤小笼包 ¥3.5、玉米蒸饺 ¥3。「半笼玉米蒸饺 3 元」是对的。');
+    L.push('- 「半笼」是半价不是少给：小笼包 ¥3、灌汤小笼包 ¥3.5、玉米蒸饺 ¥3。「半笼玉米蒸饺 3 元」是对的；只写「蒸饺」「玉米饺」也多半是半笼，按 ¥3 算，别按整笼 ¥6 冤枉人。');
+    L.push('- 白鸡蛋／鸡蛋／白水蛋／白蛋都是同一个，本店 ¥1.5 一个，不是 ¥3.5；「白鸡蛋+豆浆 3.5 元」正好对得上，不算少给。');
     L.push('- 价格先看【本店价目表】，表里没有的才看历史价。表里有的，按表算；差不到 1 块是抹零，不算少给。');
     L.push('- 一单里被拆成两样的（「玉米蒸饺」拆成玉米+蒸饺）、件数明显跟「两个」对不上的，是真的问题。');
     L.push('');
@@ -2309,7 +2401,7 @@
         (a.over > 0 ? '<em>多收 ¥' + money(a.over) + '</em>' : '') +
         '</div></div>';
 
-      h += '<p class="jl-hint jl-basis">价格对着本店价目表算的，半笼按一半：小笼包 ¥3、灌汤小笼包 ¥3.5、玉米蒸饺 ¥3。</p>';
+      h += '<p class="jl-hint jl-basis">价格对着本店价目表算的：白鸡蛋 ¥1.5、豆浆 ¥2、包子 ¥2～2.5；半笼按一半：小笼包 ¥3、灌汤小笼包 ¥3.5、玉米蒸饺 ¥3。</p>';
 
       h += '<div class="jl-issues">';
       for (var i = 0; i < a.issues.length; i++) {
@@ -2797,7 +2889,7 @@
             no: o.no, name: o.name, building: o.building, room: o.room,
             buildingFrom: o.buildingFrom || '',
             raw: o.raw || '',
-            items: (o.items || []).map(function (i2) { return { name: i2.name, qty: i2.qty, unit: i2.unit, fromText: !!i2.fromText, half: !!i2.half, priceFrom: i2.priceFrom || '' }; }),
+            items: (o.items || []).map(function (i2) { return { name: i2.name, qty: i2.qty, unit: i2.unit, fromText: !!i2.fromText, half: i2.half == null ? null : !!i2.half, priceFrom: i2.priceFrom || '' }; }),
             total: o.total == null ? null : o.total,
             note: o.note || '', manual: o.manual
           };
