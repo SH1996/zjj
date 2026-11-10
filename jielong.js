@@ -625,6 +625,65 @@
     return n;
   }
 
+  // 按名字在过往接龙记录里找这个人的楼栋：精确优先，再放宽到「去掉常见称呼后缀」
+  // （张三 → 张三姐 / 张三哥 / 小张）。查不到返回 null。
+  function lookupBuildingByName(name) {
+    name = trim(name || '');
+    if (!name) return null;
+    var book = residentBook(listRecords);
+    if (book[name] && book[name].building) return { building: book[name].building, room: book[name].room || '', at: book[name].at || '' };
+    var strip = function (x) { return trim(x).replace(/(姐|哥|阿姨|叔|先生|女士|老板|小|老|大)$/, ''); };
+    var sName = strip(name);
+    if (sName && book[sName] && book[sName].building) {
+      return { building: book[sName].building, room: book[sName].room || '', at: book[sName].at || '' };
+    }
+    var ks = Object.keys(book);
+    for (var i = 0; i < ks.length; i++) {
+      var k = ks[i];
+      if (book[k].building && strip(k) === name) {
+        return { building: book[k].building, room: book[k].room || '', at: book[k].at || '' };
+      }
+    }
+    return null;
+  }
+
+  // 问题清单里「没写楼栋」那一行的按钮：去过往记录按名字查，查到就填、查不到记一笔
+  function lookupBld(no) {
+    var rec = V.record;
+    if (!rec || !rec.orders) return;
+    var o = null;
+    for (var i = 0; i < rec.orders.length; i++) if (rec.orders[i].no === no) { o = rec.orders[i]; break; }
+    if (!o || o.building) return;
+    var nm = trim(o.name || '');
+    var hit = nm ? lookupBuildingByName(nm) : null;
+    if (hit) {
+      o.building = hit.building;
+      if (!o.room && hit.room) o.room = hit.room;
+      o.buildingFrom = 'history';
+      o.bldLookedUp = false;
+      rec.buildings = groupByBuilding(rec.orders);
+      persist(true);
+      paint();
+      toast('已在过往记录找到「' + nm + '」：' + hit.building + (hit.room ? (' ' + hit.room) : '') + '，已补上');
+    } else {
+      o.bldLookedUp = true;
+      persist(true);
+      paint();
+      toast(nm ? ('过往记录里没找到「' + nm + '」的楼栋') : '这条没写名字，没法按名字查');
+    }
+  }
+
+  // 「没写楼栋」问题行底部：没查过出按钮，查过没找到出灰字提示
+  function bldLookupHtml(no) {
+    var rec = V.record;
+    if (!rec || !rec.orders) return '';
+    var o = null;
+    for (var i = 0; i < rec.orders.length; i++) if (rec.orders[i].no === no) { o = rec.orders[i]; break; }
+    if (!o || o.building) return '';
+    if (o.bldLookedUp) return '<p class="jl-looked">已查过往记录，没找到这个人的楼栋</p>';
+    return '<button type="button" class="jl-issue-act" data-act="lookupbld" data-no="' + no + '">在过往接龙里按名字查楼栋</button>';
+  }
+
   /* 半笼兜底：原文写了「半笼」，可 AI 拆单常把 half 弄丢，还会把「玉米饺」
    * 归一成全称「玉米鲜肉蒸饺」——原来那个拿名字硬套原文的正则就找不着了。
    * 改成按整单判：这单里能半笼、且只点一份的，就是那一半。 */
@@ -2483,6 +2542,7 @@
           '<button type="button" class="jl-issue-x" data-act="skipissue" data-k="' + esc(it.key) + '">不用管</button>' +
           '</div>' +
           (it.detail ? '<p>' + esc(it.detail) + '</p>' : '') +
+          (it.code === 'nobld' ? bldLookupHtml(it.no) : '') +
           (it.aiWhy ? '<p class="jl-ai-why">AI：' + esc(it.aiWhy) + '</p>' : '') +
           '</div>';
       }
@@ -3714,6 +3774,10 @@
       }
       return;
     }
+    if (act === 'lookupbld') {
+      lookupBld(parseInt(btn.getAttribute('data-no'), 10));
+      return;
+    }
     if (act === 'unskipall') {
       if (V.record) {
         V.record.issueSkip = {};
@@ -3835,6 +3899,9 @@
     residentBook: residentBook,
     residentsText: residentsText,
     fillMissingBuildings: fillMissingBuildings,
+    lookupBuildingByName: lookupBuildingByName,
+    lookupBld: lookupBld,
+    getRecord: function () { return V.record; },
     finalize: finalize,
     groupByBuilding: groupByBuilding,
     sumTotals: sumTotals,
