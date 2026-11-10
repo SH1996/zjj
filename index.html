@@ -1714,6 +1714,31 @@
   .jl-box-f{margin-top:9px;font-size:11px;color:var(--jl-faint);}
   .jl-box-w{margin-top:8px;font-size:11px;line-height:1.7;color:var(--jl-soft);}
 
+  /* 冬天保温：一箱一栋 */
+  .jl-warm{display:flex;align-items:flex-start;gap:10px;width:100%;margin-top:10px;
+    padding:11px 13px;border:1px solid var(--jl-line);border-radius:12px;background:var(--jl-panel);
+    font-family:inherit;text-align:left;cursor:pointer;}
+  .jl-warm.on{border-color:rgba(201,114,47,.42);background:rgba(201,114,47,.07);}
+  .jl-warm-sw{flex:0 0 auto;width:34px;height:20px;border-radius:11px;background:var(--jl-line);
+    position:relative;margin-top:1px;transition:background .18s;}
+  .jl-warm-sw::after{content:'';position:absolute;top:2px;left:2px;width:16px;height:16px;border-radius:50%;
+    background:#fff;box-shadow:0 1px 3px rgba(0,0,0,.22);transition:left .18s;}
+  .jl-warm.on .jl-warm-sw{background:var(--jl-acc);}
+  .jl-warm.on .jl-warm-sw::after{left:16px;}
+  .jl-warm>span{flex:1;min-width:0;}
+  .jl-warm b{display:block;font-size:12.5px;font-weight:600;color:var(--jl-ink);}
+  .jl-warm em{display:block;margin-top:3px;font-style:normal;font-size:11px;line-height:1.6;
+    color:var(--jl-faint);}
+  .jl-warm.on em{color:var(--jl-soft);}
+  .jl-box-warm{border-color:rgba(201,114,47,.28);}
+  .jl-box-pin{margin-top:7px;font-size:10.5px;color:var(--jl-acc);letter-spacing:.02em;}
+  .jl-box-over{margin-top:6px;font-size:10.5px;line-height:1.6;color:var(--jl-warn);}
+  .jl-warm-pins{margin-top:10px;padding:11px 13px;border-radius:12px;background:var(--jl-wash);}
+  .jl-warm-pins>b{display:block;font-size:11.5px;font-weight:600;color:var(--jl-soft);}
+  .jl-warm-pins>div{display:flex;flex-wrap:wrap;gap:6px;margin-top:8px;}
+  .jl-chip-pin{border:1px dashed var(--jl-line);background:transparent;color:var(--jl-acc);
+    border-radius:8px;padding:5px 10px;font-size:11.5px;font-family:inherit;cursor:pointer;}
+
   /* AI 建议条：装箱页顶部 */
   .jl-aiwire{display:flex;align-items:center;gap:10px;margin-top:10px;padding:11px 13px;
     background:var(--jl-panel);border:1px solid var(--jl-line);border-radius:12px;}
@@ -1883,6 +1908,7 @@
     font-weight:600;margin-top:1px;}
   .jl-memrow>em.drop{color:#5f8a4e;background:rgba(95,138,78,.14);}
   .jl-memrow>em.keep{color:#bf4d3a;background:rgba(191,77,58,.12);}
+  .jl-memrow>em.warm{color:#8a6a2f;background:rgba(201,114,47,.16);}
   .jl-memrow>div{flex:1;min-width:0;}
   .jl-memrow b{font-size:11.5px;font-weight:600;}
   .jl-memrow span{margin-left:6px;color:var(--jl-soft);font-size:10.5px;}
@@ -1893,6 +1919,48 @@
   .jl-memrow button{flex:0 0 auto;border:1px solid var(--jl-line);background:transparent;
     border-radius:7px;font-size:9.5px;color:var(--jl-faint);padding:5px 8px;font-family:inherit;
     cursor:pointer;line-height:1.2;}
+
+  /* AI 资料库：一页看全，按人/货/钱/箱分组 */
+  .jl-memcard{display:flex;align-items:center;gap:12px;margin-top:18px;padding:14px 16px;
+    border:1px solid var(--jl-line);border-radius:14px;background:var(--jl-panel);cursor:pointer;}
+  .jl-memcard-l{flex:1;min-width:0;}
+  .jl-memcard-l b{display:block;font-size:13px;font-weight:600;letter-spacing:.02em;}
+  .jl-memcard-l span{display:block;margin-top:4px;font-size:11px;line-height:1.65;color:var(--jl-soft);}
+  .jl-memcard-l em{display:block;margin-top:6px;font-style:normal;font-size:10.5px;
+    color:var(--jl-faint);white-space:nowrap;overflow:hidden;text-overflow:ellipsis;}
+  .jl-memcard-r{flex:0 0 auto;text-align:right;}
+  .jl-memcard-r b{display:block;font-size:24px;font-weight:600;color:var(--jl-acc);
+    font-variant-numeric:tabular-nums;line-height:1;}
+  .jl-memcard-r i{font-style:normal;font-size:10px;color:var(--jl-faint);}
+  .jl-memlead{margin-top:6px;padding:14px 15px;border-radius:14px;background:var(--jl-wash);}
+  .jl-memlead b{display:block;font-size:13px;font-weight:600;}
+  .jl-memlead p{margin:6px 0 0;font-size:11.5px;line-height:1.8;color:var(--jl-soft);}
+  .jl-memstat{display:flex;gap:8px;flex-wrap:wrap;margin-top:14px;}
+  .jl-memstat span{font-size:11px;color:var(--jl-soft);background:var(--jl-wash);
+    border-radius:8px;padding:4px 9px;}
+  .jl-memstat span b{color:var(--jl-acc);font-variant-numeric:tabular-nums;}
+  .jl-memgrp{margin-top:18px;}
+  .jl-memgrp-h{display:flex;align-items:baseline;gap:8px;flex-wrap:wrap;margin-bottom:8px;}
+  .jl-memgrp-h b{font-size:12.5px;font-weight:600;}
+  .jl-memgrp-h em{font-style:normal;font-size:10.5px;color:var(--jl-acc);}
+  .jl-memgrp-h span{width:100%;font-size:10.5px;color:var(--jl-faint);}
+  .jl-memrow-lib{padding:9px 11px;}
+  .jl-memrow .jl-mem-day{margin-top:4px;font-size:9.5px;color:var(--jl-faint);}
+  .jl-memadd{display:block;width:100%;margin-top:20px;padding:12px;border-radius:12px;
+    border:1px dashed var(--jl-line);background:transparent;color:var(--jl-soft);
+    font-size:12px;font-family:inherit;cursor:pointer;}
+  .jl-membox-btn{display:flex;align-items:center;gap:8px;width:100%;margin-top:12px;
+    padding:11px 13px;border:1px dashed var(--jl-line);border-radius:12px;background:transparent;
+    font-family:inherit;text-align:left;cursor:pointer;}
+  .jl-membox-btn b{flex:0 0 auto;font-size:11.5px;font-weight:600;color:var(--jl-acc);}
+  .jl-membox-btn span{flex:1;min-width:0;font-size:10.5px;line-height:1.6;color:var(--jl-soft);}
+  .jl-membox-btn i{flex:0 0 auto;font-style:normal;font-size:15px;color:var(--jl-faint);}
+  .jl-addcats{display:flex;gap:6px;flex-wrap:wrap;margin:0 0 12px;}
+  .jl-addcat{border:1px solid var(--jl-line);background:transparent;color:var(--jl-soft);
+    border-radius:9px;padding:6px 14px;font-size:12px;font-family:inherit;cursor:pointer;}
+  .jl-addcat.on{background:rgba(201,114,47,.1);border-color:rgba(201,114,47,.45);
+    color:var(--jl-acc);font-weight:600;}
+  .jl-sheet-addmem{max-height:82vh;overflow-y:auto;}
 
   .jl-sheet-mem .jl-mem-lead{margin:0 0 12px;font-size:11.5px;line-height:1.8;color:var(--jl-soft);}
   .jl-mem-src{border:1px solid var(--jl-line);border-radius:12px;background:rgba(201,114,47,.035);
@@ -1938,6 +2006,9 @@
   .jl-mem-aihint{display:flex;justify-content:space-between;align-items:baseline;gap:10px;
     margin:6px 0 0 51px;font-size:10px;line-height:1.6;color:var(--jl-faint);}
   .jl-mem-aihint em{font-style:normal;flex:0 0 auto;font-variant-numeric:tabular-nums;}
+  .jl-mem-aihint #jlAddScope{flex:1;min-width:0;line-height:1.6;}
+  .jl-mem-aihint #jlAddScope.on{color:#8a6a2f;}
+  .jl-mem-aihint #jlAddScope.warn{color:var(--jl-warn);}
   .jl-mem-note input:focus,.jl-mem-note textarea:focus,.jl-efield input:focus,.jl-efield select:focus{
     border-color:var(--jl-acc);box-shadow:0 0 0 3px rgba(201,114,47,.12);outline:none;}
   .jl-mem-wide{display:flex;align-items:flex-start;gap:7px;margin:11px 0 0;font-size:11px;
@@ -1957,6 +2028,8 @@
     .jl-mem-picks{margin-top:10px;}
     .jl-mem-note{margin-top:10px;}
     .jl-mem-aihint{display:none;}
+    /* 手写规矩那一行「只管谁」不能省，写歪了就是全局规矩 */
+    .jl-sheet-addmem .jl-mem-aihint{display:flex;}
     .jl-mem-note textarea{min-height:42px;}
   }
 
@@ -3206,7 +3279,7 @@ window.onerror = function (msg, url, line) {
   'use strict';
 
   // 版本号统一在此维护；localStorage 键沿用 v11 不变，切勿改名以免丢失用户数据
-  var APP_VERSION = '15.13.2';
+  var APP_VERSION = '15.14.0';
   // 送货单拍照识别：视觉模型默认名、兼容别名与各项安全上限
   var DEFAULT_VISION_MODEL = 'deepseek-flash';
   var VISION_MODEL_FALLBACK = 'deepseek-v4-flash-vision-exp';
