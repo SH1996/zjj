@@ -1412,8 +1412,8 @@
     for (var i = 0; i < arr.length && out.length < MEMORY_MAX; i++) {
       if (memKeyOf(arr[i]) !== k) out.push(arr[i]);
     }
-    writeMemory(out);
-    return out;
+    var ok = writeMemory(out);
+    return { list: out, ok: ok };
   }
 
   /* 老板点下「记下」的那一下，把这条判断收成规矩：
@@ -3766,10 +3766,12 @@
       (issue.detail ? '<p>' + esc(issue.detail) + '</p>' : '') +
       (issue.aiWhy ? '<p class="jl-mem-ai">AI 说：' + esc(issue.aiWhy) + '</p>' : '') +
       (issue.aiDrop ? '<p class="jl-mem-ai">AI 说：' + esc(issue.aiDrop) + '</p>' : '') + '</div>' +
+      '<p class="jl-mem-ask">这条，它是不是看错了？<em>选一个</em></p>' +
       '<div class="jl-mem-picks">' +
       '<button type="button" class="jl-mem-pick" data-x="v" data-v="drop">它看错了</button>' +
       '<button type="button" class="jl-mem-pick" data-x="v" data-v="keep">确实有问题</button>' +
       '</div>' +
+      '<div class="jl-mem-tip" id="jlMemTip" role="status"></div>' +
       '<label class="jl-mem-note"><span>一句话</span>' +
       '<input id="jlMemNote" maxlength="60" placeholder="例：王姐住 3 栋，群里从不写楼栋"></label>' +
       '<label class="jl-mem-wide"><input type="checkbox" id="jlMemWide">' +
@@ -3790,7 +3792,52 @@
     }
 
     var pick = '';
+    var tipEl = mask.querySelector('#jlMemTip');
+    var picksEl = mask.querySelector('.jl-mem-picks');
     function close() { if (mask.parentNode) mask.parentNode.removeChild(mask); }
+
+    /* 弹框里的提示必须画在弹框里。宿主那枚 toast 的层级压不过遮罩，
+     * 以前点了「记下」没选就会像死机一样毫无动静。 */
+    function warn(html) {
+      if (!tipEl) return;
+      tipEl.innerHTML = html;
+      tipEl.classList.add('show');
+      if (picksEl) {
+        picksEl.classList.remove('warn');
+        void picksEl.offsetWidth;
+        picksEl.classList.add('warn');
+      }
+      // 底下的「记下」是吸底的，提示得自己滚到弹框中间，别被它压住
+      requestAnimationFrame(function () {
+        if (!mask.parentNode) return;
+        var sheet = mask.querySelector('.jl-sheet-mem');
+        if (sheet) {
+          try {
+            var sr = sheet.getBoundingClientRect(), tr = tipEl.getBoundingClientRect();
+            sheet.scrollTop += (tr.top - sr.top) - sheet.clientHeight / 2 + tr.height / 2;
+          } catch (e) {}
+        }
+        try { tipEl.scrollIntoView({ block: 'nearest' }); }
+        catch (e) {}
+      });
+    }
+    function clearWarn() {
+      if (tipEl) { tipEl.classList.remove('show'); tipEl.innerHTML = ''; }
+      if (picksEl) picksEl.classList.remove('warn');
+    }
+
+    // 写完一句顺手按回车就等于点「记下」
+    var noteEl = mask.querySelector('#jlMemNote');
+    if (noteEl) {
+      noteEl.addEventListener('keydown', function (ev) {
+        if (ev.key === 'Enter' || ev.keyCode === 13) {
+          ev.preventDefault();
+          noteEl.blur();
+          var okBtn = mask.querySelector('[data-x="ok"]');
+          if (okBtn) okBtn.click();
+        }
+      });
+    }
 
     mask.addEventListener('click', function (ev) {
       var t = ev.target;
@@ -3804,13 +3851,25 @@
           if (bs[b] === t) bs[b].classList.add('on');
           else bs[b].classList.remove('on');
         }
+        clearWarn();
         return;
       }
       if (x === 'ok') {
-        if (!pick) { toast('先点一下：它看错了，还是确实有问题'); return; }
+        var ni = mask.querySelector('#jlMemNote');
+        if (ni && document.activeElement === ni) ni.blur();
         var note = (mask.querySelector('#jlMemNote').value || '').replace(/^\s+|\s+$/g, '');
         var wide = !!mask.querySelector('#jlMemWide').checked;
-        memSave(memFromIssue(issue.code, order, pick, note, wide, order.raw));
+        if (!pick) {
+          warn('还差一步：这条是<b>它看错了</b>，还是<b>确实有问题</b>？' +
+            '<br>把上面那个选了，再按「记下」。');
+          return;
+        }
+        var saved = memSave(memFromIssue(issue.code, order, pick, note, wide, order.raw));
+        if (saved && saved.ok === false) {
+          warn('这台设备没存上，多半是存储满了。' +
+            '<br>翻到底下「核单记忆」，删两条旧的再试。');
+          return;
+        }
         close();
         paint();
         toast(pick === 'drop' ? '记下了 · 往后这条不再挑出来' : '记下了 · 往后这条要盯着');
