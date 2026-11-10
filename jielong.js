@@ -2120,8 +2120,9 @@
         var u = it.fromText ? it.unit : (it.derivedUnit != null ? it.derivedUnit : null);
         if (u == null || !(u > 0 && u < 1000)) continue;
         var own = readPrice();   // 每样重新读，别把这一轮刚学的价再覆盖回去
-        if (own[it.name] && own[it.name].from === 'manual') continue;   // 手填的最大，绝不覆盖
-        if (own[it.name] && Number(own[it.name].unit) === Number(u)) continue;
+        // 已经有价就不再自动改：这个价是「平时多少钱」的基准，被本单自己改掉，
+        // 「谁给少了」就永远查不出来。要改价去金额页手填（manual 最大）。
+        if (own[it.name]) continue;
         setPrice(it.name, u, 'learned');
       }
     }
@@ -3085,6 +3086,7 @@
     writePrice: writePrice,
     setPrice: setPrice,
     learnedPrices: learnedPrices,
+    learnPrices: learnPrices,
     effectivePrice: effectivePrice,
     readSettings: readSettings,
     writeSettings: writeSettings,
