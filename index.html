@@ -1757,6 +1757,27 @@
   .jl-tb tfoot td{border-bottom:none;font-weight:600;padding-top:11px;}
   .jl-price{width:62px;border:1px solid var(--jl-line);background:var(--jl-panel);color:var(--jl-ink);
     border-radius:8px;padding:5px 7px;font-size:12.5px;font-family:inherit;text-align:right;}
+  .jl-price-off{border-color:rgba(192,57,43,.55);background:rgba(192,57,43,.05);}
+
+  /* 本店价目表 */
+  .jl-menu{display:block;font-style:normal;font-size:10.5px;line-height:1.5;
+    color:var(--jl-faint);margin-top:2px;}
+  .jl-menu-book{margin-top:12px;border:1px dashed var(--jl-line);border-radius:12px;padding:9px 11px;}
+  .jl-menu-book summary{font-size:11px;color:var(--jl-soft);cursor:pointer;list-style:none;
+    display:block;}
+  .jl-menu-book summary::-webkit-details-marker{display:none;}
+  .jl-menu-book summary::after{content:'›';float:right;margin-right:-12px;font-size:15px;
+    line-height:1;color:var(--jl-faint);}
+  .jl-menu-book[open] summary::after{content:'⌄';}
+  .jl-menu-book[open] summary{margin-bottom:6px;}
+  .jl-menu-grid{display:grid;grid-template-columns:1fr 1fr;gap:5px 14px;}
+  .jl-menu-row{display:flex;align-items:baseline;justify-content:space-between;gap:8px;
+    padding:4px 0;border-bottom:1px solid var(--jl-line);font-size:12px;}
+  .jl-menu-row b{font-weight:500;}
+  .jl-menu-row em{font-style:normal;color:var(--jl-soft);font-variant-numeric:tabular-nums;
+    white-space:nowrap;font-size:11.5px;}
+  .jl-menu-row em u{display:block;text-decoration:none;color:var(--jl-acc);font-size:10.5px;}
+  .jl-basis{margin-top:8px;}
 
   .jl-people{display:flex;flex-direction:column;gap:1px;background:var(--jl-line);
     border:1px solid var(--jl-line);border-radius:12px;overflow:hidden;}
@@ -2525,7 +2546,7 @@ window.onerror = function (msg, url, line) {
   'use strict';
 
   // 版本号统一在此维护；localStorage 键沿用 v11 不变，切勿改名以免丢失用户数据
-  var APP_VERSION = '15.9.0';
+  var APP_VERSION = '15.10.0';
   // 送货单拍照识别：视觉模型默认名、兼容别名与各项安全上限
   var DEFAULT_VISION_MODEL = 'deepseek-flash';
   var VISION_MODEL_FALLBACK = 'deepseek-v4-flash-vision-exp';
