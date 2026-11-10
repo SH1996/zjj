@@ -2104,11 +2104,11 @@
   [data-theme="dark"] .grain{opacity:.055}
 
   .page{
-    width:100%;max-width:1220px;height:100dvh;min-height:640px;padding:0 34px 94px;
-    display:grid;grid-template-columns:minmax(0,1.22fr) minmax(360px,.78fr);
-    grid-template-areas:"head head" "composer stage" "nav stage";
-    grid-template-rows:auto auto auto;column-gap:30px;row-gap:18px;
-    align-content:center;overflow-y:auto;scrollbar-width:none;perspective:1600px;
+    width:100%;max-width:1220px;height:100dvh;min-height:0;padding:0 34px 78px;
+    display:grid;grid-template-columns:minmax(0,1.22fr) minmax(340px,.78fr);
+    grid-template-areas:"head head" "composer stage" "nav stage" "soul stage";
+    grid-template-rows:auto minmax(0,1fr) auto auto;column-gap:28px;row-gap:14px;
+    align-content:stretch;overflow:hidden;scrollbar-width:none;perspective:1600px;
   }
   .page::-webkit-scrollbar{display:none}
   .masthead{grid-area:head;align-items:center;padding:38px 2px 22px;gap:24px}
@@ -2139,7 +2139,7 @@
   .icon-btn:active{transform:translateY(0) scale(.94)}
 
   .composer{
-    grid-area:composer;align-self:start;min-height:290px;display:flex;flex-direction:column;border-radius:30px;padding:26px 26px 22px;
+    grid-area:composer;align-self:start;min-height:0;display:flex;flex-direction:column;border-radius:28px;padding:22px 22px 18px;
     border:1px solid rgba(255,255,255,.82);background:linear-gradient(145deg,rgba(255,255,255,.82),rgba(239,250,243,.57));
     box-shadow:var(--card-edge),0 34px 70px -36px rgba(15,79,52,.48),0 6px 20px -12px rgba(15,79,52,.14);
     backdrop-filter:blur(26px) saturate(1.2);-webkit-backdrop-filter:blur(26px) saturate(1.2);
@@ -2154,16 +2154,15 @@
   }
   .composer:focus-within{transform:translateY(-4px) translateZ(12px);border-color:var(--g300);box-shadow:var(--card-edge),var(--shadow-3)}
   .composer textarea{
-    min-height:104px;max-height:190px;border:1px solid rgba(71,128,99,.12);border-radius:20px;
+    height:auto;min-height:86px;max-height:150px;border:1px solid rgba(71,128,99,.12);border-radius:18px;
     background:rgba(255,255,255,.52);padding:18px 20px;font-size:17px;line-height:1.75;
     box-shadow:inset 0 2px 8px rgba(25,76,53,.035),0 1px 0 rgba(255,255,255,.6);
   }
   [data-theme="dark"] .composer textarea{background:rgba(5,29,20,.34);box-shadow:inset 0 2px 10px rgba(0,0,0,.12)}
   .composer textarea::placeholder{color:var(--ink-faint);opacity:.85}
   .composer textarea:focus{border-color:var(--g400);box-shadow:var(--ring),inset 0 2px 8px rgba(25,76,53,.03)}
-  .input-wrap{gap:10px;flex:1}
-  .composer textarea{height:100%;min-height:142px;max-height:none}
-  .input-actions{gap:8px;align-self:flex-end}
+  .input-wrap{display:flex;align-items:flex-end;gap:10px;flex:1}
+  .input-actions{display:flex;align-items:center;gap:8px;flex:none}
   .inline-btn,.send-btn{width:48px;height:48px;border-radius:16px}
   .inline-btn{border-color:rgba(64,120,92,.16);background:rgba(255,255,255,.58);box-shadow:var(--card-edge),0 8px 18px -12px rgba(20,75,51,.32)}
   [data-theme="dark"] .inline-btn{background:rgba(20,55,41,.6)}
@@ -2205,7 +2204,7 @@
 
   /* 首页 3D 竹节装置 */
   .bamboo-stage{
-    --rx:0deg;--ry:0deg;grid-area:stage;position:relative;isolation:isolate;min-height:480px;overflow:hidden;
+    --rx:0deg;--ry:0deg;grid-area:stage;grid-row:2 / span 3;position:relative;isolation:isolate;min-height:0;height:100%;overflow:hidden;
     border-radius:36px;border:1px solid rgba(206,255,226,.24);color:#e9fff2;
     background:
       radial-gradient(circle at 68% 32%,rgba(88,225,155,.26),transparent 28%),
@@ -2224,6 +2223,24 @@
   .stage-aurora{position:absolute;width:280px;height:280px;right:-80px;top:-100px;border-radius:50%;background:#51d997;opacity:.14;filter:blur(70px);animation:auroraFloat 9s ease-in-out infinite alternate}
   .stage-topline{position:absolute;z-index:5;left:25px;right:25px;top:23px;display:flex;justify-content:space-between;align-items:center;font-size:8px;font-weight:600;letter-spacing:.2em;color:rgba(220,255,235,.64)}
   .stage-index{padding:5px 8px;border:1px solid rgba(211,255,229,.16);border-radius:99px;letter-spacing:.12em}
+  .stage-ai{
+    display:inline-flex;align-items:center;gap:5px;padding:5px 9px;border-radius:99px;
+    border:1px solid rgba(211,255,229,.28);background:rgba(10,58,40,.5);color:#d8ffe8;
+    font-size:8px;font-weight:700;letter-spacing:.12em;cursor:pointer;
+    box-shadow:inset 0 1px 0 rgba(255,255,255,.12),0 8px 18px -12px rgba(0,30,18,.8);
+    transition:transform .25s ease,background .25s ease,border-color .25s ease,box-shadow .25s ease;
+  }
+  .stage-ai svg{width:11px;height:11px}
+  .stage-ai:hover{background:rgba(24,96,66,.72);border-color:rgba(211,255,229,.5);transform:translateY(-2px);box-shadow:inset 0 1px 0 rgba(255,255,255,.18),0 12px 24px -12px rgba(0,30,18,.9)}
+  .stage-ai:active{transform:translateY(0) scale(.94)}
+  .stage-ai:disabled{opacity:.55;cursor:wait;transform:none}
+  .stage-spark{
+    margin-top:10px;max-width:260px;min-height:16px;font-size:10.5px;line-height:1.65;letter-spacing:.04em;
+    color:#c9ffe1;text-shadow:0 0 18px rgba(93,226,154,.35);
+  }
+  .stage-spark::before{content:"✦ ";color:#8ff0b6}
+  .stage-spark.show{animation:sparkIn .6s cubic-bezier(.2,.8,.2,1) both}
+  @keyframes sparkIn{from{opacity:0;transform:translateY(8px) scale(.96)}to{opacity:1;transform:translateY(0) scale(1)}}
   .scene-camera{position:absolute;inset:48px 0 122px;perspective:900px;display:grid;place-items:center;transform-style:preserve-3d}
   .scene-world{
     position:relative;width:280px;height:290px;transform-style:preserve-3d;
@@ -2283,8 +2300,9 @@
   @keyframes haloC{to{transform:rotateX(72deg) rotateZ(415deg)}}
   @keyframes moteFloat{0%,100%{transform:translateY(0);opacity:.35}50%{transform:translateY(-14px);opacity:1}}
 
-  .soul{position:relative;z-index:2;max-width:720px;padding-top:22px}
-  .soul-text{font-family:"Iowan Old Style","Songti SC",serif;color:var(--ink-soft)}
+  .soul{grid-area:soul;position:relative;z-index:2;max-width:720px;margin:0;padding-top:2px;text-align:left}
+  .soul-text{font-family:"Iowan Old Style","Songti SC",serif;color:var(--ink-soft);font-size:11px;line-height:1.55}
+  .soul-acts{margin-top:2px;justify-content:flex-start}
   .foot{z-index:6;color:var(--ink-soft);background:linear-gradient(to top,var(--bg-bottom) 22%,transparent);font-size:10px}
   .foot::before{content:"";position:absolute;left:50%;bottom:47px;width:1px;height:16px;background:linear-gradient(var(--g400),transparent);opacity:.5}
   .dot{box-shadow:0 0 10px var(--g500)}
@@ -2378,35 +2396,45 @@
   }
   @media(max-width:760px){
     html,body{overflow:hidden}
-    .page{display:block;height:100dvh;min-height:0;padding:0 20px 110px;overflow-y:auto;perspective:none}
-    .masthead{padding:26px 0 23px}
+    .page{
+      display:grid;grid-template-columns:minmax(0,1fr);
+      grid-template-areas:"head" "composer" "stage" "nav" "soul";
+      grid-template-rows:auto auto minmax(0,1fr) auto auto;
+      height:100dvh;min-height:0;padding:0 20px 66px;overflow:hidden;perspective:none;
+    }
+    .masthead{padding:22px 0 18px}
     .leaf-logo{width:48px;height:48px;border-radius:16px;padding:10px}
     .masthead h1{font-size:28px}.masthead .sub{font-size:10px;letter-spacing:.14em}.masthead .sub::before{display:none}
     .icon-btn{width:42px;height:42px;border-radius:14px}.header-actions{gap:7px}
-    .composer{padding:20px 18px 17px;border-radius:26px;min-height:0}
-    .composer::after{right:20px}.composer textarea{min-height:84px;padding:15px 16px;border-radius:17px;font-size:16px}
-    .input-wrap{gap:7px;flex:none}.composer textarea{height:auto;min-height:84px;max-height:160px}.input-actions{gap:6px}.inline-btn,.send-btn{width:43px;height:43px;border-radius:14px}
-    .composer-bar{margin-top:14px;padding-top:13px}.tool-btn{font-size:11.5px;padding:8px 10px}
-    .bamboo-stage{min-height:270px;margin:18px 0 14px;border-radius:28px}
-    .stage-topline{top:18px;left:21px;right:21px}.stage-copy{left:23px;bottom:38px}.stage-copy h2{font-size:25px;line-height:1.35}.stage-copy p{font-size:9px;margin-top:6px}
-    .stage-foot{left:23px;right:23px;bottom:15px}.scene-camera{inset:35px -52px 45px 35%;opacity:.9;transform:scale(.74)}
-    .home-nav{grid-template-columns:repeat(3,minmax(0,1fr));gap:9px}
-    .hn-item{min-height:65px;padding:12px 14px;border-radius:18px}.hn-count{font-size:22px}.hn-name{font-size:11px}
-    .soul{padding:24px 4px 0}.foot{padding-bottom:calc(14px + env(safe-area-inset-bottom))}
+    .composer{padding:18px 16px 15px;border-radius:24px;min-height:0}
+    .composer::after{right:18px}.composer textarea{min-height:78px;max-height:120px;padding:14px 15px;border-radius:16px;font-size:16px}
+    .input-wrap{gap:7px;flex:1}.input-actions{gap:6px}.inline-btn,.send-btn{width:42px;height:42px;border-radius:14px}
+    .composer-bar{margin-top:12px;padding-top:11px}.tool-btn{font-size:11.5px;padding:8px 10px}
+    .bamboo-stage{min-height:0;height:100%;margin:0;border-radius:26px}
+    .stage-topline{top:16px;left:19px;right:19px}.stage-copy{left:21px;bottom:34px}.stage-copy h2{font-size:23px;line-height:1.32}.stage-copy p{font-size:9px;margin-top:5px}
+    .stage-foot{left:21px;right:21px;bottom:13px}.scene-camera{inset:28px -48px 38px 30%;opacity:.9;transform:scale(.68)}
+    .home-nav{grid-template-columns:repeat(3,minmax(0,1fr));gap:8px}
+    .hn-item{min-height:60px;padding:11px 13px;border-radius:17px}.hn-count{font-size:21px}.hn-name{font-size:11px}
+    .soul{padding:6px 2px 0}.foot{padding-bottom:calc(8px + env(safe-area-inset-bottom))}
     .notes-page{padding-left:16px;padding-right:16px}.np-head{top:6px;margin-top:6px}
   }
   @media(max-width:420px){
-    .page{padding-left:14px;padding-right:14px}.masthead{gap:10px}.brand{gap:11px}.leaf-logo{width:44px;height:44px;padding:9px}
-    .masthead h1{font-size:25px}.masthead .sub{font-size:9px}.header-actions{gap:5px}.icon-btn{width:39px;height:39px;border-radius:13px}
-    .composer{padding:18px 14px 15px}.composer textarea{min-height:82px;font-size:16px;padding:14px}
-    .input-actions{gap:5px}.composer textarea::placeholder{font-size:14px;letter-spacing:.02em}.inline-btn,.send-btn{width:40px;height:40px;border-radius:13px}.inline-btn svg,.send-btn svg{width:17px;height:17px}
-    .bar-left{gap:6px}.tool-btn{font-size:11px;padding:8px 9px}.composer-bar{gap:6px}
-    .bamboo-stage{min-height:246px}.scene-camera{transform:scale(.66);inset:32px -68px 42px 31%}.stage-copy h2{font-size:23px}.stage-copy p{max-width:185px;line-height:1.6}
-    .hn-item{padding:11px 12px;min-height:60px}.hn-count{font-size:20px}.hn-name{font-size:10.5px}
+    .page{padding-left:12px;padding-right:12px;padding-bottom:64px}.masthead{gap:9px}.brand{gap:10px}.leaf-logo{width:43px;height:43px;padding:9px}
+    .masthead h1{font-size:24px}.masthead .sub{font-size:9px}.header-actions{gap:5px}.icon-btn{width:38px;height:38px;border-radius:13px}
+    .composer{padding:16px 13px 13px}.composer textarea{min-height:74px;max-height:110px;font-size:16px;padding:13px 14px}
+    .input-actions{gap:5px}.composer textarea::placeholder{font-size:13.5px;letter-spacing:.02em}.inline-btn,.send-btn{width:39px;height:39px;border-radius:13px}.inline-btn svg,.send-btn svg{width:16px;height:16px}
+    .bar-left{gap:5px}.tool-btn{font-size:10.5px;padding:7px 8px}.composer-bar{gap:5px}
+    .bamboo-stage{border-radius:23px}.scene-camera{transform:scale(.6);inset:26px -62px 34px 28%}.stage-copy h2{font-size:21px}.stage-copy p{max-width:175px;line-height:1.55}
+    .stage-ai{padding:4px 7px;font-size:7.5px}.stage-spark{font-size:9.5px;max-width:210px}
+    .hn-item{padding:10px 11px;min-height:56px}.hn-count{font-size:19px}.hn-name{font-size:10px}
+  }
+  @media(max-height:880px) and (min-width:761px){
+    .scene-camera{transform:scale(.88)}
   }
   @media(max-height:760px) and (min-width:761px){
-    .page{min-height:600px;align-content:start}.masthead{padding-top:26px;padding-bottom:16px}.bamboo-stage{min-height:430px}
-    .composer textarea{min-height:80px}.composer{padding-top:22px;padding-bottom:18px}.hn-item{min-height:64px}
+    .page{min-height:0;align-content:stretch}.masthead{padding-top:22px;padding-bottom:14px}
+    .composer textarea{min-height:72px}.composer{padding-top:18px;padding-bottom:15px}.hn-item{min-height:60px}
+    .scene-camera{inset:38px 0 102px}.scene-world{transform:scale(.82)}
   }
   @media(prefers-reduced-motion:reduce){
     .scene-world,.halo,.stage-aurora,.mote{animation:none!important}
@@ -2534,6 +2562,10 @@
     <div class="stage-topline">
       <span>BAMBOO SANCTUARY</span>
       <span class="stage-index">VOL. 01</span>
+      <button class="stage-ai" id="stageSparkBtn" type="button" aria-label="AI 安放一句">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 3l1.8 4.6L18.5 9l-4.7 1.4L12 15l-1.8-4.6L5.5 9l4.7-1.4z"/><path d="M18.5 15.5l.8 2 2 .8-2 .8-.8 2-.8-2-2-.8 2-.8z"/></svg>
+        <span>AI 一句</span>
+      </button>
     </div>
     <div class="scene-camera" aria-hidden="true">
       <div class="scene-world">
@@ -2562,6 +2594,7 @@
       <span class="stage-kicker"><i></i> 此刻 · 安放</span>
       <h2>把思绪，<br>种进一片竹林。</h2>
       <p>每一份灵感，都有自己的生长空间。</p>
+      <p class="stage-spark" id="stageSparkText" aria-live="polite"></p>
     </div>
     <div class="stage-foot"><span>LOCAL FIRST</span><span>PRIVATE BY DESIGN</span></div>
   </section>
@@ -2586,7 +2619,6 @@
       <span class="hn-name">垃圾</span><b class="hn-count" id="neTrash">0</b>
     </button>
   </nav>
-</div>
 
   <section class="soul" id="soulCard" style="display:none;" aria-live="polite">
     <div class="soul-line"></div>
@@ -2595,6 +2627,7 @@
       <button class="soul-hint" id="soulRefresh" type="button">换一句</button>
     </div>
   </section>
+</div>
 
 <footer class="foot">
   <span class="dot" id="syncDot"></span>
@@ -2681,7 +2714,7 @@
   </p>
   <label class="field"><span>API 接口地址</span><input id="cfgAiUrl" placeholder="https://api.deepseek.com/chat/completions"></label>
   <label class="field"><span>API 密钥 (Key)</span><input id="cfgAiKey" type="password" placeholder="sk-..."></label>
-  <label class="field"><span>模型名称 (Model)</span><input id="cfgAiModel" placeholder="deepseek-chat"></label>
+  <label class="field"><span>模型名称 (Model)</span><input id="cfgAiModel" placeholder="deepseek-flash"></label>
   <div style="margin:2px 0 12px;display:flex;align-items:center;gap:10px;flex-wrap:wrap;">
     <button type="button" id="cfgAiTest" style="border:1px solid var(--line);background:transparent;border-radius:8px;padding:7px 12px;font-size:12px;color:var(--ink,inherit);cursor:pointer;">测一下能不能连上</button>
     <span id="cfgAiTestMsg" style="font-size:11px;color:var(--ink-faint);line-height:1.5;flex:1;min-width:150px;"></span>
@@ -2973,7 +3006,7 @@ window.onerror = function (msg, url, line) {
   'use strict';
 
   // 版本号统一在此维护；localStorage 键沿用 v11 不变，切勿改名以免丢失用户数据
-  var APP_VERSION = '15.11.0';
+  var APP_VERSION = '15.11.1';
   // 送货单拍照识别：视觉模型默认名、兼容别名与各项安全上限
   var DEFAULT_VISION_MODEL = 'deepseek-flash';
   var VISION_MODEL_FALLBACK = 'deepseek-v4-flash-vision-exp';
@@ -4126,15 +4159,17 @@ window.onerror = function (msg, url, line) {
 
   function billVisionFetch(model, content) {
     var cfg = state.config;
+    var body = {
+      model: model,
+      messages: [{ role: 'user', content: content }],
+      temperature: 0,
+      stream: false
+    };
+    if (isDeepSeekFlashModel(model, cfg.aiUrl)) body.thinking = { type: 'disabled' };
     return fetch(cfg.aiUrl, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json', 'Authorization': 'Bearer ' + cfg.aiKey },
-      body: JSON.stringify({
-        model: model,
-        messages: [{ role: 'user', content: content }],
-        temperature: 0,
-        stream: false
-      })
+      body: JSON.stringify(body)
     }).then(function (res) {
       if (!res.ok) {
         return res.text().then(function (t) {
@@ -6978,6 +7013,15 @@ window.onerror = function (msg, url, line) {
       return h === 'api.deepseek.com' || /\.deepseek\.com$/.test(h);
     } catch (e) { return false; }
   }
+  // DeepSeek Flash：默认开思考，文本核对/识别容易超时；这里统一关掉
+  function isDeepSeekFlashModel(name, url) {
+    var m = String(name || '').trim().toLowerCase();
+    if (m === 'deepseek-flash' || m === 'deepseek-v4-flash' || m === 'deepseek-v4-flash-vision-exp') return true;
+    try {
+      var h = new URL(url).hostname.toLowerCase();
+      return (h === 'api.deepseek.com' || /\.deepseek\.com$/.test(h)) && m === 'deepseek-flash';
+    } catch (e) { return false; }
+  }
 
   // DeepSeek 官方 Search API（联网降级路径）：返回 [{title,url,snippet,summary,site_name,date}]
   function webSearchApi(query) {
@@ -7083,9 +7127,9 @@ window.onerror = function (msg, url, line) {
   }
   function aiEmptyReplyError(info) {
     if (info && info.reasoning)
-      return new Error('接口已连上，但模型只返回了思考过程，没有正文。请在「设置」换用非推理模型（如 deepseek-chat）再试');
+      return new Error('接口已连上，但模型只返回了思考过程，没有正文。请在「设置」换用 deepseek-flash（已自动关闭思考）再试');
     if (info && info.finish === 'length')
-      return new Error('接口已连上，但模型输出达到长度上限，仍没有正文。请换用非推理模型（如 deepseek-chat）再试');
+      return new Error('接口已连上，但模型输出达到长度上限，仍没有正文。请换用 deepseek-flash（已自动关闭思考）再试');
     return new Error('接口已连上，但返回里没有正文，可能是接口格式不兼容');
   }
 
@@ -7096,6 +7140,7 @@ window.onerror = function (msg, url, line) {
     var cfg = cfgOverride || state.config;
     var body = { model: cfg.aiModel, messages: [{ role: 'user', content: prompt }], temperature: temp == null ? 0.4 : temp, stream: false };
     if (opts && opts.maxTokens) body.max_tokens = opts.maxTokens;
+    if (isDeepSeekFlashModel(cfg.aiModel, cfg.aiUrl)) body.thinking = { type: 'disabled' };
     return fetchTimeout(cfg.aiUrl, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json', 'Authorization': 'Bearer ' + cfg.aiKey },
@@ -7324,6 +7369,51 @@ window.onerror = function (msg, url, line) {
     }).catch(function () {
       renderSoulText(localSoulMessage(buildSoulStats()), 'local');
     });
+  }
+
+  /* =========================================
+     此刻安放 · AI 一句
+     只发给模型当前时间和主题，不外发任何笔记内容
+  ========================================= */
+  function localStageSpark() {
+    var pool = [
+      '竹叶把风接住，又轻轻放下。',
+      '此刻不用赶路，先站一会儿。',
+      '把心放低，声音就清楚了。',
+      '竹子在夜里也在慢慢长。',
+      '安放不是停下，是换个姿势呼吸。',
+      '你现在坐的地方，就是好地方。',
+      '让念头像叶子一样挂着，不急着摘。'
+    ];
+    return pool[new Date().getMinutes() % pool.length];
+  }
+  function stageSparkPrompt() {
+    var now = new Date();
+    var weekCN = ['日', '一', '二', '三', '四', '五', '六'][now.getDay()];
+    var t = now.getHours() + ':' + String(now.getMinutes()).padStart(2, '0');
+    return '你是「竹间记」首页三维竹卡片里的安放精灵。现在是星期' + weekCN + ' ' + t + '。' +
+      '请围绕“竹、此刻、安放”写一句 12~18 个汉字的中文短句，像轻轻落在竹叶上的一句话。' +
+      '要求：有画面、有温度、不说教、不解释、不出现“AI”“系统”“用户”。直接输出这一句，不要引号和前后缀。';
+  }
+  function renderStageSpark(text) {
+    var el = document.getElementById('stageSparkText');
+    if (!el) return;
+    el.textContent = String(text || '').trim().slice(0, 40);
+    el.classList.remove('show');
+    void el.offsetWidth;
+    el.classList.add('show');
+  }
+  function stageSpark() {
+    var btn = document.getElementById('stageSparkBtn');
+    if (!btn) return;
+    if (!hasAI()) { renderStageSpark(localStageSpark()); return; }
+    btn.disabled = true;
+    renderStageSpark('…');
+    aiPlain(stageSparkPrompt(), 0.75, { maxTokens: 128 }).then(function (text) {
+      renderStageSpark(soulCap(text) || localStageSpark());
+    }).catch(function () {
+      renderStageSpark(localStageSpark());
+    }).then(function () { btn.disabled = false; });
   }
 
   /* =========================================
@@ -7652,7 +7742,7 @@ window.onerror = function (msg, url, line) {
     els.loBadge.innerHTML = '';
     els.loBody.innerHTML = '<div class="lo-empty"><b>老铁还没连上线。</b><br>' +
       '他得接上 DeepSeek 才能开口——不是他不想说，是线还没插上。<br>' +
-      '<span>在设置里填好 API 地址（<code>https://api.deepseek.com/chat/completions</code>）、密钥和模型名（<code>deepseek-chat</code>），回来再点一次。</span></div>';
+      '<span>在设置里填好 API 地址（<code>https://api.deepseek.com/chat/completions</code>）、密钥和模型名（<code>deepseek-flash</code>），回来再点一次。</span></div>';
     els.loRefs.innerHTML = '';
     var hide = ['loNetSay', 'loSave', 'loCopy'];
     for (var i = 0; i < hide.length; i++) {
@@ -8271,6 +8361,7 @@ window.onerror = function (msg, url, line) {
     // 竹语
     initSoul();
     if ($('soulRefresh')) $('soulRefresh').addEventListener('click', refreshSoul);
+    if ($('stageSparkBtn')) $('stageSparkBtn').addEventListener('click', stageSpark);
 
     // 老铁有话说
     if ($('loClose')) $('loClose').addEventListener('click', closeLaoyou);
