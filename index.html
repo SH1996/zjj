@@ -2554,7 +2554,7 @@ window.onerror = function (msg, url, line) {
   'use strict';
 
   // 版本号统一在此维护；localStorage 键沿用 v11 不变，切勿改名以免丢失用户数据
-  var APP_VERSION = '15.10.3';
+  var APP_VERSION = '15.10.4';
   // 送货单拍照识别：视觉模型默认名、兼容别名与各项安全上限
   var DEFAULT_VISION_MODEL = 'deepseek-flash';
   var VISION_MODEL_FALLBACK = 'deepseek-v4-flash-vision-exp';
@@ -3727,9 +3727,9 @@ window.onerror = function (msg, url, line) {
       }
       return res.json();
     }).then(function (data) {
-      var c = data && data.choices && data.choices[0] && data.choices[0].message && data.choices[0].message.content;
-      if (!c) throw new Error('模型返回格式不正确');
-      return String(c);
+      var info = aiReplyInfo(data);
+      if (!info.text) throw aiEmptyReplyError(info);
+      return info.text;
     });
   }
 
@@ -6624,11 +6624,58 @@ window.onerror = function (msg, url, line) {
     return '连不上 AI 接口：网络不通、地址填错，或该服务不允许网页直接调用';
   }
 
+  /* OpenAI 兼容服务并不都把正文放成同一个样子：有的是字符串，有的是
+   * [{type:'text',text:'…'}]，还有的把内容放在 choice.text / output_text。
+   * 只读 message.content 会把一次成功请求误判成「没有内容」。 */
+  function aiContentText(v) {
+    if (v == null || typeof v === 'boolean') return '';
+    if (typeof v === 'string' || typeof v === 'number') return String(v);
+    if (Array.isArray(v)) {
+      var parts = [];
+      for (var i = 0; i < v.length; i++) {
+        var t = aiContentText(v[i]);
+        if (t) parts.push(t);
+      }
+      return parts.join('');
+    }
+    if (typeof v === 'object') {
+      if (v.text != null) {
+        if (typeof v.text === 'object' && v.text.value != null) return aiContentText(v.text.value);
+        return aiContentText(v.text);
+      }
+      if (v.output_text != null) return aiContentText(v.output_text);
+      if (v.content != null) return aiContentText(v.content);
+      if (v.value != null) return aiContentText(v.value);
+    }
+    return '';
+  }
+  function aiReplyInfo(data) {
+    var ch = data && data.choices && data.choices[0];
+    var msg = ch && ch.message;
+    var text = aiContentText(msg && msg.content).trim();
+    if (!text) text = aiContentText(ch && ch.text).trim();
+    if (!text) text = aiContentText(data && data.output_text).trim();
+    if (!text) text = aiContentText(data && data.output).trim();
+    return {
+      text: text,
+      finish: String((ch && ch.finish_reason) || ''),
+      reasoning: aiContentText(msg && (msg.reasoning_content || msg.reasoning)).trim()
+    };
+  }
+  function aiEmptyReplyError(info) {
+    if (info && info.reasoning)
+      return new Error('接口已连上，但模型只返回了思考过程，没有正文。请在「设置」换用非推理模型（如 deepseek-chat）再试');
+    if (info && info.finish === 'length')
+      return new Error('接口已连上，但模型输出达到长度上限，仍没有正文。请换用非推理模型（如 deepseek-chat）再试');
+    return new Error('接口已连上，但返回里没有正文，可能是接口格式不兼容');
+  }
+
   // 普通对话（不发工具）
-  // opts.maxTokens：拆单/排箱这类长 JSON 要给足，否则会被截断成半截 JSON
-  function aiPlain(prompt, temp, opts, cfgOverride) {
+  // opts.maxTokens：拆单/排箱这类长 JSON 要给足，否则会被截断成半截 JSON。
+  // 推理模型可能把额度全用在 reasoning_content，正文为空；length 时自动放大额度重试一次。
+  function aiPlain(prompt, temp, opts, cfgOverride, didRetry) {
     var cfg = cfgOverride || state.config;
-    var body = { model: cfg.aiModel, messages: [{ role: 'user', content: prompt }], temperature: temp == null ? 0.4 : temp };
+    var body = { model: cfg.aiModel, messages: [{ role: 'user', content: prompt }], temperature: temp == null ? 0.4 : temp, stream: false };
     if (opts && opts.maxTokens) body.max_tokens = opts.maxTokens;
     return fetchTimeout(cfg.aiUrl, {
       method: 'POST',
@@ -6641,9 +6688,19 @@ window.onerror = function (msg, url, line) {
       }
       return res.json();
     }).then(function (data) {
-      var c = data.choices && data.choices[0] && data.choices[0].message && data.choices[0].message.content;
-      if (!c) throw new Error('AI 返回里没有内容：' + JSON.stringify(data).replace(/\s+/g, ' ').slice(0, 90));
-      return String(c).trim();
+      var info = aiReplyInfo(data);
+      if (info.finish === 'length' && !didRetry) {
+        var oldMax = (opts && opts.maxTokens) || 1024;
+        var newMax = Math.min(8192, Math.max(2048, oldMax * 3));
+        if (newMax > oldMax) {
+          var opts2 = {};
+          if (opts) for (var k in opts) if (Object.prototype.hasOwnProperty.call(opts, k)) opts2[k] = opts[k];
+          opts2.maxTokens = newMax;
+          return aiPlain(prompt, temp, opts2, cfg, true);
+        }
+      }
+      if (info.text) return info.text;
+      throw aiEmptyReplyError(info);
     });
   }
 
@@ -6701,8 +6758,8 @@ window.onerror = function (msg, url, line) {
           function () { return viaSearch('模型不支持内置联网'); });
       }
       return res.json().then(function (data) {
-        var c = data.choices && data.choices[0] && data.choices[0].message && data.choices[0].message.content;
-        if (!c) throw new Error('返回格式不正确');
+        var info = aiReplyInfo(data);
+        if (!info.text) throw aiEmptyReplyError(info);
         var ann = data.choices[0].message.annotations || [];
         var refs = [];
         for (var i = 0; i < ann.length && refs.length < 5; i++) {
@@ -6710,7 +6767,7 @@ window.onerror = function (msg, url, line) {
           var link = safeHttpUrl(u && (u.url || u));
           if (link) refs.push({ title: (u && u.title) || link, url: link });
         }
-        return String(c).trim() + (refs.length ? '\n\n__WEB_REFS__' + JSON.stringify(refs) : '');
+        return info.text + (refs.length ? '\n\n__WEB_REFS__' + JSON.stringify(refs) : '');
       });
     });
   }
@@ -7876,11 +7933,12 @@ window.onerror = function (msg, url, line) {
       btn.disabled = true;
       out.style.color = 'var(--ink-faint)';
       out.textContent = '正在连…（最多一分半）';
-      aiPlain('只回复两个字：OK', 0, { maxTokens: 32 }, testCfg).then(function (txt) {
+      aiPlain('只回复两个字：OK', 0, { maxTokens: 128 }, testCfg).then(function (txt) {
         out.textContent = '连上了 · ' + model + ' 回复：' + String(txt).replace(/\s+/g, ' ').slice(0, 24);
         out.style.color = '#5f8a4e';
       }).catch(function (e) {
-        out.textContent = '没连上：' + ((e && e.message) || '未知原因');
+        var msg = (e && e.message) || '未知原因';
+        out.textContent = /^接口已连上/.test(msg) ? msg : ('没连上：' + msg);
         out.style.color = '#c14b3a';
       }).then(function () { btn.disabled = false; });
     });

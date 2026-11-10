@@ -2373,7 +2373,7 @@
     V.auditBusy = true;
     if (V.tab === 'issue') paint();
     var token = rec;
-    D.askAI(buildAuditPrompt(rec, cands), { maxTokens: 1400 }).then(function (out) {
+    D.askAI(buildAuditPrompt(rec, cands), { maxTokens: 2400 }).then(function (out) {
       if (V.record !== token) { V.auditBusy = false; return; }
       V.auditBusy = false;
       var r = parseAuditPayload(out, cands, rec);
