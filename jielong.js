@@ -1317,7 +1317,8 @@
     openBld: '',
     proofUrl: '',
     proofBlob: null,
-    proofBld: ''
+    proofBld: '',
+    lpAt: 0           // 长按发生的时刻，抬手那一下别当成选楼栋
   };
   var D = null;
   var HOST = null;
@@ -1708,7 +1709,7 @@
 
     h += '<div class="jl-pickbar">' +
       '<div class="jl-pickbar-h"><b>这次送哪儿</b>' +
-      '<span>' + (blds.length ? '点楼栋选好，再按下面拍照' : '这一单还没有楼栋') + '</span></div>';
+      '<span>' + (blds.length ? '点楼栋选好再拍照 · 长按看这一栋的序号' : '这一单还没有楼栋') + '</span></div>';
 
     if (blds.length) {
       h += '<div class="jl-picks">' +
@@ -2510,6 +2511,123 @@
     });
   }
 
+  /* ---------- 长按楼栋：这一栋有哪几个接龙序号 ---------- */
+
+  var LP_MS = 650;                       // 按住这么久就算长按
+  var lpTimer = null, lpKey = '', lpEl = null, lpX = 0, lpY = 0;
+
+  function lpClear() {
+    if (lpTimer) { clearTimeout(lpTimer); lpTimer = null; }
+    if (lpEl && lpEl.classList) lpEl.classList.remove('lp');
+    lpEl = null;
+  }
+
+  function lpDown(ev) {
+    var t = ev.target;
+    while (t && t !== HOST) {
+      if (t.getAttribute && t.getAttribute('data-act') === 'setbld') break;
+      t = t.parentNode;
+    }
+    if (!t || t === HOST) return;
+    lpClear();
+    lpEl = t;
+    lpKey = t.getAttribute('data-v') || '';
+    var pt = (ev.touches && ev.touches[0]) || ev;
+    lpX = typeof pt.clientX === 'number' ? pt.clientX : 0;
+    lpY = typeof pt.clientY === 'number' ? pt.clientY : 0;
+    if (t.classList) t.classList.add('lp');
+    lpTimer = setTimeout(function () {
+      lpTimer = null;
+      if (lpEl && lpEl.classList) lpEl.classList.remove('lp');
+      lpEl = null;
+      V.lpAt = Date.now();             // 手抬起来那一下别再当成选楼栋
+      try { if (navigator.vibrate) navigator.vibrate(20); } catch (e) { }
+      bldOrdersSheet(lpKey);
+    }, LP_MS);
+  }
+
+  function lpMove(ev) {
+    if (!lpTimer) return;
+    var pt = (ev.touches && ev.touches[0]) || ev;
+    if (typeof pt.clientX !== 'number') return;
+    if (Math.abs(pt.clientX - lpX) > 12 || Math.abs(pt.clientY - lpY) > 12) lpClear();
+  }
+
+  function itemBrief(o) {
+    var parts = [];
+    var its = (o && o.items) || [];
+    for (var i = 0; i < its.length; i++) {
+      if (!its[i] || !its[i].name) continue;
+      parts.push((its[i].qty > 1 ? its[i].qty + '×' : '') + its[i].name);
+    }
+    return parts.join(' + ');
+  }
+
+  function pickThisBuilding(key) {
+    V.proofBld = key;
+    paint();
+    var el = HOST && HOST.querySelector ? HOST.querySelector('.jl-shots') : null;
+    if (el && el.scrollIntoView) { try { el.scrollIntoView({ behavior: 'smooth', block: 'center' }); } catch (e) { } }
+    toast('拍照会记到 ' + key);
+  }
+
+  function bldOrdersSheet(key) {
+    if (!V.record || !key) return;
+    var b = null;
+    for (var i = 0; i < V.record.buildings.length; i++) {
+      if (V.record.buildings[i].key === key) { b = V.record.buildings[i]; break; }
+    }
+    if (!b) return;
+
+    var nos = b.orders.map(function (o) { return '#' + o.no; }).join('、');
+    var rows = b.orders.map(function (o) {
+      var amt = o.amount == null ? '—' : '¥' + money(o.amount);
+      return '<li class="jl-brow" data-no="' + o.no + '">' +
+        '<i>#' + o.no + '</i>' +
+        '<div><b>' + esc(o.name || '没写名字') + '</b>' +
+        (o.room ? '<em>' + esc(o.room) + '</em>' : '') +
+        '<p>' + esc(itemBrief(o) || '没有写商品') + '</p></div>' +
+        '<span>' + cupCount(o) + ' 件<b>' + amt + '</b></span>' +
+        '</li>';
+    }).join('');
+
+    var mask = document.createElement('div');
+    mask.className = 'jl-mask';
+    mask.innerHTML =
+      '<div class="jl-sheet-edit jl-sheet-bld">' +
+      '<div class="jl-ehead"><b>' + esc(key) + ' · ' + b.orders.length + ' 单</b>' +
+      '<button type="button" data-x="close">×</button></div>' +
+      '<p class="jl-pick-lead">这一栋的接龙序号：' + esc(nos) + '。点哪一行就改哪一单。</p>' +
+      '<ul class="jl-brows">' + rows + '</ul>' +
+      '<div class="jl-bsum"><span>' + b.cups + ' 件 · ' + esc(key) + '</span>' +
+      '<b>' + (b.unknown ? '还有 ' + b.unknown + ' 单没价钱' : '¥' + money(b.amount)) + '</b></div>' +
+      '<div class="jl-eacts">' +
+      '<button type="button" class="jl-primary" data-x="pick">就送' + esc(key) + '</button>' +
+      '<button type="button" class="jl-ghost" data-x="close">关闭</button>' +
+      '</div></div>';
+
+    document.body.appendChild(mask);
+
+    function close() { if (mask.parentNode) mask.parentNode.removeChild(mask); }
+
+    var bornAt = Date.now();
+    mask.addEventListener('click', function (ev) {
+      // 长按弹层是「按着就出来」的，松手那一下会飘一个 click 过来，别让它把弹层关掉
+      if (Date.now() - bornAt < 320) return;
+      var t = ev.target;
+      var x = t.getAttribute ? t.getAttribute('data-x') : null;
+      if (t === mask || x === 'close') { close(); return; }
+      if (x === 'pick') { close(); pickThisBuilding(key); return; }
+      var row = t;
+      while (row && row !== mask && !(row.getAttribute && row.getAttribute('data-no'))) row = row.parentNode;
+      if (row && row !== mask) {
+        var no = parseInt(row.getAttribute('data-no'), 10);
+        close();
+        if (no) editOrder(no);
+      }
+    });
+  }
+
   /* ---------- 给照片标楼栋 ---------- */
 
   function pickBuildingFor(key) {
@@ -2566,6 +2684,7 @@
   /* ---------- 事件 ---------- */
 
   function onClick(ev) {
+    var justLong = V.lpAt && (Date.now() - V.lpAt < 700);
     var t = ev.target;
     var btn = null;
     while (t && t !== HOST) {
@@ -2622,6 +2741,7 @@
     }
     if (act === 'delphoto') { delPhoto(btn.getAttribute('data-k')); return; }
     if (act === 'setbld') {
+      if (justLong) { V.lpAt = 0; return; }     // 长按是来看序号的，不切楼栋
       V.proofBld = btn.getAttribute('data-v') || '';
       paint();
       return;
@@ -2682,6 +2802,22 @@
     host.addEventListener('click', onClick);
     host.addEventListener('change', onChange);
     host.addEventListener('input', onInput);
+    // 长按楼栋胶囊 0.65 秒 → 看这一栋的接龙序号
+    host.addEventListener('pointerdown', lpDown);
+    host.addEventListener('pointerup', lpClear);
+    host.addEventListener('pointercancel', lpClear);
+    host.addEventListener('pointermove', lpMove);
+    host.addEventListener('touchstart', lpDown, { passive: true });
+    host.addEventListener('touchend', lpClear);
+    host.addEventListener('touchcancel', lpClear);
+    host.addEventListener('touchmove', lpMove, { passive: true });
+    host.addEventListener('contextmenu', function (ev) {
+      var n = ev.target;
+      while (n && n !== host) {
+        if (n.getAttribute && n.getAttribute('data-act') === 'setbld') { ev.preventDefault(); return; }
+        n = n.parentNode;
+      }
+    });
     return { paint: paint, goHome: goHome, openRecord: openRecord, list: listRecords };
   }
 
