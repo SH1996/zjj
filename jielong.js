@@ -1227,6 +1227,7 @@
         return {
           no: o.no, name: o.name, building: o.building, room: o.room,
           buildingFrom: o.buildingFrom || '',
+          raw: trim(o.raw || '').slice(0, 90),
           items: o.items.map(function (i) { return { name: i.name, qty: i.qty, unit: i.unit, fromText: !!i.fromText }; }),
           total: o.total == null ? null : o.total,
           note: o.note || '', manual: !!o.manual
@@ -1236,7 +1237,9 @@
         return { key: p.key, building: p.building, at: p.at };
       }),
       boxAi: record.boxAi || null,
-      issueSkip: (record.issueSkip && Object.keys(record.issueSkip).length) ? record.issueSkip : null
+      issueSkip: (record.issueSkip && Object.keys(record.issueSkip).length) ? record.issueSkip : null,
+      audit: record.audit || null,
+      srcText: trim(record.sourceText || '').slice(0, 3000) || null
     };
     return plain + '\n' + MARK + JSON.stringify(data);
   }
@@ -1320,6 +1323,8 @@
     proofBlob: null,
     proofBld: '',
     refPrice: null,   // 价格本快照，判断「这次比平时给少了」用
+    auditBusy: false, // AI 正在逐条核问题
+    auditErr: '',     // 上次核对失败的原因
     lpAt: 0           // 长按发生的时刻，抬手那一下别当成选楼栋
   };
   var D = null;
@@ -1354,13 +1359,15 @@
   }
 
   function tabBar() {
+    var aiDone = !!(V.record && V.record.audit);
     var issueN = V.record ? auditIssues(V.record, V.refPrice).issues.length : 0;
     var tabs = [['bld', '楼栋'], ['box', '装箱'], ['money', '金额'], ['proof', '送达'], ['issue', '问题']];
     return '<div class="jl-tabs">' + tabs.map(function (x) {
       return '<button type="button" data-act="tab" data-v="' + x[0] + '"' +
         (V.tab === x[0] ? ' class="on"' : '') + '>' + x[1] +
         (x[0] === 'proof' && V.photos.length ? '<i>' + V.photos.length + '</i>' : '') +
-        (x[0] === 'issue' && issueN ? '<i class="jl-tab-issue">' + issueN + '</i>' : '') +
+        (x[0] === 'issue' && issueN
+          ? '<i class="jl-tab-issue' + (aiDone ? '' : ' todo') + '">' + issueN + '</i>' : '') +
         '</button>';
     }).join('') + '</div>';
   }
@@ -1494,8 +1501,8 @@
       '</div>';
 
     h += '<div class="jl-foot-note">' +
-      'AI 负责认人和规格、分清总价还是单价、按名字补楼栋、给装箱建议；' +
-      '件数和金额的核对始终在这台设备上算，价格本也只存在本机。' +
+      'AI 负责认人认规格、分清总价还是单价、按名字补楼栋、排箱，也逐条对着原文核问题清单；' +
+      '件数和金额始终在这台设备上算，价格本也只存在本机。' +
       '</div>';
     return h;
   }
@@ -1648,7 +1655,9 @@
 
   function issueKey(it) { return it.no + '|' + it.code; }
 
-  function auditIssues(record, refPrice) {
+  /* 本地初筛：规则能挑出来的疑点，不是结论。
+   * 每条都带上原文那一行——AI 核实时必须对着原文看，只看拆出来的结果会把好人冤枉。 */
+  function auditCandidates(record, refPrice) {
     var orders = (record && record.orders) || [];
     var ref = (refPrice && typeof refPrice === 'object') ? refPrice : {};
     var skip = (record && record.issueSkip) || {};
@@ -1661,8 +1670,12 @@
       if (nm) names[nm] = (names[nm] || 0) + 1;
     }
 
-    function put(o, code, level, title, detail) {
-      raw.push({ no: o.no, code: code, level: level, title: title, detail: detail || '' });
+    // diff：正数是少收、负数是多收。AI 判成误报时要按它把钱退回去
+    function put(o, code, level, title, detail, diff) {
+      raw.push({
+        no: o.no, code: code, level: level, title: title, detail: detail || '',
+        src: trim(o.raw || ''), diff: diff || 0
+      });
     }
 
     var seenName = {};
@@ -1711,11 +1724,11 @@
         if (diff >= 0.5) {
           shortSum = round2(shortSum + diff);
           put(o, 'short', 'error', '少给了 ¥' + money(diff),
-            '原文写 ¥' + money(o.total) + '，按单价算是 ¥' + money(sum));
+            '原文写 ¥' + money(o.total) + '，按单价算是 ¥' + money(sum), diff);
         } else if (diff <= -0.5) {
           overSum = round2(overSum - diff);
           put(o, 'over', 'warn', '多给了 ¥' + money(-diff),
-            '原文写 ¥' + money(o.total) + '，按单价算是 ¥' + money(sum));
+            '原文写 ¥' + money(o.total) + '，按单价算是 ¥' + money(sum), diff);
         }
       }
 
@@ -1730,7 +1743,7 @@
         if (gap >= 1) {
           shortSum = round2(shortSum + gap);
           put(o, 'pricelow', 'error', '「' + it2.name + '」比平时少 ¥' + money(gap),
-            '这次 ¥' + money(it2.unit) + '/份，之前 ¥' + money(oldUnit) + '/份，' + it2.qty + ' 份共少 ¥' + money(gap));
+            '这次 ¥' + money(it2.unit) + '/份，之前 ¥' + money(oldUnit) + '/份，' + it2.qty + ' 份共少 ¥' + money(gap), gap);
         }
       }
 
@@ -1741,33 +1754,308 @@
       }
     }
 
+    return { raw: raw, short: shortSum, over: overSum, orders: orders.length };
+  }
+
+  /* 把 AI 的核实结果套在候选上。AI 说「不是问题」的挪进 dropped，不直接删——
+   * 它也会看错，随时能点回来；钱也跟着退回去，不能一边说没事一边还算少收。 */
+  function auditIssues(record, refPrice) {
+    var cands = auditCandidates(record, refPrice);
+    var audit = (record && record.audit) || null;
+    var skip = (record && record.issueSkip) || {};
+    var overrule = (audit && audit.overrule) || {};
+    var vd = (audit && audit.verdict) || {};
+    var orders = (record && record.orders) || [];
+    var shortSum = cands.short, overSum = cands.over;
+    var issues = [], dropped = [], hidden = 0;
+
+    function undo(it) {
+      if (!it.diff) return;
+      if (it.diff > 0) shortSum = round2(shortSum - it.diff);
+      else overSum = round2(overSum + it.diff);
+    }
+
+    for (var q = 0; q < cands.raw.length; q++) {
+      var it = cands.raw[q];
+      var key = issueKey(it);
+      if (skip[key]) { hidden++; continue; }
+      var v = vd[key];
+      var one = {
+        no: it.no, code: it.code, level: it.level, title: it.title, detail: it.detail,
+        src: it.src, key: key, aiWhy: '', aiDrop: '', aiAdd: false
+      };
+      if (v && v.v === 'drop' && !overrule[key]) {
+        one.aiDrop = v.why || '对着原文看，这条不成立';
+        undo(it);
+        dropped.push(one);
+        continue;
+      }
+      if (v && v.v === 'keep') one.aiWhy = v.why || '对着原文核过，确实是这样';
+      issues.push(one);
+    }
+
+    /* AI 自己看出来的：本地规则没想到的漏单、漏样、件数不符 */
+    if (audit && audit.add && audit.add.length) {
+      var nums = {};
+      for (var a1 = 0; a1 < orders.length; a1++) nums[orders[a1].no] = 1;
+      for (var a2 = 0; a2 < audit.add.length; a2++) {
+        var ad = audit.add[a2];
+        if (!nums[ad.no]) continue;
+        // 这一单本地已经挑出毛病了，就不再叠一条，免得一单两行
+        var dup = false;
+        for (var a3 = 0; a3 < issues.length; a3++) {
+          if (issues[a3].no === ad.no && issues[a3].code !== 'aiadd') { dup = true; break; }
+        }
+        if (dup) continue;
+        issues.push({
+          no: ad.no, code: 'aiadd', level: ad.level || 'warn',
+          title: ad.title, detail: ad.detail || '', src: '', key: ad.no + '|aiadd',
+          aiWhy: '', aiDrop: '', aiAdd: true
+        });
+      }
+    }
+
     var W = { error: 0, warn: 1, info: 2 };
-    raw.sort(function (a, b) {
-      if (W[a.level] !== W[b.level]) return W[a.level] - W[b.level];
-      return a.no - b.no;
+    issues.sort(function (x, y) {
+      if (W[x.level] !== W[y.level]) return W[x.level] - W[y.level];
+      return x.no - y.no;
     });
 
-    var issues = [], hidden = 0;
-    for (var q = 0; q < raw.length; q++) {
-      if (skip[issueKey(raw[q])]) hidden++;
-      else issues.push(raw[q]);
-    }
+    var kept = 0;
+    for (var k1 = 0; k1 < issues.length; k1++) if (issues[k1].aiWhy) kept++;
 
     return {
       issues: issues,
+      dropped: dropped,
       hidden: hidden,
-      total: raw.length,
-      short: shortSum,
-      over: overSum,
+      total: cands.raw.length,
+      short: round2(shortSum),
+      over: round2(overSum),
       orders: orders.length,
-      error: issues.filter(function (x) { return x.level === 'error'; }).length
+      error: issues.filter(function (x) { return x.level === 'error'; }).length,
+      ai: audit ? { at: audit.at || 0, kept: kept, drop: dropped.length } : null,
+      aiCands: cands.raw.length
     };
+  }
+
+  /* ---------- 让 AI 逐条核对 ---------- */
+
+  function auditAiReady() {
+    return !!(D && D.askAI && (!D.hasAI || D.hasAI()));
+  }
+
+  function auditSrcText(record) {
+    var t = trim((record && record.sourceText) || '');
+    if (t) return t.slice(0, 4000);
+    var rows = [];
+    var os = (record && record.orders) || [];
+    for (var i = 0; i < os.length; i++) if (os[i].raw) rows.push('#' + os[i].no + ' ' + os[i].raw);
+    return rows.join('\n');
+  }
+
+  function buildAuditPrompt(record, cands) {
+    var L = [];
+    L.push('你是早餐接龙的核单助手。下面是一条微信群接龙的原文、程序拆出来的订单、以及程序按规则挑出来的「疑点」。');
+    L.push('请对着原文逐条判断：这条疑点是真的，还是程序看错了。只判断，不要改金额和件数。');
+    L.push('');
+    L.push('【接龙原文】');
+    L.push(auditSrcText(record));
+    L.push('');
+    L.push('【程序拆出来的】');
+    var os = (record && record.orders) || [];
+    for (var i = 0; i < os.length; i++) {
+      var o = os[i];
+      var parts = [];
+      for (var j = 0; j < o.items.length; j++) {
+        var it = o.items[j];
+        parts.push(it.name + '×' + it.qty + (it.unit == null ? '(没价)' : ' ¥' + money(it.unit) + '/份'));
+      }
+      L.push('#' + o.no + ' ' + (o.name || '无名') + ' · ' + (o.building || '没楼栋') +
+        (o.room ? ' ' + o.room : '') + ' | ' + (parts.length ? parts.join('，') : '没认出商品') +
+        (o.total == null ? '' : ' | 原文总价 ¥' + money(o.total)) +
+        ' | 原句：' + (o.raw || '（无）'));
+    }
+    L.push('');
+    L.push('【疑点】');
+    for (var k = 0; k < cands.raw.length; k++) {
+      var c = cands.raw[k];
+      L.push((k + 1) + ') #' + c.no + ' 类型' + c.code + ' 标题：' + c.title +
+        (c.detail ? ' ｜ ' + c.detail : ''));
+    }
+    L.push('');
+    L.push('【怎么判断】');
+    L.push('- 数字要看语境：写在行末、前面一串商品的（「…一杯豆浆 15 块」），那是整单总价，逐样单价加起来对不上很正常（会抹零、按份算），差不到 1 块不算少给。');
+    L.push('- 「半笼」「一份」「两个」「x2」是数量，不是钱。');
+    L.push('- 名字是昵称、emoji、字母加数字（y2、魚脆²⁵、😴、h、U）都正常，不像真名不代表是错的。');
+    L.push('- 楼栋写成 A、G1、G2-、E栋-301、a栋 都算写了，不要判成「没写楼栋」。');
+    L.push('- 程序手里的「平时价」是历史价，可能过时：涨价、特价、半份都会比旧价低。只有原文同一批里别处写了更高的同价、或这单自己前后矛盾，才算给少了。');
+    L.push('- 一单里被拆成两样的（「玉米蒸饺」拆成玉米+蒸饺）、件数明显跟「两个」对不上的，是真的问题。');
+    L.push('');
+    L.push('【输出】只输出一个 JSON 对象，不要 markdown 代码块，不要任何解释。');
+    L.push('{"verdict":[{"no":2,"code":"pricelow","v":"drop","why":"行末 6 元是总价，2 元是单价，跟平时一样"}],"add":[]}');
+    L.push('- verdict 要把上面每一条疑点都判一遍，v 只能是 keep（确实有问题）或 drop（程序看错了）。');
+    L.push('- why 不超过 30 个字，写清依据；drop 时要指出程序错在哪。');
+    L.push('- add 最多 3 条，只加原文里明确看得到的：漏了一整单、某样没算钱、件数跟原文不符。add 的 no 必须是上面出现过的单号，没看出来就给空数组。');
+    return L.join('\n');
+  }
+
+  /* AI 的话不能直接信：单号要真存在、键要对得上候选、条数要有上限。
+   * 不合格的整条丢掉，本地判断照旧——宁可多留一条疑点，也不能让 AI 把真问题说没了。 */
+  function parseAuditPayload(text, cands, record) {
+    var str = String(text == null ? '' : text);
+    var a = str.indexOf('{'), b = str.lastIndexOf('}');
+    if (a < 0 || b <= a) return { ok: false, error: 'AI 没返回 JSON' };
+    var obj = null;
+    try { obj = JSON.parse(str.slice(a, b + 1)); }
+    catch (e) {
+      var fixed = str.slice(a, b + 1).replace(/,\s*([}\]])/g, '$1').replace(/[“”]/g, '"');
+      try { obj = JSON.parse(fixed); } catch (e2) { return { ok: false, error: 'JSON 解析失败' }; }
+    }
+    if (!obj || !Array.isArray(obj.verdict)) return { ok: false, error: '没有 verdict' };
+
+    var known = {};
+    for (var i = 0; i < cands.raw.length; i++) known[issueKey(cands.raw[i])] = 1;
+
+    var verdict = {}, kept = 0, drop = 0;
+    for (var j = 0; j < obj.verdict.length; j++) {
+      var v = obj.verdict[j];
+      if (!v || typeof v !== 'object') continue;
+      var no = parseInt(v.no, 10);
+      var code = trim(v.code);
+      var key = no + '|' + code;
+      if (!known[key] || verdict[key]) continue;
+      var d = v.v === 'drop' ? 'drop' : (v.v === 'keep' ? 'keep' : '');
+      if (!d) continue;
+      verdict[key] = { v: d, why: trim(v.why).slice(0, 40) };
+      if (d === 'keep') kept++; else drop++;
+    }
+    if (!kept && !drop) return { ok: false, error: 'AI 一条都没判对' };
+
+    var add = [], usedNo = {};
+    var nums = {};
+    var os = (record && record.orders) || [];
+    for (var n1 = 0; n1 < os.length; n1++) nums[os[n1].no] = 1;
+    if (Array.isArray(obj.add)) {
+      for (var m = 0; m < obj.add.length && add.length < 3; m++) {
+        var x = obj.add[m];
+        if (!x || typeof x !== 'object') continue;
+        var no2 = parseInt(x.no, 10);
+        if (!nums[no2] || usedNo[no2]) continue;
+        var tt = trim(x.title).slice(0, 30);
+        if (!tt) continue;
+        usedNo[no2] = 1;
+        add.push({
+          no: no2,
+          level: x.level === 'error' ? 'error' : (x.level === 'info' ? 'info' : 'warn'),
+          title: tt,
+          detail: trim(x.detail).slice(0, 60)
+        });
+      }
+    }
+    return {
+      ok: true,
+      kept: kept,
+      drop: drop,
+      audit: { at: Date.now(), verdict: verdict, add: add, overrule: {} }
+    };
+  }
+
+  function applyAudit(rec, audit) {
+    rec.audit = audit;
+    persist(true);
+  }
+
+  // 只改 tab 上的角标，不整页重绘：用户可能正在金额页填单价，重绘会把输入框里的字弄丢
+  function refreshIssueBadge() {
+    if (!HOST) return;
+    var btn = HOST.querySelector('[data-act="tab"][data-v="issue"]');
+    if (!btn) return;
+    var n = V.record ? auditIssues(V.record, V.refPrice).issues.length : 0;
+    var i = btn.querySelector('i');
+    if (!n) {
+      if (i && i.className === 'jl-tab-issue' && i.parentNode) i.parentNode.removeChild(i);
+      return;
+    }
+    if (!i) {
+      i = document.createElement('i');
+      i.className = 'jl-tab-issue';
+      btn.appendChild(i);
+    }
+    i.textContent = n;
+  }
+
+  function kickAuditAI(rec, manual) {
+    if (!rec) return;
+    if (!auditAiReady()) {
+      if (manual) toast('这台设备还没接上 AI，先按本地规则看');
+      return;
+    }
+    if (V.auditBusy) return;
+    var cands = auditCandidates(rec, V.refPrice || effectivePrice(listRecords));
+    if (!cands.raw.length) {
+      // 本来就没疑点，也算核过了，页面不用一直挂着「还没核」
+      rec.audit = { at: Date.now(), verdict: {}, add: [], overrule: {} };
+      persist(true);
+      if (V.tab === 'issue') paint(); else refreshIssueBadge();
+      return;
+    }
+    V.auditBusy = true;
+    if (V.tab === 'issue') paint();
+    var token = rec;
+    D.askAI(buildAuditPrompt(rec, cands), { maxTokens: 1400 }).then(function (out) {
+      if (V.record !== token) { V.auditBusy = false; return; }
+      V.auditBusy = false;
+      var r = parseAuditPayload(out, cands, rec);
+      if (!r.ok) {
+        V.auditErr = r.error;
+        if (V.tab === 'issue') paint(); else refreshIssueBadge();
+        if (manual) toast('AI 没核成：' + r.error);
+        return;
+      }
+      V.auditErr = '';
+      applyAudit(rec, r.audit);
+      if (V.tab === 'issue') paint(); else refreshIssueBadge();
+      if (manual) toast('核完了：确认 ' + r.kept + ' 条，判为误报 ' + r.drop + ' 条');
+    }).catch(function () {
+      V.auditBusy = false;
+      if (V.tab === 'issue') paint(); else refreshIssueBadge();
+      if (manual) toast('AI 核对没成功，先按本地规则看');
+    });
   }
 
   function tabIssues(r) {
     var a = auditIssues(r, V.refPrice);
+    var aiOn = auditAiReady();
     var h = '';
 
+    /* ---------- 顶部：先说清这些结论是谁下的 ---------- */
+    var state = 'todo', note = '';
+    if (V.auditBusy) {
+      state = 'busy';
+      note = '正在对着原文逐条看…';
+    } else if (a.ai) {
+      state = 'done';
+      note = a.issues.length
+        ? '确认 ' + a.ai.kept + ' 条' + (a.ai.drop ? '，判为误报 ' + a.ai.drop + ' 条' : '')
+        : (a.dropped.length ? a.dropped.length + ' 条疑点都判为误报了' : '没挑出疑点，也没看出漏的');
+    } else if (!aiOn) {
+      state = 'off';
+      note = '这台设备没接 AI，下面是本机规则挑的';
+    } else {
+      note = '还没核过，下面是本机规则挑的';
+    }
+    if (V.auditErr && !V.auditBusy) note = '上次没核成：' + V.auditErr;
+
+    h += '<div class="jl-ai-bar' + (V.auditBusy ? ' busy' : '') + '">' +
+      '<div class="jl-ai-bar-l"><em class="jl-ai-dot ' + state + '"></em>' +
+      '<b>AI 核对</b><span>' + esc(note) + '</span></div>' +
+      (aiOn
+        ? '<button type="button" class="jl-ai-btn" data-act="audit"' + (V.auditBusy ? ' disabled' : '') + '>' +
+          (V.auditBusy ? '核对中…' : (a.ai ? '重新核对' : '让 AI 核一遍')) + '</button>'
+        : '') +
+      '</div>';
+
+    /* ---------- 一条都没剩 ---------- */
     if (!a.issues.length) {
       var clearTitle, clearDesc;
       if (!a.orders) {
@@ -1776,44 +2064,67 @@
       } else if (a.hidden) {
         clearTitle = '都标成「不用管」了';
         clearDesc = '这一单还有 ' + a.hidden + ' 条是你手动跳过的，放回来还在下面那个按钮里。';
+      } else if (a.dropped.length) {
+        clearTitle = 'AI 核对完了，都不成立';
+        clearDesc = a.dropped.length + ' 条疑点是对着原文看过的，程序想多了。觉得哪条其实是问题，点开下面那条恢复。';
       } else {
-        clearTitle = '没查出问题';
+        clearTitle = a.ai ? 'AI 核对过，没查出问题' : '没查出问题';
         clearDesc = a.orders + ' 单都对得上：名字、楼栋、件数、金额都有。';
       }
       h += '<div class="jl-audit-clear">' +
         '<b>' + clearTitle + '</b>' +
         '<p>' + clearDesc + '</p></div>';
-      if (a.hidden) {
-        h += '<button type="button" class="jl-ghost jl-audit-back" data-act="unskipall">' +
-          '把忽略的 ' + a.hidden + ' 条放回来</button>';
+    } else {
+      /* ---------- 汇总 ---------- */
+      h += '<div class="jl-audit-top">' +
+        '<div class="jl-audit-n"><b>' + a.issues.length + '</b><span>条要核对</span>' +
+        (a.error ? '<i>' + a.error + ' 条对不上账</i>' : '') + '</div>' +
+        '<div class="jl-audit-m">' +
+        (a.short > 0 ? '<em>少收 ¥' + money(a.short) + '</em>' : '') +
+        (a.over > 0 ? '<em>多收 ¥' + money(a.over) + '</em>' : '') +
+        '</div></div>';
+
+      h += '<div class="jl-issues">';
+      for (var i = 0; i < a.issues.length; i++) {
+        var it = a.issues[i];
+        var lv = it.level === 'error' ? ' e' : (it.level === 'warn' ? ' w' : '');
+        h += '<div class="jl-issue' + lv + '" data-act="edit" data-no="' + it.no + '">' +
+          '<div class="jl-issue-h">' +
+          '<i>#' + it.no + '</i>' +
+          '<b>' + esc(it.title) + '</b>' +
+          (it.aiAdd ? '<em class="jl-ai-tag new">AI 发现</em>'
+            : (it.aiWhy ? '<em class="jl-ai-tag ok">AI 已确认</em>' : '')) +
+          '<button type="button" class="jl-issue-x" data-act="skipissue" data-k="' + esc(it.key) + '">不用管</button>' +
+          '</div>' +
+          (it.detail ? '<p>' + esc(it.detail) + '</p>' : '') +
+          (it.aiWhy ? '<p class="jl-ai-why">AI：' + esc(it.aiWhy) + '</p>' : '') +
+          '</div>';
       }
-      return h;
+      h += '</div>';
+
+      h += '<p class="jl-hint">点哪条就改哪一单；改完这条自己会消失。' +
+        (a.ai ? '' : '「不用管」是给你确认过的误报用的。') + '</p>';
     }
 
-    h += '<div class="jl-audit-top">' +
-      '<div class="jl-audit-n"><b>' + a.issues.length + '</b><span>条要核对</span>' +
-      (a.error ? '<i>' + a.error + ' 条对不上账</i>' : '') + '</div>' +
-      '<div class="jl-audit-m">' +
-      (a.short > 0 ? '<em>少收 ¥' + money(a.short) + '</em>' : '') +
-      (a.over > 0 ? '<em>多收 ¥' + money(a.over) + '</em>' : '') +
-      '</div></div>';
-
-    h += '<div class="jl-issues">';
-    for (var i = 0; i < a.issues.length; i++) {
-      var it = a.issues[i];
-      var lv = it.level === 'error' ? ' e' : (it.level === 'warn' ? ' w' : '');
-      h += '<div class="jl-issue' + lv + '" data-act="edit" data-no="' + it.no + '">' +
-        '<div class="jl-issue-h">' +
-        '<i>#' + it.no + '</i>' +
-        '<b>' + esc(it.title) + '</b>' +
-        '<button type="button" class="jl-issue-x" data-act="skipissue" data-k="' + esc(issueKey(it)) + '">不用管</button>' +
-        '</div>' +
-        (it.detail ? '<p>' + esc(it.detail) + '</p>' : '') +
-        '</div>';
+    /* ---------- AI 判成误报的：不能直接删，随时能捡回来 ---------- */
+    if (a.dropped.length) {
+      h += '<details class="jl-dropbox"><summary>AI 判为误报 <b>' + a.dropped.length +
+        '</b> 条 · 点开看看它怎么说的</summary><div class="jl-issues">';
+      for (var j = 0; j < a.dropped.length; j++) {
+        var d = a.dropped[j];
+        h += '<div class="jl-issue d" data-act="edit" data-no="' + d.no + '">' +
+          '<div class="jl-issue-h">' +
+          '<i>#' + d.no + '</i>' +
+          '<b>' + esc(d.title) + '</b>' +
+          '<button type="button" class="jl-issue-x" data-act="restoreissue" data-k="' + esc(d.key) + '">其实是问题</button>' +
+          '</div>' +
+          (d.src ? '<p class="jl-issue-src">原文：' + esc(d.src) + '</p>' : '') +
+          '<p class="jl-ai-why">AI：' + esc(d.aiDrop) + '</p>' +
+          '</div>';
+      }
+      h += '</div></details>';
     }
-    h += '</div>';
 
-    h += '<p class="jl-hint">点哪条就改哪一单；改完这条自己会消失。「不用管」是给你确认过的误报用的。</p>';
     if (a.hidden) {
       h += '<button type="button" class="jl-ghost jl-audit-back" data-act="unskipall">' +
         '把忽略的 ' + a.hidden + ' 条放回来</button>';
@@ -2067,6 +2378,8 @@
     V.proofUrl = '';
     V.openBld = '';
     V.refPrice = null;
+    V.auditErr = '';
+    V.auditBusy = false;
     if (!V.cap) V.cap = rec.plan.cap;
     paint();
   }
@@ -2082,7 +2395,11 @@
       orders: V.record.orders,
       source: V.record.source,
       photos: V.record.photos,
-      boxAi: V.record.boxAi
+      boxAi: V.record.boxAi,
+      // 这三样以前一编辑就丢：跳过的问题又冒出来、AI 结论和原文全没了
+      issueSkip: V.record.issueSkip,
+      audit: V.record.audit,
+      sourceText: V.record.sourceText
     }, opts);
     paint();
     if (V.view === 'detail' && V.tab === 'proof') updateProofBadge();
@@ -2176,11 +2493,18 @@
       }
       V.noteId = null;
       learnPrices(rec);
+      // 原文留着：AI 核问题时必须对着原句看，光看拆出来的结果会把好人冤枉
+      rec.sourceText = trim(text).slice(0, 3000);
       applyRecord(rec);
       persist(true);
       var t = rec.orders.length, b = rec.buildings.length;
       toast('拆出 ' + t + ' 单 / ' + b + ' 栋，已存进「接龙」');
       if (src === 'ai') kickBoxAI(rec);
+      // 排箱先跑，核对晚一步，别把两个 AI 请求挤在一起
+      var autoRec = rec;
+      setTimeout(function () {
+        if (V.record === autoRec && !autoRec.audit) kickAuditAI(autoRec, false);
+      }, 1400);
     };
 
     var localFallback = function (why) {
@@ -2235,6 +2559,7 @@
           return {
             no: o.no, name: o.name, building: o.building, room: o.room,
             buildingFrom: o.buildingFrom || '',
+            raw: o.raw || '',
             items: (o.items || []).map(function (i2) { return { name: i2.name, qty: i2.qty, unit: i2.unit, fromText: !!i2.fromText }; }),
             total: o.total == null ? null : o.total,
             note: o.note || '', manual: o.manual
@@ -2243,7 +2568,9 @@
         source: data.source || 'local',
         photos: data.photos || [],
         boxAi: data.boxAi || null,
-        issueSkip: data.issueSkip || null
+        issueSkip: data.issueSkip || null,
+        audit: data.audit || null,
+        sourceText: data.srcText || ''
       }, opts);
     } else {
       rec = parseText(stripMark(hit.text), opts);
@@ -2257,9 +2584,18 @@
     V.proofUrl = '';
     V.openBld = '';
     V.refPrice = null;
+    V.auditErr = '';        // 上一条记录的失败提示别带过来
+    V.auditBusy = false;
     V.photos = [];
     paint();
     loadPhotos(hit.id);
+    // 老记录没核过的，打开时顺手核一遍；核过的就用存下来的结论，不重复花钱
+    if (!rec.audit) {
+      var autoRec2 = rec;
+      setTimeout(function () {
+        if (V.record === autoRec2 && !autoRec2.audit) kickAuditAI(autoRec2, false);
+      }, 900);
+    }
   }
 
   /* ---------- 照片 ---------- */
@@ -2605,6 +2941,21 @@
     for (var i = 0; i < V.record.orders.length; i++) if (V.record.orders[i].no === no) o = V.record.orders[i];
     if (!o) return;
 
+    // 这一单改完，之前对着旧内容下的结论就不算数了；其它单的结论留着，不用整份重核
+    function dropAuditFor(n) {
+      var a = V.record.audit;
+      if (!a) return;
+      if (a.verdict) {
+        for (var k in a.verdict) {
+          if (!Object.prototype.hasOwnProperty.call(a.verdict, k)) continue;
+          if (parseInt(String(k).split('|')[0], 10) === n) delete a.verdict[k];
+        }
+      }
+      if (a.add) {
+        a.add = a.add.filter(function (x) { return x.no !== n; });
+      }
+    }
+
     var blds = [];
     for (var b = 0; b < V.record.buildings.length; b++) {
       var k = V.record.buildings[b].key;
@@ -2661,6 +3012,7 @@
       }
       if (x === 'del') {
         V.record.orders = V.record.orders.filter(function (x2) { return x2.no !== no; });
+        dropAuditFor(no);
         close();
         rebuild();
         persist(true);
@@ -2694,6 +3046,7 @@
         }
         o.items = items;
         o.manual = true;
+        dropAuditFor(no);
         close();
         rebuild();
         persist(true);
@@ -2931,6 +3284,26 @@
       return;
     }
     if (act === 'delphoto') { delPhoto(btn.getAttribute('data-k')); return; }
+    if (act === 'audit') {
+      if (V.record && !V.auditBusy) {
+        V.record.audit = null;      // 旧结论先撤掉，重新看一遍
+        V.auditErr = '';
+        kickAuditAI(V.record, true);
+      }
+      return;
+    }
+    if (act === 'restoreissue') {
+      var rik = btn.getAttribute('data-k') || '';
+      if (V.record && rik) {
+        V.record.audit = V.record.audit || {};
+        V.record.audit.overrule = V.record.audit.overrule || {};
+        V.record.audit.overrule[rik] = 1;
+        persist(true);
+        paint();
+        toast('已恢复成问题');
+      }
+      return;
+    }
     if (act === 'skipissue') {
       var ik = btn.getAttribute('data-k') || '';
       if (V.record && ik) {
@@ -3081,6 +3454,10 @@
     money: money,
     amtLabel: amtLabel,
     auditIssues: auditIssues,
+    auditCandidates: auditCandidates,
+    buildAuditPrompt: buildAuditPrompt,
+    parseAuditPayload: parseAuditPayload,
+    kickAuditAI: kickAuditAI,
     todayStr: todayStr,
     readPrice: readPrice,
     writePrice: writePrice,
