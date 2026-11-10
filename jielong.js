@@ -3938,7 +3938,8 @@
           ctx.fillText(noTxt, cx, cy);
           var nw = ctx.measureText(noTxt).width;
 
-          var bldTxt = names[k].bld && names[k].bld !== '未写楼栋' ? names[k].bld : '';
+          // 没写楼栋的标个「未写楼栋」，比空着更像话——空着容易被当成没渲染出来
+          var bldTxt = names[k].bld || '';
           ctx.font = '400 22px -apple-system,"PingFang SC","Microsoft YaHei",sans-serif';
           var bw = bldTxt ? ctx.measureText(bldTxt).width + 12 : 0;
 
@@ -3952,7 +3953,7 @@
           if (bldTxt) {
             // 楼栋紧跟在名字后面，别右对齐——右对齐会贴到下一列的号上，看着像别人的
             var nmW = ctx.measureText(nm).width;
-            ctx.fillStyle = '#a08a72';
+            ctx.fillStyle = bldTxt === '未写楼栋' ? '#c0a892' : '#a08a72';
             ctx.font = '400 22px -apple-system,"PingFang SC","Microsoft YaHei",sans-serif';
             ctx.fillText(bldTxt, cx + nw + 14 + nmW + 10, cy - 2);
           }
