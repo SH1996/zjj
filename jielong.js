@@ -53,7 +53,7 @@
     // 按笼卖，可以半笼
     { name: '小笼包', price: 6, by: '笼', half: true, alias: ['鲜肉小笼包', '酱肉小笼包'] },
     { name: '灌汤小笼包', price: 7, by: '笼', half: true, alias: ['灌汤包'] },
-    { name: '玉米鲜肉蒸饺', price: 6, by: '笼', half: true, alias: ['玉米蒸饺', '玉米饺', '鲜肉蒸饺'] },
+    { name: '玉米鲜肉蒸饺', price: 6, by: '笼', half: true, alias: ['玉米蒸饺', '玉米饺', '鲜肉蒸饺', '蒸饺'] },
     // 其它
     { name: '烧麦', price: 1.5, by: '个', alias: ['烧卖'] },
     { name: '玉米', price: 5, by: '个' },
