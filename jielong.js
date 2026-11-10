@@ -1416,15 +1416,121 @@
     return { list: out, ok: ok };
   }
 
+  /* ---------- 老板的一大段话 → 一句能照着做的规矩 ---------- */
+
+  function cleanRule(s) {
+    var rows = String(s || '').split('\n'), line = '';
+    for (var i = 0; i < rows.length; i++) {
+      var x = trim(rows[i]).replace(/^[-*•·]\s*/, '').replace(/^\d+[.、)）]\s*/, '');
+      if (x) { line = x; break; }
+    }
+    line = line.replace(/^(规矩|规则|记下|这一句)[:：]\s*/, '');
+    line = line.replace(/^["'“”「『（(]+/, '').replace(/["'“”」』）)]+$/, '');
+    line = line.replace(/[。；;]\s*$/, '');
+    return trim(line).slice(0, 48);
+  }
+
+  // 没接 AI、或 AI 没吭声时：从原话里挑一句最像规矩的，别把一大段生塞进记忆
+  function fallbackRule(say) {
+    var s = trim(say);
+    if (!s) return '';
+    var NEG = /别|不要|不用|不必|记得|以后|下次/;      // 带这些字的，通常才是「规矩」本身
+    var sents = s.split(/[。；！？!?;\n]+/);
+    var sent = '';
+    for (var i = 0; i < sents.length; i++) {
+      var a = trim(sents[i]);
+      if (a && NEG.test(a)) { sent = a; break; }
+    }
+    if (!sent) {
+      for (var j = 0; j < sents.length; j++) {
+        if (trim(sents[j])) { sent = trim(sents[j]); break; }
+      }
+    }
+    if (!sent) sent = s;
+
+    var bits = [];
+    var raw = sent.split(/[，,、]/);
+    for (var k = 0; k < raw.length; k++) {
+      if (trim(raw[k])) bits.push(trim(raw[k]));
+    }
+    if (!bits.length) return cleanRule(sent).slice(0, 30);
+
+    var at = -1;
+    for (var m = 0; m < bits.length; m++) {
+      if (NEG.test(bits[m])) { at = m; break; }
+    }
+
+    var take = [];
+    if (at < 0) {
+      take = bits.slice(0, 2);
+    } else {
+      // 尽量把前面交代的人、楼栋一起带上，但整句别超过 30 字
+      for (var st = Math.max(0, at - 2); st <= at; st++) {
+        var cand = bits.slice(st, at + 1);
+        if (cand.join('，').length <= 30) { take = cand; break; }
+        if (st === at) take = cand;
+      }
+    }
+    var out = cleanRule(take.join('，'));
+    if (out.length > 32) out = out.slice(0, 30) + '…';
+    return out;
+  }
+
+  function distillPrompt(issue, order, verdict, say) {
+    var L = [];
+    L.push('你是早餐铺的记账帮手。老板刚指正了你一条判断，他用大白话讲了一段，你把它收成一句能直接照着做的规矩。');
+    L.push('');
+    L.push('【你挑的毛病】' + (MEM_CODE_LABEL[issue.code] || issue.title || ''));
+    if (order) L.push('【那一单】#' + order.no + ' ' + String(order.raw || '').slice(0, 120));
+    L.push('【老板的结论】' + (verdict === 'keep' ? '这条确实有问题，以后要当回事' : '这条不算问题，以后别再挑出来'));
+    L.push('');
+    L.push('【老板的原话】');
+    L.push(say);
+    L.push('');
+    L.push('【怎么写这句规矩】');
+    L.push('- 只写一句，20 字以内，用「……就……」「……要……」「……别……」这种能直接执行的口气');
+    L.push('- 说人话，别用「用户」「该客户」「需注意」「建议」这类字眼');
+    L.push('- 他提到的人名、楼栋、门牌、叫法，原样照抄，一个字都别改');
+    L.push('- 不要引号、不要编号、不要解释，只给这一句');
+    return L.join('\n');
+  }
+
+  /* 把老板的长段话交给 AI 收成一句。8 秒不回来就先按本地挑的记下，
+   * 绝不让「记下」这个按钮卡在半路。 */
+  function distillRule(issue, order, verdict, say) {
+    var src = trim(say);
+    if (!src) return Promise.resolve('');
+    var local = function () { return fallbackRule(src); };
+    if (!auditAiReady()) return Promise.resolve(local());
+    return new Promise(function (resolve) {
+      var done = false;
+      function finish(v) { if (!done) { done = true; resolve(v); } }
+      var timer = setTimeout(function () { finish(local()); }, 8000);
+      try {
+        D.askAI(distillPrompt(issue, order, verdict, src), { maxTokens: 120 }).then(function (out) {
+          clearTimeout(timer);
+          finish(cleanRule(out) || local());
+        }).catch(function () {
+          clearTimeout(timer);
+          finish(local());
+        });
+      } catch (e) {
+        clearTimeout(timer);
+        finish(local());
+      }
+    });
+  }
+
   /* 老板点下「记下」的那一下，把这条判断收成规矩：
    * 记人（名字／楼栋类）、记货（商品类）、记原话，实在没有才只记类型。 */
-  function memFromIssue(code, order, verdict, note, wide, srcRaw) {
+  function memFromIssue(code, order, verdict, note, wide, srcRaw, say) {
     var m = {
       id: 'm' + Date.now().toString(36) + Math.random().toString(36).slice(2, 5),
       at: Date.now(), day: todayStr(),
       code: code || 'aiadd',
       verdict: verdict === 'keep' ? 'keep' : 'drop',
-      note: trim(note).slice(0, 60),
+      note: trim(note).slice(0, 48),
+      say: trim(say).slice(0, 200),
       src: trim(srcRaw || (order && order.raw) || '').slice(0, 90)
     };
     if (!wide && order) {
@@ -2773,6 +2879,8 @@
           '<div><b>' + esc(who) + '</b>' +
           '<span>' + esc(MEM_CODE_LABEL[mo.code] || mo.code) + '</span>' +
           (mo.note ? '<p>' + esc(mo.note) + '</p>' : '') +
+          (mo.say && mo.say !== mo.note
+            ? '<p class="jl-mem-say">你原话：' + esc(mo.say) + '</p>' : '') +
           '</div>' +
           '<button type="button" data-act="delmem" data-k="' + esc(mo.id) + '">删</button>' +
           '</div>';
@@ -3772,8 +3880,12 @@
       '<button type="button" class="jl-mem-pick" data-x="v" data-v="keep">确实有问题</button>' +
       '</div>' +
       '<div class="jl-mem-tip" id="jlMemTip" role="status"></div>' +
-      '<label class="jl-mem-note"><span>一句话</span>' +
-      '<input id="jlMemNote" maxlength="60" placeholder="例：王姐住 3 栋，群里从不写楼栋"></label>' +
+      '<label class="jl-mem-note"><span>怎么说</span>' +
+      '<textarea id="jlMemNote" rows="2" maxlength="200" ' +
+      'placeholder="照平时说话那样写就行，啰嗦也没关系。例：王姐住 3 栋，她从来不在群里写楼栋，你别老问她"></textarea></label>' +
+      '<p class="jl-mem-aihint">' +
+      (auditAiReady() ? '写完 AI 会替你收成一句规矩存起来' : '没接 AI，会从这段话里挑一句当规矩') +
+      '<em id="jlMemCount">0/200</em></p>' +
       '<label class="jl-mem-wide"><input type="checkbox" id="jlMemWide">' +
       '<i>以后凡是这一类都不必再提醒（不分人和货）</i></label>' +
       '<div class="jl-eacts">' +
@@ -3826,17 +3938,43 @@
       if (picksEl) picksEl.classList.remove('warn');
     }
 
-    // 写完一句顺手按回车就等于点「记下」
+    // 多行输入：跟着字长，最多长到五行的样子，再多就在框里滚
     var noteEl = mask.querySelector('#jlMemNote');
+    var countEl = mask.querySelector('#jlMemCount');
+    function growNote() {
+      if (!noteEl) return;
+      noteEl.style.height = 'auto';
+      var h = noteEl.scrollHeight;
+      if (h > 128) h = 128;
+      noteEl.style.height = h + 'px';
+      if (countEl) countEl.textContent = noteEl.value.length + '/200';
+    }
     if (noteEl) {
+      noteEl.addEventListener('input', growNote);
+      growNote();
+      // 文本框里回车是换行，要提交得按 Ctrl/⌘ + 回车
       noteEl.addEventListener('keydown', function (ev) {
-        if (ev.key === 'Enter' || ev.keyCode === 13) {
+        if ((ev.key === 'Enter' || ev.keyCode === 13) && (ev.ctrlKey || ev.metaKey)) {
           ev.preventDefault();
           noteEl.blur();
           var okBtn = mask.querySelector('[data-x="ok"]');
           if (okBtn) okBtn.click();
         }
       });
+    }
+
+    /* 「记下」在处理中时不能重复点，也要让人看得见它在忙 */
+    function busy(on, label) {
+      var b = mask.querySelector('[data-x="ok"]');
+      if (!b) return;
+      if (on) {
+        if (!b.getAttribute('data-old')) b.setAttribute('data-old', b.textContent);
+        b.disabled = true;
+        b.textContent = label || '正在理…';
+      } else {
+        b.disabled = false;
+        b.textContent = b.getAttribute('data-old') || '记下，让它重核';
+      }
     }
 
     mask.addEventListener('click', function (ev) {
@@ -3855,30 +3993,48 @@
         return;
       }
       if (x === 'ok') {
+        var btn = mask.querySelector('[data-x="ok"]');
+        if (btn && btn.disabled) return;
         var ni = mask.querySelector('#jlMemNote');
         if (ni && document.activeElement === ni) ni.blur();
-        var note = (mask.querySelector('#jlMemNote').value || '').replace(/^\s+|\s+$/g, '');
+        var say = trim(ni ? ni.value : '');
         var wide = !!mask.querySelector('#jlMemWide').checked;
         if (!pick) {
           warn('还差一步：这条是<b>它看错了</b>，还是<b>确实有问题</b>？' +
             '<br>把上面那个选了，再按「记下」。');
           return;
         }
-        var saved = memSave(memFromIssue(issue.code, order, pick, note, wide, order.raw));
-        if (saved && saved.ok === false) {
-          warn('这台设备没存上，多半是存储满了。' +
-            '<br>翻到底下「核单记忆」，删两条旧的再试。');
-          return;
-        }
-        close();
-        paint();
-        toast(pick === 'drop' ? '记下了 · 往后这条不再挑出来' : '记下了 · 往后这条要盯着');
-        // 本地已经先生效；再让 AI 拿着新规矩核一遍，让它也记住
-        if (V.record === rec && auditAiReady()) {
-          setTimeout(function () {
-            if (V.record === rec) kickAuditAI(rec, true);
-          }, 320);
-        }
+        clearWarn();
+
+        var commit = function (rule) {
+          var saved = memSave(memFromIssue(issue.code, order, pick, rule, wide, order.raw, say));
+          if (saved && saved.ok === false) {
+            busy(false);
+            warn('这台设备没存上，多半是存储满了。' +
+              '<br>翻到底下「核单记忆」，删两条旧的再试。');
+            return;
+          }
+          close();
+          paint();
+          toast(rule
+            ? ('记下了 · ' + rule)
+            : (pick === 'drop' ? '记下了 · 往后这条不再挑出来' : '记下了 · 往后这条要盯着'));
+          // 本地已经先生效；再让 AI 拿着新规矩核一遍，让它也记住
+          if (V.record === rec && auditAiReady()) {
+            setTimeout(function () {
+              if (V.record === rec) kickAuditAI(rec, true);
+            }, 320);
+          }
+        };
+
+        // 没写字就不用麻烦 AI，直接记
+        if (!say) { commit(''); return; }
+
+        busy(true, auditAiReady() ? 'AI 正在收…' : '正在记…');
+        distillRule(issue, order, pick, say).then(function (rule) {
+          if (!mask.parentNode) return;   // 等的时候人已经把弹框关了
+          commit(rule);
+        });
         return;
       }
     });
