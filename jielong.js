@@ -1235,7 +1235,8 @@
       photos: (record.photos || []).map(function (p) {
         return { key: p.key, building: p.building, at: p.at };
       }),
-      boxAi: record.boxAi || null
+      boxAi: record.boxAi || null,
+      issueSkip: (record.issueSkip && Object.keys(record.issueSkip).length) ? record.issueSkip : null
     };
     return plain + '\n' + MARK + JSON.stringify(data);
   }
@@ -1318,6 +1319,7 @@
     proofUrl: '',
     proofBlob: null,
     proofBld: '',
+    refPrice: null,   // 价格本快照，判断「这次比平时给少了」用
     lpAt: 0           // 长按发生的时刻，抬手那一下别当成选楼栋
   };
   var D = null;
@@ -1352,11 +1354,13 @@
   }
 
   function tabBar() {
-    var tabs = [['bld', '楼栋'], ['box', '装箱'], ['money', '金额'], ['proof', '送达']];
+    var issueN = V.record ? auditIssues(V.record, V.refPrice).issues.length : 0;
+    var tabs = [['bld', '楼栋'], ['box', '装箱'], ['money', '金额'], ['proof', '送达'], ['issue', '问题']];
     return '<div class="jl-tabs">' + tabs.map(function (x) {
       return '<button type="button" data-act="tab" data-v="' + x[0] + '"' +
         (V.tab === x[0] ? ' class="on"' : '') + '>' + x[1] +
         (x[0] === 'proof' && V.photos.length ? '<i>' + V.photos.length + '</i>' : '') +
+        (x[0] === 'issue' && issueN ? '<i class="jl-tab-issue">' + issueN + '</i>' : '') +
         '</button>';
     }).join('') + '</div>';
   }
@@ -1482,6 +1486,7 @@
     if (V.tab === 'bld') h += tabBuildings(r);
     else if (V.tab === 'box') h += tabBoxes(r);
     else if (V.tab === 'money') h += tabMoney(r);
+    else if (V.tab === 'issue') h += tabIssues(r);
     else h += tabProof(r);
     h += '<div class="jl-detail-acts">' +
       '<button type="button" class="jl-ghost" data-act="newone">再拆一单</button>' +
@@ -1632,6 +1637,186 @@
           return '<div class="jl-crow"><i>#' + o.no + '</i><b>' + (o.room ? esc(o.room) : '—') +
             '</b><span>' + esc(o.name || '') + '</span><em>' + itemText(o) + '</em></div>';
         }).join('') + '</div></details>';
+    }
+    return h;
+  }
+
+  /* ==================== 挑毛病：哪些单要回头核 ====================
+   * 只按本地算得出来的东西挑，不猜：名字、楼栋、件数、单价、总价对不对得上。
+   * 每条问题都挂在一个接龙序号上，点一下就能去改那一单。
+   */
+
+  function issueKey(it) { return it.no + '|' + it.code; }
+
+  function auditIssues(record, refPrice) {
+    var orders = (record && record.orders) || [];
+    var ref = (refPrice && typeof refPrice === 'object') ? refPrice : {};
+    var skip = (record && record.issueSkip) || {};
+    var raw = [];
+    var shortSum = 0, overSum = 0;
+    var names = {};
+
+    for (var i = 0; i < orders.length; i++) {
+      var nm = trim(orders[i].name || '');
+      if (nm) names[nm] = (names[nm] || 0) + 1;
+    }
+
+    function put(o, code, level, title, detail) {
+      raw.push({ no: o.no, code: code, level: level, title: title, detail: detail || '' });
+    }
+
+    var seenName = {};
+    for (var k = 0; k < orders.length; k++) {
+      var o = orders[k];
+      var c = cupCount(o);
+      var name = trim(o.name || '');
+
+      /* 1. 名字 */
+      if (!name) put(o, 'noname', 'warn', '没写名字', '群里按 #' + o.no + ' 问一句是谁的');
+      else if (name.length > 8 || /[元块杯个碗份笼瓶盘栋楼室]/.test(name) ||
+        findItems(name).items.length) {           // 名字里带着商品名，多半是把商品当人了
+        put(o, 'oddname', 'info', '名字可能认得不准', '现在写的是「' + name + '」');
+      }
+
+      /* 2. 楼栋 */
+      if (!o.building) {
+        put(o, 'nobld', 'warn', '没写楼栋', '送货前先问清哪一栋，或者去历史记录里按名字找');
+      } else if (o.buildingFrom === 'history') {
+        put(o, 'histbld', 'info', '楼栋是按历史记录补的', '以前记的是 ' + o.building + '，顺口确认一下');
+      }
+
+      /* 3. 商品与数量 */
+      if (!o.items.length) put(o, 'noitem', 'error', '没认出来买的是什么', '回原文补一下，不然没法配货');
+      if (!c) put(o, 'zeroqty', 'error', '件数是 0', '数量没认出来，补一下');
+      else if (c > 15) put(o, 'bigqty', 'warn', '这一单 ' + c + ' 件，比平常多', '核对下是不是数量认错了');
+
+      /* 4. 单价：没填的、离谱的 */
+      var lack = [], sum = 0, lackUnit = false;
+      for (var m = 0; m < o.items.length; m++) {
+        var it = o.items[m];
+        if (it.unit == null) { lack.push(it.name); lackUnit = true; }
+        else sum += it.unit * it.qty;
+        if (it.unit != null && (it.unit > 30 || it.unit === 0)) {
+          put(o, 'oddunit', 'warn', '「' + it.name + '」单价 ¥' + money(it.unit) + ' 看着不对',
+            '可能是房号、件数被当成了钱，去金额页改一下');
+        }
+      }
+      if (lack.length) {
+        put(o, 'noprice', 'warn', '没定价：' + lack.join('、'), '金额页填一次单价，下回自动带出来');
+      }
+
+      /* 5. 原文写了总价：拿它跟逐样单价对一遍，看多给少给 */
+      if (o.total != null && o.items.length && !lackUnit) {
+        var diff = round2(sum - o.total);
+        if (diff >= 0.5) {
+          shortSum = round2(shortSum + diff);
+          put(o, 'short', 'error', '少给了 ¥' + money(diff),
+            '原文写 ¥' + money(o.total) + '，按单价算是 ¥' + money(sum));
+        } else if (diff <= -0.5) {
+          overSum = round2(overSum - diff);
+          put(o, 'over', 'warn', '多给了 ¥' + money(-diff),
+            '原文写 ¥' + money(o.total) + '，按单价算是 ¥' + money(sum));
+        }
+      }
+
+      /* 6. 这次单价明显比平时低：多半是钱给少了 */
+      for (var n2 = 0; n2 < o.items.length; n2++) {
+        var it2 = o.items[n2];
+        if (!it2.fromText || it2.unit == null || !(it2.qty > 0)) continue;
+        var old = ref[it2.name];
+        var oldUnit = (old && typeof old.unit === 'number') ? old.unit : null;
+        if (oldUnit == null || oldUnit <= 0) continue;
+        var gap = round2((oldUnit - it2.unit) * it2.qty);
+        if (gap >= 1) {
+          shortSum = round2(shortSum + gap);
+          put(o, 'pricelow', 'error', '「' + it2.name + '」比平时少 ¥' + money(gap),
+            '这次 ¥' + money(it2.unit) + '/份，之前 ¥' + money(oldUnit) + '/份，' + it2.qty + ' 份共少 ¥' + money(gap));
+        }
+      }
+
+      /* 7. 同一个人下了好几单 */
+      if (name && names[name] > 1 && !seenName[name]) {
+        seenName[name] = 1;
+        put(o, 'dup', 'info', name + ' 下了 ' + names[name] + ' 单', '合在一起送，别漏了其中一单');
+      }
+    }
+
+    var W = { error: 0, warn: 1, info: 2 };
+    raw.sort(function (a, b) {
+      if (W[a.level] !== W[b.level]) return W[a.level] - W[b.level];
+      return a.no - b.no;
+    });
+
+    var issues = [], hidden = 0;
+    for (var q = 0; q < raw.length; q++) {
+      if (skip[issueKey(raw[q])]) hidden++;
+      else issues.push(raw[q]);
+    }
+
+    return {
+      issues: issues,
+      hidden: hidden,
+      total: raw.length,
+      short: shortSum,
+      over: overSum,
+      orders: orders.length,
+      error: issues.filter(function (x) { return x.level === 'error'; }).length
+    };
+  }
+
+  function tabIssues(r) {
+    var a = auditIssues(r, V.refPrice);
+    var h = '';
+
+    if (!a.issues.length) {
+      var clearTitle, clearDesc;
+      if (!a.orders) {
+        clearTitle = '还没有订单';
+        clearDesc = '先把接龙贴进来。';
+      } else if (a.hidden) {
+        clearTitle = '都标成「不用管」了';
+        clearDesc = '这一单还有 ' + a.hidden + ' 条是你手动跳过的，放回来还在下面那个按钮里。';
+      } else {
+        clearTitle = '没查出问题';
+        clearDesc = a.orders + ' 单都对得上：名字、楼栋、件数、金额都有。';
+      }
+      h += '<div class="jl-audit-clear">' +
+        '<b>' + clearTitle + '</b>' +
+        '<p>' + clearDesc + '</p></div>';
+      if (a.hidden) {
+        h += '<button type="button" class="jl-ghost jl-audit-back" data-act="unskipall">' +
+          '把忽略的 ' + a.hidden + ' 条放回来</button>';
+      }
+      return h;
+    }
+
+    h += '<div class="jl-audit-top">' +
+      '<div class="jl-audit-n"><b>' + a.issues.length + '</b><span>条要核对</span>' +
+      (a.error ? '<i>' + a.error + ' 条对不上账</i>' : '') + '</div>' +
+      '<div class="jl-audit-m">' +
+      (a.short > 0 ? '<em>少收 ¥' + money(a.short) + '</em>' : '') +
+      (a.over > 0 ? '<em>多收 ¥' + money(a.over) + '</em>' : '') +
+      '</div></div>';
+
+    h += '<div class="jl-issues">';
+    for (var i = 0; i < a.issues.length; i++) {
+      var it = a.issues[i];
+      var lv = it.level === 'error' ? ' e' : (it.level === 'warn' ? ' w' : '');
+      h += '<div class="jl-issue' + lv + '" data-act="edit" data-no="' + it.no + '">' +
+        '<div class="jl-issue-h">' +
+        '<i>#' + it.no + '</i>' +
+        '<b>' + esc(it.title) + '</b>' +
+        '<button type="button" class="jl-issue-x" data-act="skipissue" data-k="' + esc(issueKey(it)) + '">不用管</button>' +
+        '</div>' +
+        (it.detail ? '<p>' + esc(it.detail) + '</p>' : '') +
+        '</div>';
+    }
+    h += '</div>';
+
+    h += '<p class="jl-hint">点哪条就改哪一单；改完这条自己会消失。「不用管」是给你确认过的误报用的。</p>';
+    if (a.hidden) {
+      h += '<button type="button" class="jl-ghost jl-audit-back" data-act="unskipall">' +
+        '把忽略的 ' + a.hidden + ' 条放回来</button>';
     }
     return h;
   }
@@ -1811,6 +1996,7 @@
 
   function paint() {
     if (!HOST) return;
+    if (V.view === 'detail' && V.record && !V.refPrice) V.refPrice = effectivePrice(listRecords);
     var title = '接龙', sub = '', back = V.view !== 'home';
     if (V.view === 'detail' && V.record) {
       title = mdLabel(V.record.date);
@@ -1863,6 +2049,7 @@
     V.proofUrl = '';
     V.err = '';
     V.openBld = '';
+    V.refPrice = null;
     paint();
   }
 
@@ -1879,6 +2066,7 @@
     V.err = '';
     V.proofUrl = '';
     V.openBld = '';
+    V.refPrice = null;
     if (!V.cap) V.cap = rec.plan.cap;
     paint();
   }
@@ -2053,7 +2241,8 @@
         }),
         source: data.source || 'local',
         photos: data.photos || [],
-        boxAi: data.boxAi || null
+        boxAi: data.boxAi || null,
+        issueSkip: data.issueSkip || null
       }, opts);
     } else {
       rec = parseText(stripMark(hit.text), opts);
@@ -2066,6 +2255,7 @@
     V.err = '';
     V.proofUrl = '';
     V.openBld = '';
+    V.refPrice = null;
     V.photos = [];
     paint();
     loadPhotos(hit.id);
@@ -2740,6 +2930,25 @@
       return;
     }
     if (act === 'delphoto') { delPhoto(btn.getAttribute('data-k')); return; }
+    if (act === 'skipissue') {
+      var ik = btn.getAttribute('data-k') || '';
+      if (V.record && ik) {
+        V.record.issueSkip = V.record.issueSkip || {};
+        V.record.issueSkip[ik] = 1;
+        persist(true);
+        paint();
+        toast('这条不再提醒');
+      }
+      return;
+    }
+    if (act === 'unskipall') {
+      if (V.record) {
+        V.record.issueSkip = {};
+        persist(true);
+        paint();
+      }
+      return;
+    }
     if (act === 'setbld') {
       if (justLong) { V.lpAt = 0; return; }     // 长按是来看序号的，不切楼栋
       V.proofBld = btn.getAttribute('data-v') || '';
@@ -2783,6 +2992,7 @@
       var unit = parseFloat(t.value);
       if (!(unit >= 0)) return;
       setPrice(name, unit, 'manual');
+      V.refPrice = null;            // 刚填的价要马上参与「比平时少」的比对
       rebuild();
       toast('记住「' + name + '」¥' + unit);
     }
@@ -2869,6 +3079,7 @@
     findName: findName,
     money: money,
     amtLabel: amtLabel,
+    auditIssues: auditIssues,
     todayStr: todayStr,
     readPrice: readPrice,
     writePrice: writePrice,
