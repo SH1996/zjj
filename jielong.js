@@ -1175,6 +1175,24 @@
     return cards;
   }
 
+  /* 加长版的名单：这一单所有接龙号，按号从小到大排，带名字和楼栋。
+   * 号是群里接龙的序号，取餐的人念号，老板照着这张表喊名字。 */
+  function proofNameList(record) {
+    var out = [];
+    var bs = (record && record.buildings) || [];
+    for (var i = 0; i < bs.length; i++) {
+      var b = bs[i];
+      var os = b.orders || [];
+      for (var j = 0; j < os.length; j++) {
+        var o = os[j];
+        if (!(o.no > 0)) continue;
+        out.push({ no: o.no, name: o.name || '', bld: b.key });
+      }
+    }
+    out.sort(function (x, y) { return x.no - y.no; });
+    return out;
+  }
+
   /* ==================== 6. 价格本 ==================== */
 
   /* 本店价目表的查表口：名字 → {unit, by, half}。
@@ -2052,6 +2070,7 @@
     boxMode: 'auto',
     cap: 0,
     warm: false,      // 冬天保温：一箱只装一栋
+    proofNames: true, // 送达凭证加长版：图下方附「接龙号 · 名字」
     memFrom: 'home',  // 从哪进来资料库的，返回时回哪去
     openBld: '',
     proofUrl: '',
@@ -3177,6 +3196,17 @@
       } else if (blds.length) {
         h += '<p class="jl-hint">还差 ' + (blds.length - doneBld) + ' 栋没拍，接着拍就行。</p>';
       }
+      var nNames = proofNameList(r).length;
+      h += '<button type="button" class="jl-opt' + (V.proofNames ? ' on' : '') + '" data-act="proofnames">' +
+        '<i class="jl-opt-sw"></i>' +
+        '<span><b>加长版：图下方附「接龙号 · 名字」</b>' +
+        '<em>' + (!nNames
+          ? '这一单还没有接龙号，名单为空，合出来的还是原来那张'
+          : (V.proofNames
+            ? '已开 · 拼出来的图下面多一栏，' + nNames + ' 个号对名字，取餐的照着认人'
+            : '开着的话，图上会多一栏号对名字；关掉就是原来那张短图')) + '</em></span>' +
+        '</button>';
+
       h += '<div class="jl-shot-actions">' +
         '<button type="button" class="jl-primary" data-act="compose"' +
         (V.busy || unCount ? ' disabled' : '') + '>' +
@@ -3781,8 +3811,10 @@
 
   /* 合成图的尺寸：顶部一行日期，中间照片 + 楼栋标注，底部一句提醒。
    * 日期是为了让群里的人一眼知道这是哪天的；提醒是给取餐同学看的。
+   * legendRows > 0 时，照片和提醒之间多一块「接龙号 · 名字」名单（加长版）。
    */
-  function proofSize(n) {
+  var LEG_HEAD = 84, LEG_ROW = 48, LEG_PAD = 16;
+  function proofSize(n, legendRows) {
     var PAD = 36, W = 1080;
     var HEAD = 128;      // 顶部日期
     var FOOT = 148;      // 底部提醒
@@ -3792,8 +3824,9 @@
     var LABEL = 56;
     var rows = Math.max(1, Math.ceil(n / cols));
     var body = rows * (cellH + LABEL) + (rows - 1) * PAD;
-    var H = HEAD + body + PAD + FOOT;
-    return { PAD: PAD, W: W, HEAD: HEAD, FOOT: FOOT, cols: cols, cellW: cellW, cellH: cellH, LABEL: LABEL, rows: rows, H: H };
+    var LEG = legendRows > 0 ? (LEG_HEAD + legendRows * LEG_ROW + LEG_PAD) : 0;
+    var H = HEAD + body + PAD + LEG + FOOT;
+    return { PAD: PAD, W: W, HEAD: HEAD, FOOT: FOOT, cols: cols, cellW: cellW, cellH: cellH, LABEL: LABEL, rows: rows, LEG: LEG, LEG_ROWS: legendRows || 0, H: H };
   }
 
   var WEEK_CN = '日一二三四五六';
@@ -3816,9 +3849,12 @@
   }
 
   function composeProof(photos, meta) {
-    var s = proofSize(photos.length);
-    var PAD = s.PAD, W = s.W, cols = s.cols, cellW = s.cellW, cellH = s.cellH, LABEL = s.LABEL, H = s.H;
     meta = meta || {};
+    // 加长版：图下方补一块「接龙号 · 名字」，两列排，取餐的人照着号认人
+    var names = (meta.names || []).filter(function (x) { return x && x.no != null; });
+    var nameRows = names.length ? Math.ceil(names.length / 2) : 0;
+    var s = proofSize(photos.length, nameRows);
+    var PAD = s.PAD, W = s.W, cols = s.cols, cellW = s.cellW, cellH = s.cellH, LABEL = s.LABEL, H = s.H;
     var HEAD = s.HEAD, FOOT = s.FOOT;
     var tip = meta.tip || proofTip(meta.rawDate || meta.date);
 
@@ -3876,6 +3912,54 @@
         ctx.fillText(tm, x + cellW - tw - 4, y + cellH + 40);
       }
 
+      /* 加长版：照片下面补一栏「接龙号 · 名字」，让人照着号认人 */
+      if (nameRows) {
+        var legTop = H - FOOT - s.LEG;
+        ctx.fillStyle = '#eadfce';
+        ctx.fillRect(PAD * 2, legTop, W - PAD * 4, 2);
+
+        ctx.textAlign = 'center';
+        ctx.fillStyle = '#3a2a1c';
+        ctx.font = '600 34px -apple-system,"PingFang SC","Microsoft YaHei",sans-serif';
+        ctx.fillText('接龙号 · 名字', headCx, legTop + 56);
+
+        var GAP = 32;
+        var colW = Math.floor((W - PAD * 2 - GAP) / 2);
+        var rowTop = legTop + LEG_HEAD;
+        for (var k = 0; k < names.length; k++) {
+          var rc = Math.floor(k / 2), cc = k % 2;
+          var cx = PAD + cc * (colW + GAP);
+          var cy = rowTop + rc * LEG_ROW + 34;
+          var noTxt = '#' + names[k].no;
+
+          ctx.textAlign = 'left';
+          ctx.fillStyle = '#3a2a1c';
+          ctx.font = '600 30px -apple-system,"PingFang SC","Microsoft YaHei",sans-serif';
+          ctx.fillText(noTxt, cx, cy);
+          var nw = ctx.measureText(noTxt).width;
+
+          var bldTxt = names[k].bld && names[k].bld !== '未写楼栋' ? names[k].bld : '';
+          ctx.font = '400 22px -apple-system,"PingFang SC","Microsoft YaHei",sans-serif';
+          var bw = bldTxt ? ctx.measureText(bldTxt).width + 12 : 0;
+
+          var nm = names[k].name || '—';
+          ctx.font = '400 30px -apple-system,"PingFang SC","Microsoft YaHei",sans-serif';
+          var room = colW - nw - 14 - bw;
+          while (nm.length > 1 && ctx.measureText(nm).width > room) nm = nm.slice(0, nm.length - 2) + '…';
+          ctx.fillStyle = '#6b5544';
+          ctx.fillText(nm, cx + nw + 14, cy);
+
+          if (bldTxt) {
+            // 楼栋紧跟在名字后面，别右对齐——右对齐会贴到下一列的号上，看着像别人的
+            var nmW = ctx.measureText(nm).width;
+            ctx.fillStyle = '#a08a72';
+            ctx.font = '400 22px -apple-system,"PingFang SC","Microsoft YaHei",sans-serif';
+            ctx.fillText(bldTxt, cx + nw + 14 + nmW + 10, cy - 2);
+          }
+        }
+        ctx.textAlign = 'left';
+      }
+
       /* 底部：一句提醒，两行，中间一根细线隔开 */
       var tipTop = H - FOOT;
       ctx.fillStyle = '#eadfce';
@@ -3911,7 +3995,8 @@
     composeProof(V.photos, {
       date: mdLabel(V.record.date),
       week: weekdayOf(V.record.date),
-      tip: proofTip(V.record.date)
+      tip: proofTip(V.record.date),
+      names: V.proofNames ? proofNameList(V.record) : null
     }).then(function (out) {
       V.busy = false;
       if (V.proofUrl) { try { URL.revokeObjectURL(V.proofUrl); } catch (e) {} }
@@ -4735,6 +4820,16 @@
       return;
     }
     if (act === 'compose') { doCompose(); return; }
+    if (act === 'proofnames') {
+      V.proofNames = !V.proofNames;
+      var s3 = readSettings();
+      s3.proofNames = V.proofNames;
+      writeSettings(s3);
+      if (V.proofUrl) { doCompose(); }   // 已经拼过就照新选择重拼一张
+      else paint();
+      toast(V.proofNames ? '加长版：图下方附上号和人' : '改回原来那张短图');
+      return;
+    }
     if (act === 'shareproof') { shareProof(); return; }
     if (act === 'clearshots') {
       if (!window.confirm('把已拍的 ' + V.photos.length + ' 张都删掉？')) return;
@@ -4783,6 +4878,7 @@
     V.cap = st.cap || DEFAULT_CAP;
     V.boxMode = st.boxMode || 'auto';
     V.warm = !!st.warm;
+    V.proofNames = st.proofNames !== false;   // 没设过就默认加长（老板要的就是号对名字）
     host.addEventListener('click', onClick);
     host.addEventListener('change', onChange);
     host.addEventListener('input', onInput);
@@ -4831,6 +4927,7 @@
     useAiBoxes: useAiBoxes,
     proofSize: proofSize,
     composeProof: composeProof,
+    proofNameList: proofNameList,
     proofTip: proofTip,
     weekdayOf: weekdayOf,
     residentBook: residentBook,
