@@ -1176,8 +1176,24 @@
   }
 
   /* 加长版的名单：这一单所有接龙号，按号从小到大排，带名字和楼栋。
-   * 号是群里接龙的序号，取餐的人念号，老板照着这张表喊名字。 */
+   * 号是群里接龙的序号，取餐的人念号，老板照着这张表喊名字。
+   *
+   * record.namesFix 是老板事后改的。群里有人撤回接龙，号就对不上了：
+   * 说有哪几个号不存在、哪个号是别人，改过的记在这里，
+   * 每次重拼图都先套一遍，拼出来的还是改过的那版。
+   * 只动凭证上这一栏，订单、金额、件数一概不碰——那得去楼栋页删单。 */
   function proofNameList(record) {
+    var out = proofNameBase(record);
+    var fixes = (record && record.namesFix) || [];
+    for (var f = 0; f < fixes.length; f++) {
+      var ops = fixes[f] && fixes[f].ops ? fixes[f].ops : fixes[f];
+      if (ops) out = applyNameFix(out, ops);
+    }
+    return out;
+  }
+
+  /* 原始名单，没改过的：直接按接龙号排 */
+  function proofNameBase(record) {
     var out = [];
     var bs = (record && record.buildings) || [];
     for (var i = 0; i < bs.length; i++) {
@@ -1191,6 +1207,242 @@
     }
     out.sort(function (x, y) { return x.no - y.no; });
     return out;
+  }
+
+  /* 一条改动套到名单上：
+   * drop  去掉这些号（有人撤回了）
+   * set   改名字／楼栋
+   * add   补一条（漏接龙的）
+   * shift 去掉之后，比 shiftFrom 大的号依次减 1（群里重排了才用，不乱挪） */
+  function applyNameFix(list, fix) {
+    fix = fix || {};
+    var out = [];
+    for (var i = 0; i < list.length; i++) {
+      out.push({ no: list[i].no, name: list[i].name || '', bld: list[i].bld || '' });
+    }
+    var drops = fix.drop || [];
+    if (drops.length) {
+      out = out.filter(function (x) { return drops.indexOf(x.no) < 0; });
+    }
+    var sets = fix.set || [];
+    for (var s = 0; s < sets.length; s++) {
+      var one = sets[s];
+      if (!(one && one.no > 0)) continue;
+      for (var t = 0; t < out.length; t++) {
+        if (out[t].no !== one.no) continue;
+        if (one.name) out[t].name = one.name;
+        if (one.bld) out[t].bld = one.bld;
+        break;
+      }
+    }
+    if (fix.shift && drops.length) {
+      var from = fix.shiftFrom > 0 ? fix.shiftFrom : Math.min.apply(null, drops);
+      for (var m = 0; m < out.length; m++) {
+        if (out[m].no > from) out[m].no -= 1;
+      }
+      // 挪完可能撞号（老板报的号本来就有重复），撞了就留前一个，别让同一行出现两次
+      var seen = {};
+      out = out.filter(function (x) {
+        if (seen[x.no]) return false;
+        seen[x.no] = 1;
+        return true;
+      });
+    }
+    var adds = fix.add || [];
+    for (var a = 0; a < adds.length; a++) {
+      var n = adds[a];
+      if (!(n && n.no > 0)) continue;
+      var dup = false;
+      for (var q = 0; q < out.length; q++) if (out[q].no === n.no) { dup = true; break; }
+      if (dup) continue;
+      out.push({ no: n.no, name: n.name || '', bld: n.bld || '' });
+    }
+    // 事后想补断号：把 1..最大 里缺的那个洞填上，后面的号依次往前
+    if (fix.fill) out = fillNameGap(out);
+    out.sort(function (x, y) { return x.no - y.no; });
+    return out;
+  }
+
+  /* 补断号：找到最小的那个空号，把比它大的都减 1，反复做到没有空号。
+   * 只给「有人说撤回了，群里把号重排了」这种情况用，不自动干。 */
+  function fillNameGap(list) {
+    var out = [];
+    for (var i = 0; i < list.length; i++) out.push({ no: list[i].no, name: list[i].name || '', bld: list[i].bld || '' });
+    var guard = out.length + 2;
+    while (guard-- > 0) {
+      var max = 0, seen = {}, j;
+      for (j = 0; j < out.length; j++) {
+        seen[out[j].no] = 1;
+        if (out[j].no > max) max = out[j].no;
+      }
+      var gap = 0;
+      for (var n = 1; n <= max; n++) if (!seen[n]) { gap = n; break; }
+      if (!gap) break;
+      for (j = 0; j < out.length; j++) if (out[j].no > gap) out[j].no -= 1;
+    }
+    return out;
+  }
+
+  /* 让 AI 把老板那句话翻译成改动。名单一起给它，它才知道 8 号现在是谁，
+   * 也才不会把「3栋」当成 3 号。 */
+  function buildNameFixPrompt(list, say) {
+    var L = [];
+    L.push('你在帮早餐店老板改「送达凭证」上的接龙名单。这张图要发到群里，取餐的人照着号认名字。');
+    L.push('多半是群里有人撤回了接龙，号对人就对不上了，老板要你把名单改对。');
+    L.push('');
+    L.push('【现在的名单】' + list.length + ' 个号');
+    for (var i = 0; i < list.length; i++) {
+      L.push('#' + list[i].no + ' ' + (list[i].name || '（没写名字）') +
+        (list[i].bld ? '（' + list[i].bld + '）' : ''));
+    }
+    L.push('');
+    L.push('【老板的话】');
+    L.push(trim(say) || '（什么也没说）');
+    L.push('');
+    L.push('【怎么判断】');
+    L.push('1. 「几号撤回了 / 没有了 / 不存在了 / 退单了」→ 只删掉这一条，别的号不动。微信群接龙的号撤回后一般不重排。');
+    L.push('2. 只有老板明说「后面的往前挪 / 顺延 / 重排 / 重新编号」，才把比它大的号依次减 1，shift 填 true。');
+    L.push('3. 「几号是某某 / 几号改名叫某某」→ 改名字；说的名字后面带楼栋（5栋）就一起改。');
+    L.push('4. 「再加一个 / 补一个」→ 新增一条，号由你按上下文定。');
+    L.push('5. 说「4栋那单撤了」这种按楼栋说的：名单里这栋只有一个人才删；有两个以上就别乱删，在 say 里问是哪一位。');
+    L.push('6. 老板的话跟序号对不上、认不出要改哪个号，就什么都别改：drop / set / add 全给空数组，在 say 里直说没懂。');
+    L.push('7. 「3栋」是楼栋不是 3 号，别混。');
+    L.push('');
+    L.push('【只输出这个 JSON，不要任何解释文字】');
+    L.push('{"drop":[3],"set":[{"no":4,"name":"王姐","bld":"5栋"}],"add":[{"no":9,"name":"某某","bld":"3栋"}],"shift":false,"say":"3号撤回了，别的号不动"}');
+    return L.join('\n');
+  }
+
+  // AI 回的那段话里挑 JSON。它偶尔会包一层 ``` 或者先客套一句，兜着走。
+  function parseNameFixReply(text) {
+    var s = String(text || '');
+    var a = s.indexOf('{'), b = s.lastIndexOf('}');
+    if (a < 0 || b <= a) return null;
+    var obj = null;
+    try { obj = JSON.parse(s.slice(a, b + 1)); }
+    catch (e) {
+      try { obj = JSON.parse(s.slice(a, b + 1).replace(/,\s*([}\]])/g, '$1').replace(/[“”]/g, '"')); }
+      catch (e2) { return null; }
+    }
+    if (!obj || typeof obj !== 'object') return null;
+    var out = { drop: [], set: [], add: [], shift: !!obj.shift, say: trim(obj.say || '') };
+    var i;
+    if (Array.isArray(obj.drop)) {
+      for (i = 0; i < obj.drop.length; i++) {
+        var n = parseInt(obj.drop[i], 10);
+        if (n > 0) out.drop.push(n);
+      }
+    }
+    if (Array.isArray(obj.set)) {
+      for (i = 0; i < obj.set.length; i++) {
+        var st = obj.set[i];
+        var no = parseInt(st && st.no, 10);
+        if (!(no > 0)) continue;
+        out.set.push({ no: no, name: trim(st.name || ''), bld: trim(st.bld || '') });
+      }
+    }
+    if (Array.isArray(obj.add)) {
+      for (i = 0; i < obj.add.length; i++) {
+        var ad = obj.add[i];
+        var ano = parseInt(ad && ad.no, 10);
+        if (!(ano > 0)) continue;
+        out.add.push({ no: ano, name: trim(ad.name || ''), bld: trim(ad.bld || '') });
+      }
+    }
+    return out;
+  }
+
+  /* 没配 AI、或者 AI 那边断了，就自己抠。只认最常见的两句：
+   * 「3号撤回了」「3、4号没有了」「8号是王姐 5栋」。
+   * 抠不准就不改，让人再说一遍，总比改错了强。 */
+  function parseNameSay(list, say) {
+    var s = trim(say || '');
+    var ops = { drop: [], set: [], add: [], shift: false, say: s };
+    if (!s) return ops;
+    if (/往前挪|顺延|重排|重新编号|补位|往前补|往前移/.test(s)) ops.shift = true;
+
+    var DROP = /撤回|撤了|撤掉|取消|删|去掉|去除|不要|没了|没有|不存在|退了|退单|不算|不送|不做了|漏了/;
+    var SET = /改成|换成|改为|改到|搬到|挪到|就是|是|叫/;
+    var segs = s.split(/[，,。;；\n]+/);
+    for (var i = 0; i < segs.length; i++) {
+      var seg = trim(segs[i]);
+      if (!seg) continue;
+      // 「3栋」「5栋」里的数字是楼栋，先挪开，免得当成号
+      var blds = [], work = seg.replace(/(\d{1,3}|[A-Za-z])\s*栋/g, function (m) { blds.push(m.replace(/\s+/g, '')); return '〔楼〕'; });
+      var nos = [], m;
+      var re = /(\d{1,3}(?:\s*[、和及]\s*\d{1,3})*)\s*(?:号|#)/g;
+      while ((m = re.exec(work))) {
+        var part = m[1].split(/[、和及]/);
+        for (var p = 0; p < part.length; p++) {
+          var v = parseInt(trim(part[p]), 10);
+          if (v > 0 && nos.indexOf(v) < 0) nos.push(v);
+        }
+      }
+      // 没写「号」的裸数字：只在句首、且这句明显在说号的时候认（「3撤回」）
+      if (!nos.length) {
+        var m2 = work.match(/^\s*(\d{1,3}(?:\s*[、和及]\s*\d{1,3})*)(?!\s*[元个杯笼])/);
+        if (m2) {
+          var q = m2[1].split(/[、和及]/);
+          for (var q2 = 0; q2 < q.length; q2++) {
+            var w = parseInt(trim(q[q2]), 10);
+            if (w > 0) nos.push(w);
+          }
+        }
+      }
+      if (!nos.length) continue;
+
+      if (DROP.test(seg) && !SET.test(seg)) {
+        for (var d = 0; d < nos.length; d++) if (ops.drop.indexOf(nos[d]) < 0) ops.drop.push(nos[d]);
+        continue;
+      }
+      if (SET.test(seg)) {
+        var name = seg
+          .replace(/(\d{1,3}|[A-Za-z])\s*栋/g, '')
+          .replace(/\d{1,3}\s*(?:号|#)/g, '')
+          .replace(/应该|其实|好像|名字|改成|换成|改为|改到|搬到|挪到|就是|叫作|叫做|叫|是|的/g, '')
+          .replace(/[，,。;；、\s]/g, '');
+        if (/^[了的啊吧呢嘛]$/.test(name)) name = '';
+        var okName = !!name && name.length <= 6 && /^[\u4e00-\u9fa5A-Za-z·]+$/.test(name);
+        // 「4号改成5栋」只改楼栋、名字不动，也算说得通
+        if (okName || blds.length) {
+          var bld = blds.length ? blds[blds.length - 1] : '';
+          for (var k = 0; k < nos.length; k++) {
+            ops.set.push({ no: nos[k], name: okName ? name : '', bld: bld });
+          }
+        }
+        continue;
+      }
+      if (DROP.test(seg)) {
+        for (var d2 = 0; d2 < nos.length; d2++) if (ops.drop.indexOf(nos[d2]) < 0) ops.drop.push(nos[d2]);
+      }
+    }
+    return ops;
+  }
+
+  // 把一条改动说成人话，给老板过目：「去掉 #3；#4 改成「王姐」（5栋）」
+  function nameFixText(ops, list) {
+    if (!ops) return '';
+    var L = [], i;
+    for (i = 0; i < (ops.drop || []).length; i++) {
+      var no = ops.drop[i], who = '';
+      for (var j = 0; j < list.length; j++) if (list[j].no === no) who = list[j].name;
+      L.push('去掉 #' + no + (who ? '（' + who + '）' : ''));
+    }
+    for (i = 0; i < (ops.set || []).length; i++) {
+      var s = ops.set[i];
+      L.push('#' + s.no + ' 改成「' + (s.name || '？') + '」' + (s.bld ? '（' + s.bld + '）' : ''));
+    }
+    for (i = 0; i < (ops.add || []).length; i++) {
+      var a = ops.add[i];
+      L.push('加上 #' + a.no + ' ' + (a.name || '（没名字）') + (a.bld ? '（' + a.bld + '）' : ''));
+    }
+    if (ops.shift && (ops.drop || []).length) L.push('后面的号往前补一位');
+    if (!L.length) return '';
+    return L.join('；');
+  }
+
+  function nameFixCount(record) {
+    return ((record && record.namesFix) || []).length;
   }
 
   /* ==================== 6. 价格本 ==================== */
@@ -1960,6 +2212,8 @@
         return { key: p.key, building: p.building, at: p.at };
       }),
       boxAi: record.boxAi || null,
+      // 送达凭证上改过的名单（谁撤回了、几号改成谁）。只影响那张图，不动订单
+      namesFix: (record.namesFix && record.namesFix.length) ? record.namesFix : null,
       issueSkip: (record.issueSkip && Object.keys(record.issueSkip).length) ? record.issueSkip : null,
       audit: record.audit || null,
       auditErr: trim(record.auditErr || '').slice(0, 160) || null,
@@ -3196,7 +3450,10 @@
       } else if (blds.length) {
         h += '<p class="jl-hint">还差 ' + (blds.length - doneBld) + ' 栋没拍，接着拍就行。</p>';
       }
-      var nNames = proofNameList(r).length;
+      var nmList = proofNameList(r);
+      var nNames = nmList.length;
+      var nRaw = proofNameBase(r).length;
+      var nFix = nameFixCount(r);
       h += '<button type="button" class="jl-opt' + (V.proofNames ? ' on' : '') + '" data-act="proofnames">' +
         '<i class="jl-opt-sw"></i>' +
         '<span><b>加长版：图下方附「接龙号 · 名字」</b>' +
@@ -3206,6 +3463,17 @@
             ? '已开 · 拼出来的图下面多一栏，' + nNames + ' 个号对名字，取餐的照着认人'
             : '开着的话，图上会多一栏号对名字；关掉就是原来那张短图')) + '</em></span>' +
         '</button>';
+
+      if (V.proofNames && (nNames || nFix)) {
+        h += '<button type="button" class="jl-namesline' + (nFix ? ' chg' : '') + '" data-act="editnames">' +
+          '<b>名单 ' + nNames + ' 个号</b>' +
+          '<span>' + (!nNames
+            ? '删空了 · 点这里撤回来'
+            : (nFix
+              ? '改过 ' + nFix + ' 次' + (nRaw !== nNames ? '（原来 ' + nRaw + ' 个）' : '') + ' · 再改'
+              : '有人撤回接龙、号对不上？点这里改')) + '</span>' +
+          '<i>›</i></button>';
+      }
 
       h += '<div class="jl-shot-actions">' +
         '<button type="button" class="jl-primary" data-act="compose"' +
@@ -3429,6 +3697,7 @@
       issueSkip: V.record.issueSkip,
       audit: V.record.audit,
       auditErr: V.record.auditErr || '',
+      namesFix: V.record.namesFix,   // 改过的凭证名单，一编辑就丢的话下次拼图又对不上
       sourceText: V.record.sourceText
     }, opts);
     paint();
@@ -3605,6 +3874,7 @@
         issueSkip: data.issueSkip || null,
         audit: data.audit || null,
         auditErr: data.auditErr || '',
+        namesFix: data.namesFix || null,   // 上次改过的凭证名单，重开还得是改过的那版
         sourceText: data.srcText || ''
       }, opts);
     } else {
@@ -4276,6 +4546,160 @@
     setTimeout(function () { try { ta.focus(); } catch (e) {} }, 60);
   }
 
+  /* ---------- 改名单：有人撤回接龙，凭证上的号跟人对不上了 ---------- */
+
+  /* 这层只改那张图下面那一栏。订单还在，金额、件数、箱子一概不动——
+   * 真要把那单也去掉，得回楼栋页删单，这里不替你做这个决定。
+   * 两条路：点号后面的 × 直接去掉；或者把话写下来，让它翻成改动。 */
+  function nameSheet() {
+    if (!V.record) return;
+    var mask = document.createElement('div');
+    mask.className = 'jl-mask';
+    mask.innerHTML =
+      '<div class="jl-sheet-edit jl-sheet-names">' +
+      '<div class="jl-ehead"><b>改名单</b><button type="button" data-x="close" aria-label="关闭">×</button></div>' +
+      '<p class="jl-mem-lead">群里有人撤回接龙，号就跟人对不上了。点号后面的 × 去掉，或者写一句让它自己改。' +
+      '<b>只改这张凭证上那一栏，订单和金额不动。</b></p>' +
+      '<div class="jl-namechips" id="jlNameChips"></div>' +
+      '<div class="jl-nametools"><button type="button" class="jl-namelink" data-x="fill">号是断的？往前补一位</button></div>' +
+      '<label class="jl-mem-note"><span>说一句</span>' +
+      '<textarea id="jlNameSay" rows="2" maxlength="120" placeholder="例：3号撤回了 · 8号是王姐 · 后面的往前挪一位"></textarea></label>' +
+      '<p class="jl-mem-aihint"><span id="jlNameHint">写完点「改」，它按你说的改</span></p>' +
+      '<div class="jl-eacts">' +
+      '<button type="button" class="jl-ghost" data-x="undo">撤销上次</button>' +
+      '<button type="button" class="jl-primary" data-x="ok">改</button>' +
+      '</div></div>';
+
+    document.body.appendChild(mask);
+    var chipsEl = mask.querySelector('#jlNameChips');
+    var hintEl = mask.querySelector('#jlNameHint');
+    var ta = mask.querySelector('#jlNameSay');
+    var okBtn = mask.querySelector('[data-x="ok"]');
+    var undoBtn = mask.querySelector('[data-x="undo"]');
+    var pending = null;
+
+    function close() { if (mask.parentNode) mask.parentNode.removeChild(mask); }
+
+    function chipsHtml() {
+      var list = proofNameList(V.record);
+      if (!list.length) return '<span class="jl-nameempty">名单空了 · 点「撤销上次」能退回去</span>';
+      return list.map(function (x) {
+        return '<span class="jl-namechip"><b>#' + x.no + '</b>' + esc(x.name || '（没名字）') +
+          (x.bld ? '<em>' + esc(x.bld) + '</em>' : '') +
+          '<button type="button" data-x="drop" data-k="' + x.no + '" aria-label="去掉这个号">×</button></span>';
+      }).join('');
+    }
+
+    function refresh() {
+      chipsEl.innerHTML = chipsHtml();
+      var n = nameFixCount(V.record);
+      undoBtn.disabled = !n;
+      undoBtn.textContent = n ? '撤销上次' : '还没改过';
+    }
+
+    function hint(txt, cls) {
+      hintEl.textContent = txt;
+      hintEl.className = cls || '';
+    }
+
+    function resetBtn() {
+      okBtn.disabled = false;
+      okBtn.textContent = '改';
+      okBtn.setAttribute('data-x', 'ok');
+    }
+
+    /* 改动落地：记进 record，存一份，图重拼一张 */
+    function commit(ops, say) {
+      if (!V.record) return;
+      if (!V.record.namesFix) V.record.namesFix = [];
+      V.record.namesFix.push({ at: Date.now(), say: say || '', ops: ops });
+      persist(true);
+      refresh();
+      pending = null;
+      resetBtn();
+      hint('改好了，正在重拼图…', 'on');
+      V.proofUrl ? doCompose() : paint();
+      if (V.proofUrl) toast('名单改好了，图重拼好了');
+      setTimeout(function () {
+        if (mask.parentNode) hint('改好了 · 还能接着改', 'on');
+      }, 700);
+    }
+
+    // 把认出来的改动先摆出来给人看，点「就这么改」才动
+    function offer(ops, say, fromAI) {
+      var txt = nameFixText(ops, proofNameList(V.record));
+      if (!txt) {
+        hint('没听出要改哪个号。换个说法，比如「3号撤回了」', 'warn');
+        pending = null;
+        resetBtn();
+        return;
+      }
+      pending = { ops: ops, say: say };
+      hint((fromAI ? 'AI 认出来：' : '按你说的：') + txt, 'on');
+      okBtn.textContent = '就这么改';
+      okBtn.setAttribute('data-x', 'apply');
+      okBtn.disabled = false;
+    }
+
+    function ask() {
+      var say = trim(ta.value);
+      if (!say) { hint('先写一句，比如「3号撤回了」', 'warn'); ta.focus(); return; }
+      var list = proofNameList(V.record);
+      var localOps = parseNameSay(list, say);
+      // 没配 AI 就别等，本地抠一遍；抠不出来再明说
+      if (!D || !D.askAI || (D.hasAI && !D.hasAI())) {
+        offer(localOps, say, false);
+        return;
+      }
+      okBtn.disabled = true;
+      okBtn.textContent = '认…';
+      hint('正在认…', '');
+      D.askAI(buildNameFixPrompt(list, say), { maxTokens: 500 }).then(function (out) {
+        var ops = parseNameFixReply(out);
+        if (!ops) ops = localOps;
+        offer(ops, say, true);
+      }).catch(function () {
+        offer(localOps, say, false);
+      });
+    }
+
+    mask.addEventListener('click', function (ev) {
+      var t = ev.target;
+      var x = t.getAttribute ? t.getAttribute('data-x') : null;
+      if (t === mask) { close(); return; }
+      if (x === 'close') { close(); return; }
+      if (x === 'drop') {
+        var no = parseInt(t.getAttribute('data-k'), 10);
+        if (!(no > 0)) return;
+        commit({ drop: [no], set: [], add: [], shift: false }, no + ' 号撤回了');
+        return;
+      }
+      if (x === 'undo') {
+        if (!V.record.namesFix || !V.record.namesFix.length) return;
+        V.record.namesFix.pop();
+        persist(true);
+        refresh();
+        hint('退回上一次改之前了', 'on');
+        V.proofUrl ? doCompose() : paint();
+        return;
+      }
+      if (x === 'ok') { ask(); return; }
+      if (x === 'fill') {
+        var nowList = proofNameList(V.record);
+        if (!nowList.length) { hint('名单是空的，先点「撤销上次」退回去', 'warn'); return; }
+        var before = nowList.map(function (p) { return p.no; }).join(',');
+        var after = fillNameGap(nowList).map(function (p) { return p.no; }).join(',');
+        if (before === after) { hint('号是连着的，不用补', 'on'); return; }
+        commit({ fill: true, drop: [], set: [], add: [], shift: false }, '号往前补一位');
+        return;
+      }
+      if (x === 'apply' && pending) { commit(pending.ops, pending.say); return; }
+    });
+
+    refresh();
+    setTimeout(function () { try { ta.focus(); } catch (e) {} }, 60);
+  }
+
   /* ---------- 教它一句：把老板的判断收成规矩 ---------- */
 
   function teachIssue(key) {
@@ -4821,6 +5245,7 @@
       return;
     }
     if (act === 'compose') { doCompose(); return; }
+    if (act === 'editnames') { nameSheet(); return; }
     if (act === 'proofnames') {
       V.proofNames = !V.proofNames;
       var s3 = readSettings();
@@ -4929,6 +5354,11 @@
     proofSize: proofSize,
     composeProof: composeProof,
     proofNameList: proofNameList,
+    proofNameBase: proofNameBase,
+    applyNameFix: applyNameFix,
+    parseNameSay: parseNameSay,
+    buildNameFixPrompt: buildNameFixPrompt,
+    nameFixText: nameFixText,
     proofTip: proofTip,
     weekdayOf: weekdayOf,
     residentBook: residentBook,

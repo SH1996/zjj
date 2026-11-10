@@ -1748,6 +1748,40 @@
   .jl-opt b{display:block;font-size:12.5px;font-weight:600;color:var(--jl-ink);}
   .jl-opt em{display:block;margin-top:3px;font-style:normal;font-size:11px;line-height:1.6;color:var(--jl-faint);}
   .jl-opt.on em{color:var(--jl-soft);}
+
+  /* 名单行：撤回接龙、号对不上时从这儿进 */
+  .jl-namesline{display:flex;align-items:center;gap:8px;width:100%;margin-top:8px;
+    padding:9px 13px;border:1px dashed var(--jl-line);border-radius:11px;background:transparent;
+    font-family:inherit;text-align:left;cursor:pointer;}
+  .jl-namesline b{flex:0 0 auto;font-size:12px;font-weight:600;color:var(--jl-ink);}
+  .jl-namesline span{flex:1;min-width:0;font-size:11px;line-height:1.5;color:var(--jl-faint);
+    overflow:hidden;text-overflow:ellipsis;white-space:nowrap;}
+  .jl-namesline i{flex:0 0 auto;font-style:normal;font-size:14px;color:var(--jl-faint);}
+  .jl-namesline.chg{border-style:solid;border-color:rgba(201,114,47,.34);background:rgba(201,114,47,.05);}
+  .jl-namesline.chg b{color:var(--jl-acc);}
+  .jl-namesline.chg span{color:var(--jl-soft);}
+
+  /* 改名单弹层：号牌一颗颗排，点叉就没了 */
+  .jl-namechips{display:flex;flex-wrap:wrap;gap:6px;max-height:36vh;overflow-y:auto;
+    padding:10px;margin-bottom:12px;border:1px solid var(--jl-line);border-radius:11px;background:var(--jl-wash);}
+  .jl-namechip{display:inline-flex;align-items:center;gap:5px;padding:5px 5px 5px 8px;
+    border:1px solid var(--jl-line);border-radius:9px;background:var(--jl-panel);
+    font-size:11.5px;color:var(--jl-ink);max-width:100%;}
+  .jl-namechip b{font-weight:600;color:var(--jl-acc);font-size:11px;}
+  .jl-namechip em{font-style:normal;font-size:10px;color:var(--jl-faint);}
+  .jl-namechip button{border:none;background:transparent;color:var(--jl-faint);font-size:14px;
+    line-height:1;padding:0 2px;cursor:pointer;}
+  .jl-namechip button:active{color:var(--jl-warn);}
+  .jl-nameempty{font-size:11.5px;line-height:1.7;color:var(--jl-faint);}
+  .jl-nametools{display:flex;justify-content:flex-end;margin:-4px 0 10px;}
+  .jl-namelink{border:none;background:transparent;padding:2px 0;font-family:inherit;
+    font-size:11px;color:var(--jl-acc);cursor:pointer;letter-spacing:.02em;}
+  .jl-namelink:active{opacity:.6;}
+  .jl-sheet-names .jl-mem-note textarea{min-height:54px;}
+  .jl-sheet-names .jl-mem-aihint{font-size:11px;}
+  .jl-eacts button:disabled{opacity:.42;cursor:default;}
+  #jlNameHint.on{color:#8a6a2f;}
+  #jlNameHint.warn{color:var(--jl-warn);}
   .jl-box-over{margin-top:6px;font-size:10.5px;line-height:1.6;color:var(--jl-warn);}
   .jl-warm-pins{margin-top:10px;padding:11px 13px;border-radius:12px;background:var(--jl-wash);}
   .jl-warm-pins>b{display:block;font-size:11.5px;font-weight:600;color:var(--jl-soft);}
@@ -2048,6 +2082,9 @@
     .jl-mem-aihint{display:none;}
     /* 手写规矩那一行「只管谁」不能省，写歪了就是全局规矩 */
     .jl-sheet-addmem .jl-mem-aihint{display:flex;}
+    /* 改名单时「AI 认出来什么」更得留着，不然改没改对看不见 */
+    .jl-sheet-names .jl-mem-aihint{display:flex;}
+    .jl-sheet-names .jl-namechips{max-height:26vh;}
     .jl-mem-note textarea{min-height:42px;}
   }
 
@@ -3297,7 +3334,7 @@ window.onerror = function (msg, url, line) {
   'use strict';
 
   // 版本号统一在此维护；localStorage 键沿用 v11 不变，切勿改名以免丢失用户数据
-  var APP_VERSION = '15.15.1';
+  var APP_VERSION = '15.16.0';
   // 送货单拍照识别：视觉模型默认名、兼容别名与各项安全上限
   var DEFAULT_VISION_MODEL = 'deepseek-flash';
   var VISION_MODEL_FALLBACK = 'deepseek-v4-flash-vision-exp';
