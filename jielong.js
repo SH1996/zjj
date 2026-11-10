@@ -1435,45 +1435,43 @@
     var s = trim(say);
     if (!s) return '';
     var NEG = /别|不要|不用|不必|记得|以后|下次/;      // 带这些字的，通常才是「规矩」本身
-    var sents = s.split(/[。；！？!?;\n]+/);
-    var sent = '';
-    for (var i = 0; i < sents.length; i++) {
-      var a = trim(sents[i]);
-      if (a && NEG.test(a)) { sent = a; break; }
+    var HARD = /(\d+|[一二三四五六七八九十两]+)\s*(栋|幢|号楼|单元|室|号|楼)|门牌|电话|微信/;
+
+    var atoms = [], raw = s.split(/[。；！？!?;，,、\n]+/);
+    for (var i = 0; i < raw.length; i++) {
+      if (trim(raw[i])) atoms.push(trim(raw[i]));
     }
-    if (!sent) {
-      for (var j = 0; j < sents.length; j++) {
-        if (trim(sents[j])) { sent = trim(sents[j]); break; }
+    if (!atoms.length) return '';
+
+    var hard = -1, neg = -1;
+    for (var j = 0; j < atoms.length; j++) {
+      if (hard < 0 && HARD.test(atoms[j])) hard = j;
+      if (neg < 0 && NEG.test(atoms[j])) neg = j;
+    }
+
+    // 楼栋、门牌这种眼见为实的东西，只要有就必须带上——丢了它就等于没教
+    if (hard >= 0) {
+      var head = atoms[hard];
+      if (head.length > 30) head = head.slice(0, 28) + '…';
+      if (neg >= 0 && neg !== hard) {
+        var tail = atoms[neg];
+        var pair = neg < hard ? (tail + '，' + head) : (head + '，' + tail);
+        if (pair.length <= 30) return cleanRule(pair);
+      }
+      return cleanRule(head);
+    }
+
+    if (neg >= 0) {
+      // 没硬信息，就把带「别」的那句连同前一句带上，别超过 30 字
+      for (var st = Math.max(0, neg - 2); st <= neg; st++) {
+        var cand = atoms.slice(st, neg + 1).join('，');
+        if (cand.length <= 30 || st === neg) return cleanRule(cand);
       }
     }
-    if (!sent) sent = s;
 
-    var bits = [];
-    var raw = sent.split(/[，,、]/);
-    for (var k = 0; k < raw.length; k++) {
-      if (trim(raw[k])) bits.push(trim(raw[k]));
-    }
-    if (!bits.length) return cleanRule(sent).slice(0, 30);
-
-    var at = -1;
-    for (var m = 0; m < bits.length; m++) {
-      if (NEG.test(bits[m])) { at = m; break; }
-    }
-
-    var take = [];
-    if (at < 0) {
-      take = bits.slice(0, 2);
-    } else {
-      // 尽量把前面交代的人、楼栋一起带上，但整句别超过 30 字
-      for (var st = Math.max(0, at - 2); st <= at; st++) {
-        var cand = bits.slice(st, at + 1);
-        if (cand.join('，').length <= 30) { take = cand; break; }
-        if (st === at) take = cand;
-      }
-    }
-    var out = cleanRule(take.join('，'));
-    if (out.length > 32) out = out.slice(0, 30) + '…';
-    return out;
+    var first = atoms.slice(0, 2).join('，');
+    if (first.length > 30) first = atoms[0].slice(0, 28) + '…';
+    return cleanRule(first);
   }
 
   function distillPrompt(issue, order, verdict, say) {
