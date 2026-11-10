@@ -36,31 +36,36 @@
   var MENU = [
     // 包子
     { name: '红烧肉包', price: 2.5, by: '个' },
-    { name: '鲜肉包', price: 2.5, by: '个' },
-    { name: '酱肉包', price: 2.5, by: '个' },
+    { name: '鲜肉包', price: 2.5, by: '个', alias: ['鲜肉'] },
+    { name: '酱肉包', price: 2.5, by: '个', alias: ['酱肉'] },
     { name: '麻辣牛肉包', price: 2.5, by: '个' },
-    { name: '豆腐包', price: 2, by: '个' },
+    { name: '豆腐包', price: 2, by: '个', alias: ['麻辣豆腐包'] },
     { name: '豆沙包', price: 2, by: '个' },
     { name: '豇豆包', price: 2, by: '个' },
-    { name: '香菇青菜包', price: 2, by: '个' },
+    { name: '香菇青菜包', price: 2, by: '个', alias: ['香菇青菜'] },
     { name: '香辣粉丝包', price: 2, by: '个' },
     { name: '梅干菜包', price: 2, by: '个' },
     { name: '香辣雪菜包', price: 2, by: '个' },
-    { name: '肉沫茄子包', price: 2, by: '个' },
+    { name: '肉沫茄子包', price: 2, by: '个', alias: ['茄包', '茄子包'] },
     { name: '香辣海带丝包', price: 2, by: '个' },
-    { name: '香菇冬笋包', price: 2, by: '个', alias: ['香菇竹笋包', '冬笋包', '竹笋包'] },
-    { name: '麻辣土豆包', price: 2, by: '个' },
+    { name: '香菇冬笋包', price: 2, by: '个', alias: ['香菇竹笋包', '冬笋包', '竹笋包', '香菇冬笋'] },
+    { name: '麻辣土豆包', price: 2, by: '个', alias: ['土豆包', '土豆'] },
     // 按笼卖，可以半笼
     { name: '小笼包', price: 6, by: '笼', half: true, alias: ['鲜肉小笼包', '酱肉小笼包'] },
     { name: '灌汤小笼包', price: 7, by: '笼', half: true, alias: ['灌汤包'] },
-    { name: '玉米鲜肉蒸饺', price: 6, by: '笼', half: true, alias: ['玉米蒸饺', '玉米饺', '鲜肉蒸饺', '蒸饺'] },
+    { name: '玉米鲜肉蒸饺', price: 6, by: '笼', half: true, alias: ['玉米蒸饺', '玉米饺', '鲜肉蒸饺', '蒸饺', '鲜肉玉米蒸饺'] },
     // 其它
     // 牌子上没写蛋，但店里白水蛋一直是 1.5 一个。名字写法五花八门，全归到这一样，
     // 免得「白水蛋 1.5」「白鸡蛋 3.5」各存一份，问题清单拿着错的那个去算少给。
     { name: '白鸡蛋', price: 1.5, by: '个', alias: ['鸡蛋', '白水蛋', '水煮蛋', '水煮鸡蛋', '白蛋', '清水蛋'] },
     { name: '烧麦', price: 1.5, by: '个', alias: ['烧卖'] },
+    // 群里常写、两块牌子上没单列：价格取自接龙原文（油条 2、菜角 2.5、红薯 2、茶叶蛋 2）
+    { name: '油条', price: 2, by: '根' },
+    { name: '菜角', price: 2.5, by: '个' },
+    { name: '红薯', price: 2, by: '个' },
+    { name: '茶叶蛋', price: 2, by: '个' },
     { name: '玉米', price: 5, by: '个' },
-    { name: '老面馒头', price: 1, by: '个' },
+    { name: '老面馒头', price: 1, by: '个', alias: ['白馒头', '白面馒头'] },
     { name: '红糖馒头', price: 2, by: '个' },
     { name: '南瓜馒头', price: 2, by: '个' },
     { name: '豆浆', price: 2, by: '杯' },
@@ -240,6 +245,14 @@
       better({ raw: m[0], token: m[1], room: '', start: at, end: at + 1 }, 2);
     }
 
+    // ⑥ 行首单个大写字母也是楼栋：「E huh 一个鲜肉」「D朱柳臻 一个白鸡蛋」
+    //    后面紧跟另一个字母就不算（Aurora 不是 A 栋）；④ 只认逗号，这两条都不认，以前整栋丢。
+    var m6 = text.match(/^\s*([A-H])(?![A-Za-z])/);
+    if (m6) {
+      var st6 = m6[0].lastIndexOf(m6[1]);
+      better({ raw: m6[1], token: m6[1], room: '', start: st6, end: st6 + 1 }, 2);
+    }
+
     if (!best) return null;
     return { key: normBuilding(best.token), room: best.room, raw: best.raw, start: best.start, end: best.end };
   }
@@ -333,10 +346,20 @@
    */
   function parseSeg(seg) {
     var money = [];
-    var s = String(seg).replace(/(?:[￥¥]\s*)?([0-9]+(?:\.[0-9]+)?)\s*(元|块钱|块|圆)/g, function (m, num, u, off) {
-      money.push({ val: parseFloat(num), at: off, len: m.length });
-      return blank(m.length);
-    });
+    // 中文数字金额也要收：「七块」「十块」「两块五」的前半截。以前只认阿拉伯数字，
+    // 「半笼酱肉小笼包＋土豆包＋豆浆 七块」整单金额就算不出来（合计直接少了这一单）。
+    // 「两块五」「三块五」：块后面的中文数字是角（五 = 0.5），不是另一笔钱
+    var s = String(seg).replace(/(?:[￥¥]\s*)?([0-9]+(?:\.[0-9]+)?|[一二两三四五六七八九十]{1,3})\s*(元|块钱|块|圆)([一二两三四五六七八九])?(?![0-9])/g,
+      function (m, num, u, jiao, off) {
+        var v = /^[0-9]/.test(num) ? parseFloat(num) : cnToNum(num);
+        if (isNaN(v)) return m;                 // 认不出的中文数字原样留着，别吞
+        if (jiao) {
+          var j = cnToNum(jiao);
+          if (!isNaN(j) && j < 10) v = round2(v + j / 10);
+        }
+        money.push({ val: v, at: off, len: m.length });
+        return blank(m.length);
+      });
 
     var hits = collectHits(s);
 
@@ -436,6 +459,10 @@
     var parts = s.split(/\s+/);
     for (var i = 0; i < parts.length; i++) {
       var p = trim(parts[i]);
+      if (!p) continue;
+      // 名字和商品连写（「蔡徐坤一个鲜肉一个香菇青菜」）时，商品剥掉后还粘着「一个」，
+      // 不截掉就会把名字认成「蔡徐坤一个」，整单商品也跟着一起被吞
+      p = p.replace(/(?:半|[0-9]{1,2}|[一二两三四五六七八九十])\s*[杯份个瓶袋根只盒碗笼屉张块条颗串支片斤]$/, '');
       if (!p) continue;
       if (/^[0-9.]+$/.test(p)) continue;                       // 房号 / 金额残渣
       if (hasEmoji(p)) return p.slice(0, 8);
@@ -642,7 +669,9 @@
       applyHalfFromRaw(o);   // 原文写了「半笼」就一定要认出来，AI 拆单常丢这个标记
       for (var j = 0; j < o.items.length; j++) {
         var it = o.items[j];
-        var p = price[it.name];
+        // AI 常回原文的简称／别名（「鲜肉」「麻辣豆腐包」「鲜肉玉米蒸饺」），
+        // 价格本里没这个 key 时再按价目表归一一次，否则明明表里有价还显示「没定价」
+        var p = price[it.name] || menuOf(it.name);
         var bookUnit = (p && typeof p.unit === 'number') ? p.unit : null;
         if (bookUnit != null && it.half && canHalf(it.name)) bookUnit = round2(bookUnit / 2);
         /* 这个 unit 是哪来的：
@@ -1052,6 +1081,7 @@
   }
   function menuList() { return MENU.slice(); }
 
+
   /* 价目表的一段文字，给 AI 看：同价的归一行，能半笼的单独写清楚半价 */
   function menuText() {
     var lines = [], group = {}, order = [];
@@ -1257,11 +1287,24 @@
     if (typeof residents === 'string') res = residents;
     else if (residents && typeof residents === 'object') res = residentsText(residents);
 
+    // 群里爱写简称／漏「包」字，列给 AI 让它统一写回价目表里的规范名。
+    // 以前提示词第 13 条写着「单价照【本店价目表】填」，可整张表压根没塞进来，AI 是盲拆。
+    var aliasLines = [];
+    for (var ai = 0; ai < MENU.length; ai++) {
+      var am = MENU[ai];
+      if (am.alias && am.alias.length) aliasLines.push(am.name + ' ← ' + am.alias.join('、'));
+    }
+
     return '你是早餐接龙的拆单助手。下面是一条微信群接龙原文，请拆成结构化订单。\n\n' +
+      '【本店价目表】（填 unit、算钱一律以这张表为准；表里没有的商品 unit 留空，绝对不要猜）\n' +
+      menuText() + '\n\n' +
+      '【简称对照】原文写左边的叫法，items.name 一律写成箭头右边的规范名\n' +
+      aliasLines.join('\n') + '\n\n' +
       (res ? '【这群人的历史住处】（原文没写楼栋时按名字查这里补，buildingFrom 填 "history"；原文写了就填 "text"，不要改）\n' + res + '\n\n' : '') +
       '【原文】\n' + String(text).slice(0, 6000) + '\n\n' +
       '【输出格式】只输出一个 JSON 对象，不要 markdown 代码块，不要任何解释。\n' +
-      '{"title":"","orders":[{"no":1,"name":"张三","building":"3栋","room":"301","buildingFrom":"text","items":[{"name":"豆浆","qty":2,"unit":5}],"total":null,"note":""}]}\n\n' +
+      '{"title":"","orders":[{"no":1,"name":"张三","building":"3栋","room":"301","buildingFrom":"text","raw":"1. 3栋张三 豆浆2杯 10元","items":[{"name":"豆浆","qty":2,"unit":null,"half":false}],"total":10,"note":""}]}\n' +
+      '（raw 必须是这一单的原文整行，含序号，程序要用它认「半笼」和核对问题清单）\n\n' +
       '【金额：末尾的数字要分清是哪种，这是最容易错的地方】\n' +
       '1.「张三 豆浆2杯 10元」——10 是这一单的总价 → total:10，items 里的 unit 留空。\n' +
       '2.「豆浆 5元/杯」「豆浆5元」且这一行只有这一样——5 是单价 → items[0].unit:5，total 留空。\n' +
@@ -1276,7 +1319,17 @@
       '10. 不是订单的行（#接龙、日期、说明、接龙格式提示）不要进 orders。\n' +
       '11. 不要改人名，也不要把两个人合并成一条。\n' +
       '12. 「半笼小笼包」「半笼蒸饺」这种：qty 填 1，half 填 true（小笼包、灌汤小笼包、玉米蒸饺都可以半笼）。原文出现「半笼/半份」就一定要给 half:true，别丢。\n' +
-      '13. 单价照【本店价目表】填：白鸡蛋／鸡蛋／白水蛋／白蛋一律 1.5 元一个，不是 3.5；半笼蒸饺 3 元、半笼小笼包 3 元、半笼灌汤小笼包 3.5 元。\n';
+      '13. 单价照【本店价目表】填：白鸡蛋／鸡蛋／白水蛋／白蛋一律 1.5 元一个，不是 3.5；半笼蒸饺 3 元、半笼小笼包 3 元、半笼灌汤小笼包 3.5 元。\n' +
+      '14. 名字和商品连写、中间没空格也要拆开：「A栋，蔡徐坤一个鲜肉一个香菇青菜4.5」\n' +
+      '    → building「A栋」、name「蔡徐坤」、items 两条（鲜肉包 ×1、香菇青菜包 ×1）、total 4.5。\n' +
+      '    「E huh 一个鲜肉，一个酱肉，5」→ building「E栋」、name「huh」、items 鲜肉包 ×1＋酱肉包 ×1、total 5。\n' +
+      '    行首单个大写字母（E / D / A）是楼栋，不是名字的一部分；「Aurora(A栋)」里的 A 不是楼栋。\n' +
+      '15. 中文数字金额照样认：「七块」= 7、「十块」= 10、「两块五」= 2.5，填进 total。\n' +
+      '16. 行末孤立的小数也是整单总价：「1土豆1茄包1白蛋。5.5，」的 5.5 填 total，\n' +
+      '    别当成某样商品的单价；「3r」「2.5r」的 r 就是「元」，同样按整单总价处理。\n' +
+      '17. items.name 一律用【本店价目表】里的规范名，别保留原文简称，\n' +
+      '    否则「白鸡蛋／白蛋／水煮蛋」会在金额页被当成三样不同商品分开装箱。\n' +
+      '18. 「一个香菇冬笋」「1土豆」这种漏了「包」字的，按【简称对照】补成规范名，不要整样丢掉。\n';
   }
 
   function parseAiPayload(text, opts) {
@@ -1980,7 +2033,7 @@
 
       /* 1. 名字 */
       if (!name) put(o, 'noname', 'warn', '没写名字', '群里按 #' + o.no + ' 问一句是谁的');
-      else if (name.length > 8 || /[元块杯个碗份笼瓶盘栋楼室]/.test(name) ||
+      else if (name.length > 8 || /[块杯个碗份笼瓶盘栋楼室]/.test(name) ||
         findItems(name).items.length) {           // 名字里带着商品名，多半是把商品当人了
         put(o, 'oddname', 'info', '名字可能认得不准', '现在写的是「' + name + '」');
       }
