@@ -1530,6 +1530,7 @@
       boxAi: record.boxAi || null,
       issueSkip: (record.issueSkip && Object.keys(record.issueSkip).length) ? record.issueSkip : null,
       audit: record.audit || null,
+      auditErr: trim(record.auditErr || '').slice(0, 160) || null,
       srcText: trim(record.sourceText || '').slice(0, 3000) || null
     };
     return plain + '\n' + MARK + JSON.stringify(data);
@@ -2378,18 +2379,25 @@
       var r = parseAuditPayload(out, cands, rec);
       if (!r.ok) {
         V.auditErr = r.error;
+        rec.auditErr = r.error;
+        persist(true);
         if (V.tab === 'issue') paint(); else refreshIssueBadge();
-        if (manual) toast('AI 没核成：' + r.error);
+        toast('AI 没核成：' + r.error);
         return;
       }
       V.auditErr = '';
+      rec.auditErr = '';
       applyAudit(rec, r.audit);
       if (V.tab === 'issue') paint(); else refreshIssueBadge();
       if (manual) toast('核完了：确认 ' + r.kept + ' 条，判为误报 ' + r.drop + ' 条');
-    }).catch(function () {
+    }).catch(function (e) {
       V.auditBusy = false;
+      var msg = (e && e.message) ? String(e.message) : 'AI 没回应';
+      V.auditErr = msg;
+      rec.auditErr = msg;
+      persist(true);
       if (V.tab === 'issue') paint(); else refreshIssueBadge();
-      if (manual) toast('AI 核对没成功，先按本地规则看');
+      toast('AI 没核成：' + msg);
     });
   }
 
@@ -2411,6 +2419,9 @@
     } else if (!aiOn) {
       state = 'off';
       note = '这台设备没接 AI，下面是本机规则挑的';
+    } else if (V.auditErr) {
+      state = 'err';
+      note = '上次没核成：' + V.auditErr;
     } else {
       note = '还没核过，下面是本机规则挑的';
     }
@@ -2421,9 +2432,12 @@
       '<b>AI 核对</b><span>' + esc(note) + '</span></div>' +
       (aiOn
         ? '<button type="button" class="jl-ai-btn" data-act="audit"' + (V.auditBusy ? ' disabled' : '') + '>' +
-          (V.auditBusy ? '核对中…' : (a.ai ? '重新核对' : '让 AI 核一遍')) + '</button>'
+          (V.auditBusy ? '核对中…' : (V.auditErr && !a.ai ? '重试核对' : (a.ai ? '重新核对' : '让 AI 核一遍'))) + '</button>'
         : '') +
       '</div>';
+    if (V.auditErr && !V.auditBusy && aiOn) {
+      h += '<p class="jl-ai-err-tip">AI 没连上不影响拆单。常见是 Key 过期、余额不足、接口地址填错：到右上角「设置 → 测一下能不能连上」能看到具体是哪一样。</p>';
+    }
 
     /* ---------- 一条都没剩 ---------- */
     if (!a.issues.length) {
@@ -2759,7 +2773,7 @@
     V.proofUrl = '';
     V.openBld = '';
     V.refPrice = null;
-    V.auditErr = '';
+    V.auditErr = rec.auditErr || '';
     V.auditBusy = false;
     if (!V.cap) V.cap = rec.plan.cap;
     paint();
@@ -2780,6 +2794,7 @@
       // 这三样以前一编辑就丢：跳过的问题又冒出来、AI 结论和原文全没了
       issueSkip: V.record.issueSkip,
       audit: V.record.audit,
+      auditErr: V.record.auditErr || '',
       sourceText: V.record.sourceText
     }, opts);
     paint();
@@ -2918,7 +2933,8 @@
       if (r.ok) { finish(r.record, 'ai'); return; }
       localFallback('AI 没拆好（' + r.error + '），已改用本地规则');
     }).catch(function (e) {
-      localFallback('AI 调用失败，已用本地规则');
+      var msg = (e && e.message) ? String(e.message) : 'AI 没回应';
+      localFallback('AI 没连上（' + msg + '），已用本地规则');
     });
   }
 
@@ -2952,6 +2968,7 @@
         boxAi: data.boxAi || null,
         issueSkip: data.issueSkip || null,
         audit: data.audit || null,
+        auditErr: data.auditErr || '',
         sourceText: data.srcText || ''
       }, opts);
     } else {
@@ -2966,7 +2983,7 @@
     V.proofUrl = '';
     V.openBld = '';
     V.refPrice = null;
-    V.auditErr = '';        // 上一条记录的失败提示别带过来
+    V.auditErr = data.auditErr || '';   // 这一条上次没核成的原因，打开就该看得见
     V.auditBusy = false;
     V.photos = [];
     paint();
