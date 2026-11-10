@@ -1826,7 +1826,11 @@
   .jl-issue .jl-issue-src{margin:4px 0 0 31px;font-size:10.5px;color:var(--jl-faint);
     line-height:1.55;white-space:pre-wrap;}
   .jl-dropbox{margin-top:12px;border:1px dashed var(--jl-line);border-radius:12px;padding:9px 11px;}
-  .jl-dropbox summary{font-size:11px;color:var(--jl-soft);cursor:pointer;list-style:none;}
+  .jl-dropbox summary{font-size:11px;color:var(--jl-soft);cursor:pointer;list-style:none;
+    padding-right:16px;}
+  .jl-dropbox summary::after{content:'›';float:right;margin-right:-12px;font-size:15px;
+    color:var(--jl-faint);line-height:1.2;}
+  .jl-dropbox[open] summary::after{content:'⌄';}
   .jl-dropbox summary::-webkit-details-marker{display:none;}
   .jl-dropbox summary b{color:var(--jl-acc);font-variant-numeric:tabular-nums;}
   .jl-dropbox[open] summary{margin-bottom:4px;}
