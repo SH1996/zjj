@@ -1670,6 +1670,10 @@
       var tail = m.note ? '：' + m.note : '';
       if (isBox) {
         L.push((i + 1) + ') ' + who + '要单独装一箱保温，派箱子时先给它留一个' + tail);
+      } else if (m.hand) {
+        // 老板自己写的一条，本来就写成一句人能懂的话，别再套「某个毛病确有其事」的壳
+        var hWho = m.name ? '客人「' + m.name + '」：' : (m.item ? '「' + m.item + '」：' : '');
+        L.push((i + 1) + ') ' + hWho + (m.note || '') + '（老板自己写的规矩，照办）');
       } else if (forParse) {
         L.push((i + 1) + ') ' + who + what + lab + scope +
           (m.verdict === 'drop'
@@ -3243,13 +3247,14 @@
       for (var b = 0; b < arr.length; b++) {
         var m = arr[b];
         var who = m.name ? m.name : (m.item ? m.item : '');
-        var tagCls = m.code === 'warmbld' ? 'warm' : (m.verdict === 'drop' ? 'drop' : 'keep');
-        var tagTxt = m.code === 'warmbld' ? '单独一箱'
-          : (m.verdict === 'drop' ? '不算问题' : '要留意');
+        var tagCls = m.hand ? 'hand' : (m.code === 'warmbld' ? 'warm' : (m.verdict === 'drop' ? 'drop' : 'keep'));
+        var tagTxt = m.hand ? '手写'
+          : (m.code === 'warmbld' ? '单独一箱' : (m.verdict === 'drop' ? '不算问题' : '要留意'));
+        var subTxt = m.hand ? '你自己写的' : (MEM_CODE_LABEL[m.code] || m.code);
         h += '<div class="jl-memrow jl-memrow-lib">' +
           '<em class="' + tagCls + '">' + tagTxt + '</em>' +
           '<div><b>' + esc(who || MEM_CODE_LABEL[m.code] || '这一条') + '</b>' +
-          '<span>' + esc(MEM_CODE_LABEL[m.code] || m.code) + '</span>' +
+          '<span>' + esc(subTxt) + '</span>' +
           (m.note ? '<p>' + esc(m.note) + '</p>' : '') +
           (m.say && m.say !== m.note ? '<p class="jl-mem-say">你原话：' + esc(m.say) + '</p>' : '') +
           (m.day ? '<p class="jl-mem-day">' + esc(mdLabel(m.day)) + ' 记的</p>' : '') +
@@ -3269,6 +3274,7 @@
   }
 
   function viewHistory() {
+    var rows = listRecords();
     if (!rows.length) {
       return '<div class="jl-empty">还没有存过接龙<br><span>识别完一单会自动存进「接龙」分类</span></div>';
     }
@@ -4166,7 +4172,7 @@
         var saved = memSave({
           id: 'm' + Date.now().toString(36) + Math.random().toString(36).slice(2, 5),
           at: Date.now(), day: todayStr(),
-          code: cat.code, verdict: 'keep',
+          code: cat.code, verdict: 'keep', hand: true,
           name: sc.name, item: sc.item, frag: sc.frag,
           note: note, say: ''
         });

@@ -1909,6 +1909,7 @@
   .jl-memrow>em.drop{color:#5f8a4e;background:rgba(95,138,78,.14);}
   .jl-memrow>em.keep{color:#bf4d3a;background:rgba(191,77,58,.12);}
   .jl-memrow>em.warm{color:#8a6a2f;background:rgba(201,114,47,.16);}
+  .jl-memrow>em.hand{color:#4d6b7a;background:rgba(77,107,122,.13);}
   .jl-memrow>div{flex:1;min-width:0;}
   .jl-memrow b{font-size:11.5px;font-weight:600;}
   .jl-memrow span{margin-left:6px;color:var(--jl-soft);font-size:10.5px;}
@@ -1990,6 +1991,7 @@
   @keyframes jlTipIn{from{opacity:0;transform:translateY(-3px)}to{opacity:1;transform:none}}
   [data-theme="dark"] .jl-mem-tip{background:rgba(232,149,86,.12);border-color:#6b4a2c;color:#e3b183;}
   [data-theme="dark"] .jl-mem-tip b{color:var(--jl-acc);}
+  [data-theme="dark"] .jl-memrow>em.hand{color:#a8c7d6;background:rgba(120,170,190,.15);}
   .jl-mem-pick{padding:12px 8px;border-radius:11px;border:1px solid var(--jl-line);
     background:transparent;color:var(--jl-ink);font-size:12.5px;font-family:inherit;cursor:pointer;
     line-height:1.3;}
@@ -3279,7 +3281,7 @@ window.onerror = function (msg, url, line) {
   'use strict';
 
   // 版本号统一在此维护；localStorage 键沿用 v11 不变，切勿改名以免丢失用户数据
-  var APP_VERSION = '15.14.0';
+  var APP_VERSION = '15.14.1';
   // 送货单拍照识别：视觉模型默认名、兼容别名与各项安全上限
   var DEFAULT_VISION_MODEL = 'deepseek-flash';
   var VISION_MODEL_FALLBACK = 'deepseek-v4-flash-vision-exp';
