@@ -2235,9 +2235,12 @@
   .stage-ai:active{transform:translateY(0) scale(.94)}
   .stage-ai:disabled{opacity:.55;cursor:wait;transform:none}
   .stage-spark{
-    margin-top:10px;max-width:260px;min-height:16px;font-size:10.5px;line-height:1.65;letter-spacing:.04em;
+    margin-top:10px;max-width:330px;min-height:16px;font-size:11px;line-height:1.7;letter-spacing:.04em;
     color:#c9ffe1;text-shadow:0 0 18px rgba(93,226,154,.35);
+    display:-webkit-box;-webkit-line-clamp:3;-webkit-box-orient:vertical;overflow:hidden;
   }
+  /* 有了箴言，就让副标题退场，避免文案堆叠 */
+  .stage-copy.has-spark > p:not(.stage-spark){display:none}
   .stage-spark::before{content:"✦ ";color:#8ff0b6}
   .stage-spark.show{animation:sparkIn .6s cubic-bezier(.2,.8,.2,1) both}
   @keyframes sparkIn{from{opacity:0;transform:translateY(8px) scale(.96)}to{opacity:1;transform:translateY(0) scale(1)}}
@@ -2414,9 +2417,10 @@
     .composer{flex:0 0 auto;align-self:stretch;min-height:0;padding:13px 13px 11px;border-radius:22px}
     .composer::before{left:16px;right:16px}
     .composer::after{display:none}
-    .composer textarea{min-height:68px;max-height:104px;padding:12px 14px;border-radius:15px;font-size:16px;line-height:1.6}
+    .composer textarea{min-height:40px;max-height:104px;padding:8px 13px;border-radius:13px;font-size:16px;line-height:22px}
+    .composer textarea::placeholder{font-size:13.5px;letter-spacing:.01em}
     .input-wrap{gap:8px;flex:1;align-items:flex-end}
-    .input-actions{gap:6px;align-items:center;padding-bottom:2px}
+    .input-actions{gap:6px;align-items:center}
     .inline-btn,.send-btn{width:40px;height:40px;border-radius:13px}
     .inline-btn svg,.send-btn svg{width:17px;height:17px}
     .composer-bar{margin-top:9px;padding-top:9px;gap:6px}
@@ -2435,7 +2439,7 @@
     .stage-kicker{font-size:8px;margin-bottom:6px}
     .stage-copy h2{font-size:22px;line-height:1.3}
     .stage-copy p{font-size:9px;margin-top:4px;max-width:200px;line-height:1.55}
-    .stage-spark{font-size:9.5px;line-height:1.55;max-width:100%;margin-top:6px;min-height:0}
+    .stage-copy .stage-spark{font-size:10px;line-height:1.6;max-width:100%;margin-top:7px;min-height:0;color:#d4ffe6}
     .stage-foot{display:none}
     .scene-camera{inset:14px -40px 44px 26%;opacity:.94;transform:scale(var(--scene-scale,.9))}
 
@@ -2461,7 +2465,7 @@
     .masthead h1{font-size:23px}.masthead .sub{font-size:9px}
     .header-actions{gap:5px}.icon-btn{width:38px;height:38px;border-radius:13px}
     .composer{padding:12px 12px 10px;border-radius:20px}
-    .composer textarea{min-height:64px;max-height:96px;font-size:16px;padding:11px 13px}
+    .composer textarea{min-height:38px;max-height:96px;font-size:16px;padding:7px 12px;line-height:22px}
     .composer textarea::placeholder{font-size:13.5px;letter-spacing:.02em}
     .inline-btn,.send-btn{width:38px;height:38px;border-radius:12px}
     .inline-btn svg,.send-btn svg{width:16px;height:16px}
@@ -2476,6 +2480,9 @@
     .hn-item{padding:9px 11px;min-height:52px;border-radius:15px}
     .hn-count{font-size:19px}.hn-name{font-size:10px}
   }
+  @media(max-width:345px){
+    .composer textarea::placeholder{font-size:11.5px;letter-spacing:-.01em}
+  }
   /* 矮屏手机：压缩留白，保证所有区块完整可见且不重叠 */
   @media(max-width:900px) and (max-height:800px){
     .masthead{padding-top:calc(11px + env(safe-area-inset-top))}
@@ -2483,11 +2490,11 @@
     .masthead h1{font-size:22px;margin-bottom:3px}
     .masthead .sub{font-size:9px}
     .composer{padding-top:11px;padding-bottom:9px}
-    .composer textarea{min-height:58px;max-height:82px;line-height:1.5}
+    .composer textarea{min-height:38px;max-height:82px;padding:7px 12px;line-height:22px}
     .composer-bar{margin-top:8px;padding-top:8px}
     .hn-item{min-height:50px;padding:8px 11px}
     .hn-count{font-size:18px}.hn-name{font-size:10px}
-    .stage-copy{padding-right:4px}.stage-copy p{display:none}
+    .stage-copy{padding-right:4px}.stage-copy > p:not(.stage-spark){display:none}
     .stage-copy h2{font-size:19px;line-height:1.28}
     .stage-kicker{margin-bottom:4px;font-size:7.5px}
     .stage-spark{margin-top:4px;font-size:9px}
@@ -2499,7 +2506,7 @@
     .masthead{padding-top:calc(8px + env(safe-area-inset-top))}
     .leaf-logo{width:36px;height:36px;padding:8px;border-radius:12px}
     .masthead h1{font-size:20px;letter-spacing:.16em}
-    .composer textarea{min-height:52px;max-height:70px}
+    .composer textarea{min-height:38px;max-height:70px;padding:7px 11px;line-height:22px}
     .composer-bar{margin-top:7px;padding-top:7px}
     .hn-item{min-height:46px;padding:7px 10px}.hn-count{font-size:17px}
     .stage-copy{left:16px;right:auto;width:60%;bottom:20px}
@@ -2511,7 +2518,7 @@
   @media(max-width:900px) and (max-height:610px){
     .masthead h1{font-size:19px}
     .composer{padding:9px 10px 8px}
-    .composer textarea{min-height:46px;max-height:60px;font-size:15px;padding:9px 11px}
+    .composer textarea{min-height:38px;max-height:60px;font-size:15px;padding:7px 11px;line-height:22px}
     .bar-left{gap:5px}
     .tool-btn{padding:6px 5px;font-size:10px}
     .hn-item{min-height:42px;padding:6px 9px}
@@ -2658,9 +2665,9 @@
     <div class="stage-topline">
       <span>BAMBOO SANCTUARY</span>
       <span class="stage-index">VOL. 01</span>
-      <button class="stage-ai" id="stageSparkBtn" type="button" aria-label="AI 安放一句">
+      <button class="stage-ai" id="stageSparkBtn" type="button" aria-label="竹间一刻，写一句箴言">
         <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 3l1.8 4.6L18.5 9l-4.7 1.4L12 15l-1.8-4.6L5.5 9l4.7-1.4z"/><path d="M18.5 15.5l.8 2 2 .8-2 .8-.8 2-.8-2-2-.8 2-.8z"/></svg>
-        <span>AI 一句</span>
+        <span>竹间一刻</span>
       </button>
     </div>
     <div class="scene-camera" aria-hidden="true">
@@ -3102,7 +3109,7 @@ window.onerror = function (msg, url, line) {
   'use strict';
 
   // 版本号统一在此维护；localStorage 键沿用 v11 不变，切勿改名以免丢失用户数据
-  var APP_VERSION = '15.11.2';
+  var APP_VERSION = '15.11.3';
   // 送货单拍照识别：视觉模型默认名、兼容别名与各项安全上限
   var DEFAULT_VISION_MODEL = 'deepseek-flash';
   var VISION_MODEL_FALLBACK = 'deepseek-v4-flash-vision-exp';
@@ -7468,33 +7475,46 @@ window.onerror = function (msg, url, line) {
   }
 
   /* =========================================
-     此刻安放 · AI 一句
-     只发给模型当前时间和主题，不外发任何笔记内容
+     竹间一刻 · 首页竹卡里的一句箴言
+     沿用「竹语」的智者口吻，只发给模型当前时辰，不外发任何笔记内容
   ========================================= */
   function localStageSpark() {
     var pool = [
-      '竹叶把风接住，又轻轻放下。',
-      '此刻不用赶路，先站一会儿。',
-      '把心放低，声音就清楚了。',
-      '竹子在夜里也在慢慢长。',
-      '安放不是停下，是换个姿势呼吸。',
-      '你现在坐的地方，就是好地方。',
-      '让念头像叶子一样挂着，不急着摘。'
+      '竹节一节一节地长，人也不必一口气走完一生的路。',
+      '叶影落在石阶上，风一过就散了；要紧的事，往往也这样轻。',
+      '竹心是空的，所以风穿得过去，人也该留一点空。',
+      '笋在土里待得最久，出土只在一夜之间。',
+      '风来竹响，风去竹静；事来则应，事去不留。',
+      '不争一日之高，只求岁岁有节。',
+      '旧叶落下，新枝才看得见天光。',
+      '慢下来的那一段路，往往走得最稳。',
+      '竹不择地而生，人不择日而安。',
+      '把话说轻一点，才听得见自己心里那点声音。'
     ];
-    return pool[new Date().getMinutes() % pool.length];
+    var seed = new Date().getDate() + new Date().getHours() * 7 + new Date().getMinutes();
+    return pool[seed % pool.length];
   }
   function stageSparkPrompt() {
     var now = new Date();
     var weekCN = ['日', '一', '二', '三', '四', '五', '六'][now.getDay()];
-    var t = now.getHours() + ':' + String(now.getMinutes()).padStart(2, '0');
-    return '你是「竹间记」首页三维竹卡片里的安放精灵。现在是星期' + weekCN + ' ' + t + '。' +
-      '请围绕“竹、此刻、安放”写一句 12~18 个汉字的中文短句，像轻轻落在竹叶上的一句话。' +
-      '要求：有画面、有温度、不说教、不解释、不出现“AI”“系统”“用户”。直接输出这一句，不要引号和前后缀。';
+    var h = now.getHours();
+    var period = h < 5 ? '凌晨' : h < 8 ? '清晨' : h < 11 ? '上午' : h < 14 ? '正午'
+      : h < 17 ? '下午' : h < 19 ? '黄昏' : h < 22 ? '夜里' : '深夜';
+    var t = h + ':' + String(now.getMinutes()).padStart(2, '0');
+    return '你是「竹间记」首页竹卡里的智者，笔名「竹间」，参透世事、言辞凝练。' +
+      '现在是星期' + weekCN + '的' + period + '（' + t + '）。\n' +
+      '请在竹影与此刻之间，写下 18~34 个汉字的一两句箴言，像大师随手批在书页边上的一句，读完的人会忽然静下来。\n' +
+      '要求：\n' +
+      '1. 从一个具体的物象起笔（竹节、叶影、风、光、石阶、茶烟、旧木桌、雨），落到一个关于时间、持守、取舍或放下的命题上；对句、短句顿挫都可以\n' +
+      '2. 有文采但不堆砌辞藻；忌网络语、忌鸡汤口号、忌说教、忌解释、忌排比堆叠\n' +
+      '3. 不出现「你」「用户」「AI」「系统」「数据显示」这类词，也不要复述首页已有的文案\n' +
+      '4. 直接输出这一两句，不要引号、不要署名、不要任何前后缀';
   }
   function renderStageSpark(text) {
     var el = document.getElementById('stageSparkText');
     if (!el) return;
-    el.textContent = String(text || '').trim().slice(0, 40);
+    el.textContent = String(text || '').trim().slice(0, 60);
+    if (el.parentNode) el.parentNode.classList.add('has-spark');
     el.classList.remove('show');
     void el.offsetWidth;
     el.classList.add('show');
@@ -7505,7 +7525,7 @@ window.onerror = function (msg, url, line) {
     if (!hasAI()) { renderStageSpark(localStageSpark()); return; }
     btn.disabled = true;
     renderStageSpark('…');
-    aiPlain(stageSparkPrompt(), 0.75, { maxTokens: 128 }).then(function (text) {
+    aiPlain(stageSparkPrompt(), 0.85, { maxTokens: 220 }).then(function (text) {
       renderStageSpark(soulCap(text) || localStageSpark());
     }).catch(function () {
       renderStageSpark(localStageSpark());
