@@ -1339,6 +1339,144 @@
     } catch (e) { return false; }
   }
 
+  /* ==================== 6.5 核单记忆：老板教过的规矩 ====================
+   * AI 认字比人快，可它不认识这些客人。谁家群里从不写楼栋、谁回回抹零、
+   * 哪样东西绝不能按整笼算——只有老板知道。所以问题清单每条后面留个「教它」：
+   * 把原文摊开给他看，他一句话说清，这条规矩就存进本机。
+   * 往后三处都用得上：
+   *   ① 挑疑点前先过一遍（他说没事的，压根不放出来）；
+   *   ② AI 核对的提示词里带着（少犯同一回错）；
+   *   ③ 拆单的提示词里也带一句（认名字、认楼栋时就长记性）。
+   * 跟价格本一样只存这一台设备，随时能删。 */
+  var MEMORY_KEY = 'bamboo.v11.jielong.memory';
+  var MEMORY_MAX = 48;
+
+  var MEM_CODE_LABEL = {
+    noname: '没写名字', oddname: '名字认得不准', nobld: '没写楼栋', histbld: '楼栋按历史补的',
+    noitem: '没认出商品', zeroqty: '件数是 0', bigqty: '件数比平常多', noprice: '没定价',
+    oddunit: '单价看着不对', short: '少给了', over: '多给了', pricelow: '比本店价少',
+    dup: '同一个人下了好几单', aiadd: '别的问题'
+  };
+
+  function readMemory() {
+    try {
+      if (!root || !root.localStorage) return [];
+      var raw = root.localStorage.getItem(MEMORY_KEY);
+      if (!raw) return [];
+      var arr = JSON.parse(raw);
+      if (!Array.isArray(arr)) return [];
+      return arr.filter(function (m) { return m && m.code; });
+    } catch (e) { return []; }
+  }
+
+  function writeMemory(arr) {
+    try {
+      if (!root || !root.localStorage) return false;
+      root.localStorage.setItem(MEMORY_KEY, JSON.stringify((arr || []).slice(0, MEMORY_MAX)));
+      return true;
+    } catch (e) { return false; }
+  }
+
+  function memKeyOf(m) {
+    return [m.code, m.name || '', m.item || '', m.frag || '', m.verdict || ''].join('|');
+  }
+
+  /* 一条规矩管不管这一条的闲事：类型相同，再对上人／货／原话里的那一截 */
+  function memHit(m, code, order) {
+    if (!m || !order || m.code !== code) return false;
+    if (m.name && trim(order.name || '') !== m.name) return false;
+    if (m.item) {
+      var its = order.items || [], has = false;
+      for (var i = 0; i < its.length; i++) if (its[i].name === m.item) { has = true; break; }
+      if (!has) return false;
+    }
+    if (m.frag && String(order.raw || '').replace(/\s+/g, '').indexOf(m.frag) < 0) return false;
+    return true;
+  }
+
+  // 越具体的规矩越先说话：「王姐不写楼栋」压过「谁不写楼栋都不算事」
+  function memFind(mem, code, order) {
+    var wide = null;
+    for (var i = 0; i < mem.length; i++) {
+      if (!memHit(mem[i], code, order)) continue;
+      if (mem[i].name || mem[i].item || mem[i].frag) return mem[i];
+      if (!wide) wide = mem[i];
+    }
+    return wide;
+  }
+
+  function memSave(m) {
+    var arr = readMemory();
+    var k = memKeyOf(m);
+    var out = [m];
+    for (var i = 0; i < arr.length && out.length < MEMORY_MAX; i++) {
+      if (memKeyOf(arr[i]) !== k) out.push(arr[i]);
+    }
+    writeMemory(out);
+    return out;
+  }
+
+  /* 老板点下「记下」的那一下，把这条判断收成规矩：
+   * 记人（名字／楼栋类）、记货（商品类）、记原话，实在没有才只记类型。 */
+  function memFromIssue(code, order, verdict, note, wide, srcRaw) {
+    var m = {
+      id: 'm' + Date.now().toString(36) + Math.random().toString(36).slice(2, 5),
+      at: Date.now(), day: todayStr(),
+      code: code || 'aiadd',
+      verdict: verdict === 'keep' ? 'keep' : 'drop',
+      note: trim(note).slice(0, 60),
+      src: trim(srcRaw || (order && order.raw) || '').slice(0, 90)
+    };
+    if (!wide && order) {
+      var nm = trim(order.name || '');
+      var item = (order.items && order.items[0]) ? order.items[0].name : '';
+      if (/^(noname|oddname|nobld|histbld|dup)$/.test(m.code)) {
+        if (nm) m.name = nm; else if (item) m.item = item;
+      } else if (/^(noitem|zeroqty|bigqty|noprice|oddunit|pricelow)$/.test(m.code)) {
+        if (item) m.item = item; else if (nm) m.name = nm;
+      } else {
+        // 少给、多给、AI 另外看出来的：多半是这个人的习惯，认人不认货
+        if (nm) m.name = nm;
+        else if (item) m.item = item;
+      }
+      if (!m.name && !m.item) {
+        var frag = String((order && order.raw) || '').replace(/\s+/g, '').slice(0, 16);
+        if (frag) m.frag = frag;
+      }
+    }
+    return m;
+  }
+
+  // 给 AI 看的规矩：说人话，一条一行。codes 限定只带哪几类，forParse 换一种口气（拆单用）
+  function memPromptText(limit, codes, forParse) {
+    var arr = readMemory();
+    if (codes && codes.length) {
+      arr = arr.filter(function (m) { return codes.indexOf(m.code) >= 0; });
+    }
+    arr = arr.slice(0, limit || 12);
+    if (!arr.length) return '';
+    var L = [];
+    for (var i = 0; i < arr.length; i++) {
+      var m = arr[i];
+      var who = m.name ? '客人「' + m.name + '」的' : '';
+      var what = m.item ? '「' + m.item + '」的' : '';
+      var lab = '「' + (MEM_CODE_LABEL[m.code] || m.code) + '」';
+      var scope = (!m.name && !m.item) ? '（不分人和货）' : '';
+      var tail = m.note ? '：' + m.note : '';
+      if (forParse) {
+        L.push((i + 1) + ') ' + who + what + lab + scope +
+          (m.verdict === 'drop'
+            ? '不算问题（老板确认过），照原样认，不要自作聪明去补、去改'
+            : '确有其事（老板确认过），照这个认，别改回去') + tail);
+      } else if (m.verdict === 'drop') {
+        L.push((i + 1) + ') ' + who + what + lab + scope + '不算问题，别再挑出来' + tail);
+      } else {
+        L.push((i + 1) + ') ' + who + what + lab + scope + '要当真问题，必须留着' + tail);
+      }
+    }
+    return L.join('\n');
+  }
+
   /* ==================== 7. AI 兜底 ==================== */
 
   function buildPrompt(text, residents) {
@@ -1353,6 +1491,8 @@
       var am = MENU[ai];
       if (am.alias && am.alias.length) aliasLines.push(am.name + ' ← ' + am.alias.join('、'));
     }
+    // 认人认货的规矩在拆单这一步就用得上：谁的名字是昵称、哪一栋从不写、谁常有两单
+    var memTxt = memPromptText(6, ['noname', 'oddname', 'nobld', 'histbld', 'noitem', 'dup'], true);
 
     return '你是早餐接龙的拆单助手。下面是一条微信群接龙原文，请拆成结构化订单。\n\n' +
       '【本店价目表】（填 unit、算钱一律以这张表为准；表里没有的商品 unit 留空，绝对不要猜）\n' +
@@ -1360,6 +1500,7 @@
       '【简称对照】原文写左边的叫法，items.name 一律写成箭头右边的规范名\n' +
       aliasLines.join('\n') + '\n\n' +
       (res ? '【这群人的历史住处】（原文没写楼栋时按名字查这里补，buildingFrom 填 "history"；原文写了就填 "text"，不要改）\n' + res + '\n\n' : '') +
+      (memTxt ? '【老板交代过的】（他确认过的实情，遇到相近的照这个认，别自作聪明改回去）\n' + memTxt + '\n\n' : '') +
       '【原文】\n' + String(text).slice(0, 6000) + '\n\n' +
       '【输出格式】只输出一个 JSON 对象，不要 markdown 代码块，不要任何解释。\n' +
       '{"title":"","orders":[{"no":1,"name":"张三","building":"3栋","room":"301","buildingFrom":"text","raw":"1. 3栋张三 豆浆2杯 10元","items":[{"name":"豆浆","qty":2,"unit":null,"half":false}],"total":10,"note":""}]}\n' +
@@ -2179,7 +2320,34 @@
       }
     }
 
-    return { raw: raw, short: shortSum, over: overSum, orders: orders.length };
+    /* 8. 先过一遍老板教过的规矩。
+     * 他说「这条不算事」的，压根不放出来（钱也跟着退回去，不能一边说没事一边还算少收）；
+     * 他说「这条要当真」的，抬成红字，AI 判成误报也翻不掉。 */
+    var mem = readMemory();
+    var byNo = {};
+    for (var q = 0; q < orders.length; q++) byNo[orders[q].no] = orders[q];
+    var kept = [], memDrop = 0, memKeep = 0;
+    for (var w = 0; w < raw.length; w++) {
+      var one = raw[w];
+      var rule = mem ? memFind(mem, one.code, byNo[one.no]) : null;
+      if (rule && rule.verdict === 'drop') {
+        memDrop++;
+        if (one.diff > 0) shortSum = round2(shortSum - one.diff);
+        else if (one.diff < 0) overSum = round2(overSum + one.diff);
+        continue;
+      }
+      if (rule && rule.verdict === 'keep') {
+        memKeep++;
+        one.memWhy = trim(rule.note) || '你说过这条要留意';
+        if (one.level !== 'error') one.level = 'error';
+      }
+      kept.push(one);
+    }
+
+    return {
+      raw: kept, short: shortSum, over: overSum, orders: orders.length,
+      memDrop: memDrop, memKeep: memKeep
+    };
   }
 
   /* 把 AI 的核实结果套在候选上。AI 说「不是问题」的挪进 dropped，不直接删——
@@ -2207,9 +2375,10 @@
       var v = vd[key];
       var one = {
         no: it.no, code: it.code, level: it.level, title: it.title, detail: it.detail,
-        src: it.src, key: key, aiWhy: '', aiDrop: '', aiAdd: false
+        src: it.src, key: key, aiWhy: '', aiDrop: '', aiAdd: false, memWhy: it.memWhy || ''
       };
-      if (v && v.v === 'drop' && !overrule[key]) {
+      // 老板亲手教的比 AI 的话硬：他说这条要当真，AI 判成误报也留下
+      if (v && v.v === 'drop' && !overrule[key] && !it.memWhy) {
         one.aiDrop = v.why || '对着原文看，这条不成立';
         undo(it);
         dropped.push(one);
@@ -2259,7 +2428,10 @@
       orders: orders.length,
       error: issues.filter(function (x) { return x.level === 'error'; }).length,
       ai: audit ? { at: audit.at || 0, kept: kept, drop: dropped.length } : null,
-      aiCands: cands.raw.length
+      aiCands: cands.raw.length,
+      memDrop: cands.memDrop || 0,
+      memKeep: cands.memKeep || 0,
+      memCount: readMemory().length
     };
   }
 
@@ -2311,6 +2483,12 @@
         (c.detail ? ' ｜ ' + c.detail : ''));
     }
     L.push('');
+    var memTxt = memPromptText(14);
+    if (memTxt) {
+      L.push('【老板教过的规矩】他亲手确认过的，跟下面任何一条冲突都以这里为准：');
+      L.push(memTxt);
+      L.push('');
+    }
     L.push('【怎么判断】');
     L.push('- 数字要看语境：写在行末、前面一串商品的（「…一杯豆浆 15 块」），那是整单总价，逐样单价加起来对不上很正常（会抹零、按份算），差不到 1 块不算少给。');
     L.push('- 「半笼」「一份」「两个」「x2」是数量，不是钱。');
@@ -2485,6 +2663,9 @@
       note = '还没核过，下面是本机规则挑的';
     }
     if (V.auditErr && !V.auditBusy) note = '上次没核成：' + V.auditErr;
+    if (a.memDrop && !V.auditBusy) {
+      note = (note ? note + ' · ' : '') + '按你的规矩滤掉 ' + a.memDrop + ' 条';
+    }
 
     h += '<div class="jl-ai-bar' + (V.auditBusy ? ' busy' : '') + '">' +
       '<div class="jl-ai-bar-l"><em class="jl-ai-dot ' + state + '"></em>' +
@@ -2538,18 +2719,20 @@
           '<i>#' + it.no + '</i>' +
           '<b>' + esc(it.title) + '</b>' +
           (it.aiAdd ? '<em class="jl-ai-tag new">AI 发现</em>'
-            : (it.aiWhy ? '<em class="jl-ai-tag ok">AI 已确认</em>' : '')) +
+            : (it.memWhy ? '<em class="jl-ai-tag mine">你说过</em>'
+              : (it.aiWhy ? '<em class="jl-ai-tag ok">AI 已确认</em>' : ''))) +
+          '<button type="button" class="jl-issue-x jl-issue-teach" data-act="teachissue" data-k="' + esc(it.key) + '">教它</button>' +
           '<button type="button" class="jl-issue-x" data-act="skipissue" data-k="' + esc(it.key) + '">不用管</button>' +
           '</div>' +
           (it.detail ? '<p>' + esc(it.detail) + '</p>' : '') +
           (it.code === 'nobld' ? bldLookupHtml(it.no) : '') +
+          (it.memWhy ? '<p class="jl-mem-why">你的规矩：' + esc(it.memWhy) + '</p>' : '') +
           (it.aiWhy ? '<p class="jl-ai-why">AI：' + esc(it.aiWhy) + '</p>' : '') +
           '</div>';
       }
       h += '</div>';
 
-      h += '<p class="jl-hint">点哪条就改哪一单；改完这条自己会消失。' +
-        (a.ai ? '' : '「不用管」是给你确认过的误报用的。') + '</p>';
+      h += '<p class="jl-hint">点哪条就改哪一单；改完这条自己会消失。它看得不对的，点「教它」说一句，往后先照你的规矩来。</p>';
     }
 
     /* ---------- AI 判成误报的：不能直接删，随时能捡回来 ---------- */
@@ -2574,6 +2757,27 @@
     if (a.hidden) {
       h += '<button type="button" class="jl-ghost jl-audit-back" data-act="unskipall">' +
         '把忽略的 ' + a.hidden + ' 条放回来</button>';
+    }
+
+    /* ---------- 核单记忆：教过它什么，都摆在这儿，能删 ---------- */
+    var mem = readMemory();
+    if (mem.length) {
+      h += '<details class="jl-membox"><summary>核单记忆 <b>' + mem.length +
+        '</b> 条 · 你的规矩，它每回先看</summary><div class="jl-memlist">';
+      for (var mi = 0; mi < mem.length; mi++) {
+        var mo = mem[mi];
+        var who = mo.name || mo.item || '这一类';
+        h += '<div class="jl-memrow">' +
+          '<em class="' + (mo.verdict === 'drop' ? 'drop' : 'keep') + '">' +
+          (mo.verdict === 'drop' ? '不算问题' : '要留意') + '</em>' +
+          '<div><b>' + esc(who) + '</b>' +
+          '<span>' + esc(MEM_CODE_LABEL[mo.code] || mo.code) + '</span>' +
+          (mo.note ? '<p>' + esc(mo.note) + '</p>' : '') +
+          '</div>' +
+          '<button type="button" data-act="delmem" data-k="' + esc(mo.id) + '">删</button>' +
+          '</div>';
+      }
+      h += '</div><p class="jl-hint">这些只存这台设备。哪条记拧了，点「删」就恢复原样。</p></details>';
     }
     return h;
   }
@@ -3514,6 +3718,113 @@
     });
   }
 
+  /* ---------- 教它一句：把老板的判断收成规矩 ---------- */
+
+  function teachIssue(key) {
+    var rec = V.record;
+    if (!rec || !key) return;
+    var a = auditIssues(rec, V.refPrice);
+    var issue = null, i, j, k;
+    for (i = 0; i < a.issues.length; i++) if (a.issues[i].key === key) { issue = a.issues[i]; break; }
+    if (!issue) for (j = 0; j < a.dropped.length; j++) if (a.dropped[j].key === key) { issue = a.dropped[j]; break; }
+    if (!issue) { toast('这条已经不在了'); return; }
+
+    var order = null;
+    for (k = 0; k < rec.orders.length; k++) if (rec.orders[k].no === issue.no) order = rec.orders[k];
+    if (!order) return;
+
+    /* 原文整段摊开——老板要认的是「我当初怎么发的」，不是程序拆完的样子。
+     * 这一单那几行标上色，免得在一长串里找。 */
+    var src = trim(rec.sourceText || '');
+    if (!src) {
+      var rows = [];
+      for (var r = 0; r < rec.orders.length; r++) {
+        if (rec.orders[r].raw) rows.push('#' + rec.orders[r].no + ' ' + rec.orders[r].raw);
+      }
+      src = rows.join('\n');
+    }
+    var lines = src ? src.split('\n').slice(0, 80) : [];
+    var flatRaw = String(order.raw || '').replace(/\s+/g, '');
+    var lineHtml = '';
+    for (var l = 0; l < lines.length; l++) {
+      var flat = String(lines[l]).replace(/\s+/g, '');
+      var hit = !!(flatRaw && (flat.indexOf(flatRaw) >= 0 || (flat.length > 6 && flatRaw.indexOf(flat) >= 0)));
+      lineHtml += '<div class="jl-mem-line' + (hit ? ' hit' : '') + '">' +
+        (trim(lines[l]) ? esc(lines[l]) : '&nbsp;') + '</div>';
+    }
+
+    var mask = document.createElement('div');
+    mask.className = 'jl-mask';
+    mask.innerHTML =
+      '<div class="jl-sheet-edit jl-sheet-mem">' +
+      '<div class="jl-ehead"><b>教它一句</b><button type="button" data-x="close" aria-label="关闭">×</button></div>' +
+      '<p class="jl-mem-lead">先看一眼群里发的原话。这条是它自己挑出来的——你觉得不对，就说清该怎么看，往后它先照你的规矩来。</p>' +
+      '<div class="jl-mem-src"><div class="jl-mem-src-h"><span>接龙原文</span>' +
+      '<em>第 ' + issue.no + ' 条已标色</em></div>' +
+      (lineHtml || '<div class="jl-mem-line">' + esc(order.raw || '（没有原文）') + '</div>') + '</div>' +
+      '<div class="jl-mem-issue"><b>' + esc(issue.title) + '</b>' +
+      (issue.detail ? '<p>' + esc(issue.detail) + '</p>' : '') +
+      (issue.aiWhy ? '<p class="jl-mem-ai">AI 说：' + esc(issue.aiWhy) + '</p>' : '') +
+      (issue.aiDrop ? '<p class="jl-mem-ai">AI 说：' + esc(issue.aiDrop) + '</p>' : '') + '</div>' +
+      '<div class="jl-mem-picks">' +
+      '<button type="button" class="jl-mem-pick" data-x="v" data-v="drop">它看错了</button>' +
+      '<button type="button" class="jl-mem-pick" data-x="v" data-v="keep">确实有问题</button>' +
+      '</div>' +
+      '<label class="jl-mem-note"><span>一句话</span>' +
+      '<input id="jlMemNote" maxlength="60" placeholder="例：王姐住 3 栋，群里从不写楼栋"></label>' +
+      '<label class="jl-mem-wide"><input type="checkbox" id="jlMemWide">' +
+      '<i>以后凡是这一类都不必再提醒（不分人和货）</i></label>' +
+      '<div class="jl-eacts">' +
+      '<button type="button" class="jl-ghost" data-x="close">先不教</button>' +
+      '<button type="button" class="jl-primary" data-x="ok">记下，让它重核</button>' +
+      '</div></div>';
+
+    document.body.appendChild(mask);
+
+    // 原文长的时候，先把标了色的那一行滚到眼前，别让老板自己找
+    var srcBox = mask.querySelector('.jl-mem-src');
+    var hitLine = mask.querySelector('.jl-mem-line.hit');
+    if (srcBox && hitLine) {
+      var hr = hitLine.getBoundingClientRect(), br = srcBox.getBoundingClientRect();
+      srcBox.scrollTop = Math.max(0, srcBox.scrollTop + (hr.top - br.top) - srcBox.clientHeight / 2 + hr.height / 2);
+    }
+
+    var pick = '';
+    function close() { if (mask.parentNode) mask.parentNode.removeChild(mask); }
+
+    mask.addEventListener('click', function (ev) {
+      var t = ev.target;
+      var x = t.getAttribute ? t.getAttribute('data-x') : null;
+      if (t === mask) { close(); return; }
+      if (x === 'close') { close(); return; }
+      if (x === 'v') {
+        pick = t.getAttribute('data-v') || '';
+        var bs = mask.querySelectorAll('.jl-mem-pick');
+        for (var b = 0; b < bs.length; b++) {
+          if (bs[b] === t) bs[b].classList.add('on');
+          else bs[b].classList.remove('on');
+        }
+        return;
+      }
+      if (x === 'ok') {
+        if (!pick) { toast('先点一下：它看错了，还是确实有问题'); return; }
+        var note = (mask.querySelector('#jlMemNote').value || '').replace(/^\s+|\s+$/g, '');
+        var wide = !!mask.querySelector('#jlMemWide').checked;
+        memSave(memFromIssue(issue.code, order, pick, note, wide, order.raw));
+        close();
+        paint();
+        toast(pick === 'drop' ? '记下了 · 往后这条不再挑出来' : '记下了 · 往后这条要盯着');
+        // 本地已经先生效；再让 AI 拿着新规矩核一遍，让它也记住
+        if (V.record === rec && auditAiReady()) {
+          setTimeout(function () {
+            if (V.record === rec) kickAuditAI(rec, true);
+          }, 320);
+        }
+        return;
+      }
+    });
+  }
+
   /* ---------- 长按楼栋：这一栋有哪几个接龙序号 ---------- */
 
   var LP_MS = 650;                       // 按住这么久就算长按
@@ -3763,6 +4074,7 @@
       }
       return;
     }
+    if (act === 'teachissue') { teachIssue(btn.getAttribute('data-k') || ''); return; }
     if (act === 'skipissue') {
       var ik = btn.getAttribute('data-k') || '';
       if (V.record && ik) {
@@ -3784,6 +4096,13 @@
         persist(true);
         paint();
       }
+      return;
+    }
+    if (act === 'delmem') {
+      var mid = btn.getAttribute('data-k') || '';
+      writeMemory(readMemory().filter(function (x) { return x.id !== mid; }));
+      paint();
+      toast('删了，往后还照原来的规矩');
       return;
     }
     if (act === 'setbld') {
