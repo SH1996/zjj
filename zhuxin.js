@@ -1443,7 +1443,8 @@
     h += '<div class="zx-ledger">' +
       '<div><b>' + sum.n + '</b><i>注</i></div>' +
       '<div><b>¥' + sum.spend + '</b><i>投入</i></div>' +
-      '<div><b class="' + (sum.back - sum.spend >= 0 ? 'up' : 'down') + '">¥' + (sum.back - sum.spend) + '</b><i>净</i></div>' +
+      '<div><b class="' + (sum.back - sum.spend >= 0 ? 'up' : 'down') + '">¥' + (sum.back - sum.spend) + '</b><i>净' +
+      (sum.floatN ? ' · 不含浮动' : '') + '</i></div>' +
       '</div>';
     h += '<p class="zx-fine">这本账一直记着。中奖 ' + sum.hit + ' 次' +
       (sum.floatN ? '，其中 ' + sum.floatN + ' 注是一/二等奖，金额浮动，没有计入上面的净额' : '') +
