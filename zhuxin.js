@@ -10,7 +10,7 @@
 })(typeof window !== 'undefined' ? window : this, function (root) {
   'use strict';
 
-  var V = '3.1.0';
+  var V = '3.1.1';
   var KEY = {
     states: 'bamboo.v19.zx.states',
     tickets: 'bamboo.v19.zx.tickets',
@@ -520,6 +520,19 @@
     return best;
   }
 
+  /* 模型有时把数组包一层：{"states":[...]} / {"proposals":[...]}。
+     名字不止一种，按常见顺序找一遍，找不到才认它没给。 */
+  var ARR_KEYS = ['states', 'proposals', 'items', 'list', 'result', 'data', 'bias', 'watch'];
+  function arrOf(v) {
+    if (Array.isArray(v)) return v;
+    if (v && typeof v === 'object') {
+      for (var i = 0; i < ARR_KEYS.length; i++) {
+        if (Array.isArray(v[ARR_KEYS[i]])) return v[ARR_KEYS[i]];
+      }
+    }
+    return [];
+  }
+
   /* 最后一层：模型不给 JSON 时，从人话里认号码。
      开奖号码有强格式——一串严格递增、互不重复、落在范围内的整数。
      日期、期号、链接先剔掉，免得把 11 月 5 日认成红球。
@@ -616,7 +629,7 @@
       webSearch: true,
       query: q,
       lead: '以下是刚刚联网搜到的真实资料。只依据这些资料作答，不要凭记忆补，也不要编号码：\n',
-      hint: want
+      hint: want, maxTokens: 900
     }).then(function (text) {
       var raw = stripMeta(text).replace(/\s+/g, ' ').trim().slice(0, 600);
       var j = pickJSON(text, 'obj');
@@ -731,10 +744,10 @@
     ].join('\n');
 
     return aiAsk('这是一台记账机器攒下的开奖记录。请你通读，指出我先前的判断哪里错了。\n\n' + digest, {
-      hint: want
+      hint: want, maxTokens: 1100
     }).then(function (text) {
       var j = pickJSON(text, 'obj');
-      if (!j) return { ok: false, msg: '没读懂 AI 的回复', raw: stripMeta(text).replace(/\s+/g, ' ').slice(0, 600) };
+      if (!j) return { ok: false, msg: '它没按格式回', raw: stripMeta(text).replace(/\s+/g, ' ').slice(0, 600) };
       var bias = [];
       (Array.isArray(j.bias) ? j.bias : []).slice(0, 3).forEach(function (b) {
         if (!b || !FAMILY[b.family]) return;
@@ -788,11 +801,14 @@
     return aiAsk('竹芯的状态库里现有 ' + CATALOG.length + ' 个状态。已有 id：\n' +
       ids.join(' ') + '\n\n请提出 ' + k + ' 个现有库里没有的买法状态，要求是：' +
       '把两个以上约束叠在一起，且这个组合在直觉上有一点道理（不是纯随机拼）。', {
-      hint: want
+      hint: want, maxTokens: 1800
     }).then(function (text) {
-      var arr = pickJSON(text);
-      if (!arr) return { ok: false, msg: '没读懂 AI 的回复', raw: stripMeta(text).replace(/\s+/g, ' ').slice(0, 600) };
-      if (!Array.isArray(arr)) arr = (arr && Array.isArray(arr.states)) ? arr.states : [];
+      var raw = stripMeta(text).replace(/\s+/g, ' ').trim().slice(0, 600);
+      var arr = pickJSON(text, 'arr');
+      if (!Array.isArray(arr)) arr = arrOf(pickJSON(text, 'obj'));
+      if (!Array.isArray(arr) || !arr.length) {
+        return { ok: false, msg: '它没按格式回', raw: raw };
+      }
 
       var ctx = ctxOf(readCfg().game || 'ssq');
       var ok = [], rejected = [];
@@ -860,7 +876,12 @@
     ui.autoBusy = true;
     aiReflect().then(function (r) {
       ui.autoBusy = false;
-      if (!r || !r.ok) return;
+      if (!r || !r.ok) {
+        ui.aiRefErr = { msg: (r && r.msg) || '它没按格式回', raw: (r && r.raw) || '', auto: true };
+        if (ui.open && ui.tab === 'log') paint(false);
+        return;
+      }
+      ui.aiRefErr = null;
       applyBias(r);
       if (ui.open && ui.tab === 'log') { paint(false); }
     }).catch(function () { ui.autoBusy = false; });
@@ -1622,7 +1643,7 @@
   var ui = {
     open: false, tab: 'core', game: 'ssq', plan: null, fam: {}, detail: null, toastT: 0, el: null,
     aiDraw: null, aiDrawBusy: false, aiErr: '', aiIssue: '', aiRaw: '',
-    aiRefBusy: false, aiPropBusy: false, aiProp: null, autoBusy: false,
+    aiRefBusy: false, aiRefErr: null, aiPropBusy: false, aiProp: null, autoBusy: false,
     btBusy: false, btPct: 0, btMsg: ''
   };
 
@@ -1965,8 +1986,10 @@
     h += '</section>';
 
     if (cur && cur.tickets && cur.tickets.length) {
+      var clean = cur.tickets.every(function (t) { return !t.residual || t.residual < 0.005; });
       h += '<section class="zx-blk">';
-      h += secHead('第 ' + cur.issue + ' 期', '三注 · 三个状态');
+      h += secHead('第 ' + cur.issue + ' 期',
+        '三注 · ' + (clean ? '残差全 0' : '残差 ' + cur.tickets.map(function (t) { return (t.residual || 0).toFixed(2); }).join('/')));
       cur.tickets.forEach(function (t, i) { h += ticketCard(t, i); });
       h += '<div class="zx-row">' +
         '<button class="zx-btn" data-act="goto" data-to="settle">去结算</button>' +
@@ -2092,7 +2115,12 @@
           (ui.aiProp.rejected.length ? '<i>退回：' + esc(ui.aiProp.rejected.join('；')) + '</i>' : '') +
           '</div>';
       } else {
-        h += '<div class="zx-aierr">' + esc(ui.aiProp.msg) + '<span>它提的东西本机验不过，就不收。</span></div>';
+        h += '<div class="zx-aierr">' + esc(ui.aiProp.msg) +
+          '<span>' + (ui.aiProp.raw
+            ? '原话在下面。多半是写成了一段人话——它懂，只是没照格式给。'
+            : '它提的东西本机验不过，就不收。') + '</span>' +
+          (ui.aiProp.raw ? '<details><summary>看 AI 原话</summary><pre>' + esc(ui.aiProp.raw) + '</pre></details>' : '') +
+          '</div>';
       }
     }
     h += '</section>';
@@ -2291,12 +2319,21 @@
     /* AI 读账 */
     var aiLog = readAI().logs[0];
     h += '<section class="zx-blk">';
-    h += secHead('AI 读账', aiOn() ? (aiLog ? esc(aiLog.at.slice(5, 16).replace('T', ' ')) : '还没读过') : '未配置 AI');
+    h += secHead('AI 读账', aiOn()
+      ? (ui.aiRefErr ? '上次没读成' : (aiLog ? esc(aiLog.at.slice(5, 16).replace('T', ' ')) : '还没读过'))
+      : '未配置 AI');
     if (aiOn()) {
       h += '<button class="zx-btn wide zx-ai-btn" data-act="aireflect"' + (ui.aiRefBusy ? ' disabled' : '') + '>' +
         (ui.aiRefBusy ? '<span class="zx-spin2"></span>DeepSeek 正在通读这批账…' : '<i class="zx-ai-ico">✦</i>让 AI 通读这批账，指出我错在哪') + '</button>';
     } else {
       h += '<p class="zx-fine">接上 AI 之后，它会通读最近 16 期，指出哪个族的先验错得最离谱。</p>';
+    }
+    if (ui.aiRefErr) {
+      h += '<div class="zx-aierr">' + esc(ui.aiRefErr.msg) +
+        '<span>' + (ui.aiRefErr.auto ? '它自己读的那一遍没按格式回，账本没动，也不影响出票。'
+          : '原话在下面。它懂你的账，只是没照格式给结论。账本没动。') + '</span>' +
+        (ui.aiRefErr.raw ? '<details><summary>看 AI 原话</summary><pre>' + esc(ui.aiRefErr.raw) + '</pre></details>' : '') +
+        '</div>';
     }
     if (aiLog) {
       h += '<div class="zx-airead">';
@@ -2410,7 +2447,11 @@
         paint(false);
         aiReflect().then(function (r) {
           ui.aiRefBusy = false;
-          if (!r.ok) { toast(r.msg || 'AI 没读懂'); paint(false); return; }
+          if (!r.ok) {
+            ui.aiRefErr = { msg: r.msg || '它没按格式回', raw: r.raw || '' };
+            paint(false); return;
+          }
+          ui.aiRefErr = null;
           var n = applyBias(r);
           toast(n ? 'AI 动了 ' + n + ' 个族的权重' : '读了，但它没找到站得住的证据');
           paint(false);
@@ -2428,7 +2469,7 @@
         aiPropose(3).then(function (r) {
           ui.aiPropBusy = false;
           ui.aiProp = r;
-          toast(r.ok ? '收了 ' + r.added.length + ' 个新状态' : (r.msg || '都不合格'));
+          if (r.ok) toast('收了 ' + r.added.length + ' 个新状态');
           paint(false);
         }).catch(function (e) {
           ui.aiPropBusy = false;
@@ -2447,7 +2488,7 @@
           if (r.done) {
             ui.btBusy = false; ui.btPct = 100; ui.btMsg = '';
             if (r.dup) toast('这批已经回放过了');
-            else toast('回放完 ' + (r.periods || total) + ' 期，' + r.n + ' 注，命中 ' + r.hit);
+            else toast('回放 ' + (r.periods || total) + ' 期 · ' + r.n + ' 注 · 中 ' + r.hit);
             paint(false);
             return;
           }

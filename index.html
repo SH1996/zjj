@@ -3214,9 +3214,9 @@
     background:transparent;font-size:10.5px;color:var(--faint);letter-spacing:.06em;transition:.22s;}
   .zx-acts button:active{background:rgba(255,255,255,.04);}
   .zx-toast{position:absolute;left:50%;bottom:calc(78px + env(safe-area-inset-bottom));
-    transform:translate(-50%,14px);max-width:82%;padding:10px 16px;border-radius:999px;
+    transform:translate(-50%,14px);max-width:84%;padding:10px 16px;border-radius:13px;
     background:rgba(16,52,42,.97);border:1px solid var(--line2);color:var(--ink);
-    font-size:11px;text-align:center;opacity:0;pointer-events:none;z-index:9;
+    font-size:11px;line-height:1.6;text-align:center;opacity:0;pointer-events:none;z-index:9;
     transition:opacity .24s,transform .24s;box-shadow:0 12px 30px -12px rgba(0,0,0,.6);}
   .zx-toast.on{opacity:1;transform:translate(-50%,0);}
 
@@ -3851,7 +3851,7 @@ window.onerror = function (msg, url, line) {
   'use strict';
 
   // 版本号统一在此维护；localStorage 键沿用 v11 不变，切勿改名以免丢失用户数据
-  var APP_VERSION = '15.21.0';
+  var APP_VERSION = '15.22.0';
   // 送货单拍照识别：视觉模型默认名、兼容别名与各项安全上限
   var DEFAULT_VISION_MODEL = 'deepseek-flash';
   var VISION_MODEL_FALLBACK = 'deepseek-v4-flash-vision-exp';
@@ -8513,7 +8513,12 @@ window.onerror = function (msg, url, line) {
   function aiChat(prompt, temp, opts) {
     var cfg = state.config;
     if (!hasAI()) return Promise.reject(new Error('未配置 AI'));
-    if (!opts || !opts.webSearch) return aiPlain(prompt, temp);
+    // 不联网时也要把"怎么写"带上。丢过这里，模型只能自由发挥，
+    // 回来的是一段人话或表格，解析层自然一句都读不出。
+    if (!opts || !opts.webSearch) {
+      var tail = (opts && opts.hint) ? '\n\n' + opts.hint : '';
+      return aiPlain(prompt + tail, temp, opts);
+    }
 
     var q = cleanQuery(opts.query);
     var hint = (opts && opts.hint) || '请基于以上资料回答，保留关键数字与时间。';
@@ -8532,7 +8537,7 @@ window.onerror = function (msg, url, line) {
             results[i].summary + '\n链接: ' + results[i].url + '\n\n';
         }
         ctx += '\n要写的东西：' + prompt + '\n' + hint;
-        return aiPlain(ctx, 0.3).then(function (text) {
+        return aiPlain(ctx, 0.3, opts).then(function (text) {
           return text + '\n\n__WEB_REFS__' + JSON.stringify(results);
         });
       }).catch(function (err) {
