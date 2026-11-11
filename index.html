@@ -2908,6 +2908,9 @@
   .zx-mets>div+div::before{content:'';position:absolute;left:0;top:5px;bottom:5px;width:1px;background:var(--line);}
   .zx-mets b{display:block;font-family:var(--mono);font-size:16px;font-weight:500;color:var(--ink);}
   .zx-mets i{display:block;margin-top:3px;font-style:normal;font-size:9px;letter-spacing:.14em;color:var(--faint);}
+  .zx-mets u{display:block;margin-top:2px;font-style:normal;text-decoration:none;
+    font-family:var(--mono);font-size:8.5px;letter-spacing:.02em;color:rgba(124,224,168,.55);}
+  .zx-mini u{font-style:normal;text-decoration:none;color:rgba(124,224,168,.7);font-size:9px;}
   .zx-hero-cap{margin:0;font-size:10.5px;color:var(--faint);letter-spacing:.02em;}
 
   .zx-side{display:none;}
@@ -3008,6 +3011,16 @@
   .zx-libtop>div{flex:1;text-align:center;}
   .zx-libtop b{display:block;font-family:var(--mono);font-size:18px;font-weight:400;color:var(--ink);}
   .zx-libtop i{display:block;margin-top:2px;font-style:normal;font-size:9px;color:var(--faint);}
+  .zx-bt-num{display:flex;margin:2px 0 12px;}
+  .zx-bt-num>div{flex:1;text-align:center;position:relative;}
+  .zx-bt-num>div+div::before{content:'';position:absolute;left:0;top:14%;height:72%;width:1px;
+    background:rgba(124,224,168,.13);}
+  .zx-bt-num b{display:block;font-family:var(--mono);font-size:19px;font-weight:400;color:var(--acc);
+    letter-spacing:-.01em;}
+  .zx-bt-num i{display:block;margin-top:3px;font-style:normal;font-size:9px;color:var(--faint);letter-spacing:.06em;}
+  .zx-bt-bar{height:3px;margin:9px 0 0;border-radius:2px;background:rgba(124,224,168,.1);overflow:hidden;}
+  .zx-bt-bar i{display:block;height:100%;background:linear-gradient(90deg,rgba(124,224,168,.55),var(--acc));
+    border-radius:2px;transition:width .25s ease;}
 
   .zx-fam{margin:0 0 8px;border:1px solid var(--line);border-radius:12px;overflow:hidden;
     background:rgba(255,255,255,.018);}
@@ -3162,6 +3175,15 @@
     border:1px solid rgba(208,100,90,.26);background:rgba(208,100,90,.065);
     font-size:10.5px;line-height:1.75;color:#e8a89f;}
   .zx-aierr span{display:block;margin:5px 0 0;font-size:9.5px;color:rgba(232,168,159,.62);}
+  .zx-aierr details{margin:7px 0 0;border-top:1px solid rgba(208,100,90,.18);padding-top:6px;}
+  .zx-aierr summary{font-size:9.5px;color:rgba(232,168,159,.78);cursor:pointer;list-style:none;
+    letter-spacing:.04em;-webkit-tap-highlight-color:transparent;}
+  .zx-aierr summary::-webkit-details-marker{display:none;}
+  .zx-aierr summary::before{content:'▸ ';font-size:9px;}
+  .zx-aierr details[open] summary::before{content:'▾ ';}
+  .zx-aierr pre{margin:6px 0 0;max-height:150px;overflow:auto;white-space:pre-wrap;word-break:break-all;
+    font:9.5px/1.7 ui-monospace,SFMono-Regular,Menlo,monospace;
+    color:rgba(232,190,182,.82);background:rgba(0,0,0,.22);border-radius:7px;padding:7px 8px;}
   .zx-warn{margin:9px 0 0;font-size:10px;line-height:1.75;color:#e8c27a;}
 
   .zx-airead{margin:12px 0 0;padding:12px 13px;border-radius:12px;
@@ -3829,7 +3851,7 @@ window.onerror = function (msg, url, line) {
   'use strict';
 
   // 版本号统一在此维护；localStorage 键沿用 v11 不变，切勿改名以免丢失用户数据
-  var APP_VERSION = '15.20.0';
+  var APP_VERSION = '15.21.0';
   // 送货单拍照识别：视觉模型默认名、兼容别名与各项安全上限
   var DEFAULT_VISION_MODEL = 'deepseek-flash';
   var VISION_MODEL_FALLBACK = 'deepseek-v4-flash-vision-exp';
