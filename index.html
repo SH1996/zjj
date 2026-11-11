@@ -286,6 +286,7 @@
   /* ===== 笔记独立页面 ===== */
   .notes-page{position:fixed;inset:0;z-index:40;background:var(--bg-top);
     overflow-y:auto;-webkit-overflow-scrolling:touch;padding:0 20px 44px;
+    scroll-padding-top:100px;
     opacity:0;pointer-events:none;transition:opacity .35s ease;}
   .notes-page.open{opacity:1;pointer-events:auto;}
   .notes-page .np-head,.notes-page .np-toolbar,.notes-page .notes{
@@ -6904,7 +6905,7 @@ window.onerror = function (msg, url, line) {
     } else {
       res = '<div class="draw-res"><div class="draw-res-t">很遗憾，这期没中</div>' +
         '<div class="draw-res-s">' + whenLine + '<div>' + hitLine +
-        '。差一个号就是另一个结果，下期再来。</div></div></div>';
+        '。差一点，下期再来。</div></div></div>';
     }
 
     var src = rec.source
