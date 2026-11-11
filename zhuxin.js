@@ -2469,7 +2469,7 @@
         aiPropose(3).then(function (r) {
           ui.aiPropBusy = false;
           ui.aiProp = r;
-          if (r.ok) toast('收了 ' + r.added.length + ' 个新状态');
+          /* 结果就写在按钮下面，不再弹条子盖住"退回"那一行 */
           paint(false);
         }).catch(function (e) {
           ui.aiPropBusy = false;
