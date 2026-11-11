@@ -873,7 +873,7 @@
     var tickets = readTickets();
     var states = readStates();
     var issues = readIssues();
-    var hit = 0, spend = 0, back = 0, touched = [];
+    var hit = 0, spend = 0, back = 0, floatN = 0, touched = [];
 
     tickets.forEach(function (t) {
       if (t.game !== gameKey || t.issue !== issue || t.settled) return;
@@ -882,7 +882,8 @@
       t.result = r;
       hit += r.hit ? 1 : 0;
       spend += 2;
-      back += r.money > 0 ? r.money : 0;
+      if (r.money > 0) back += r.money;
+      else if (r.money < 0) floatN++;
 
       var st = states[t.stateId];
       if (!st) return;
@@ -906,7 +907,7 @@
     else issues.unshift({ id: issue, game: gameKey, createdAt: nowISO(), settled: true, draw: { main: dm, sub: ds }, settledAt: nowISO() });
     writeIssues(issues);
 
-    var log = buildLog(gameKey, issue, dm, ds, touched, states, { hit: hit, spend: spend, back: back });
+    var log = buildLog(gameKey, issue, dm, ds, touched, states, { hit: hit, spend: spend, back: back, floatN: floatN });
     var logs = readLogs();
     logs.unshift(log);
     writeLogs(logs);
@@ -934,7 +935,9 @@
 
     var conv = convergence(states);
     var lines = [];
-    lines.push('第 ' + issue + ' 期结算：' + tally.hit + ' / ' + (tally.spend / 2) + ' 注中奖，投入 ' + tally.spend + ' 元，回来 ' + tally.back + ' 元。');
+    lines.push('第 ' + issue + ' 期结算：' + tally.hit + ' / ' + (tally.spend / 2) + ' 注中奖，投入 ' +
+      tally.spend + ' 元，固定奖回收 ' + tally.back + ' 元' +
+      (tally.floatN ? '，另有 ' + tally.floatN + ' 注一/二等奖，金额等官方公布' : '') + '。');
     if (rises.length) lines.push('信念上调：' + rises[0].name + ' ' + pct(rises[0].prior, 2) + ' → ' + pct(rises[0].post, 2) + '（样本 ' + rises[0].n + '）。');
     if (falls.length) lines.push('信念下调：' + falls[0].name + ' ' + pct(falls[0].prior, 2) + ' → ' + pct(falls[0].post, 2) + '。');
     if (refuted.length) lines.push('被打脸：' + refuted[0].name + '，先验 ' + pct(refuted[0].prior, 2) + '，实测 ' + pct(refuted[0].k / refuted[0].n, 2) + '。这个偏见要记下来。');
@@ -1429,10 +1432,11 @@
     if (!logs.length) {
       return '<section class="zx-blk"><div class="zx-empty">反思是结算之后自己写出来的。<br>还没有一期走到那一步。</div></section>';
     }
-    var sum = { spend: 0, back: 0, hit: 0, n: 0 };
+    var sum = { spend: 0, back: 0, hit: 0, n: 0, floatN: 0 };
     logs.forEach(function (g) {
       if (!g.tally) return;
       sum.spend += g.tally.spend; sum.back += g.tally.back; sum.hit += g.tally.hit;
+      sum.floatN += (g.tally.floatN || 0);
       sum.n += Math.round(g.tally.spend / 2);
     });
     h += '<section class="zx-blk">';
@@ -1441,7 +1445,9 @@
       '<div><b>¥' + sum.spend + '</b><i>投入</i></div>' +
       '<div><b class="' + (sum.back - sum.spend >= 0 ? 'up' : 'down') + '">¥' + (sum.back - sum.spend) + '</b><i>净</i></div>' +
       '</div>';
-    h += '<p class="zx-fine">这本账一直记着。中奖次数 ' + sum.hit + ' 次。竹芯不替你判断值不值，只保证数字不撒谎。</p>';
+    h += '<p class="zx-fine">这本账一直记着。中奖 ' + sum.hit + ' 次' +
+      (sum.floatN ? '，其中 ' + sum.floatN + ' 注是一/二等奖，金额浮动，没有计入上面的净额' : '') +
+      '。竹芯不替你判断值不值，只保证数字不撒谎。</p>';
     h += '</section>';
 
     logs.slice(0, 40).forEach(function (g) {
