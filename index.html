@@ -555,6 +555,8 @@
   .note:hover{border-color:var(--g300);box-shadow:var(--card-edge),var(--shadow-2);transform:translateY(-2px);background:var(--card-hover);}
   .note.is-done{background:var(--g100);border-color:var(--line-soft);}
   .note.is-done::before{background:var(--g300);opacity:.7;}
+  /* 彩票号码划掉就看不清了：已完成的彩票保留正文原样 */
+  .note.is-done.is-lottery .note-text{text-decoration:none;}
   .note.is-trash{background:var(--line-soft);border-color:var(--line);}
   .note.is-trash::before{background:var(--ink-faint);opacity:.4;}
   .note.is-pinned{border-color:rgba(168,135,61,.26);
@@ -814,6 +816,72 @@
   .lo-btn .lo-mark{width:5px;height:5px;border-radius:50%;background:var(--gold);display:none;}
   .lo-btn.has-said{border-color:rgba(168,135,61,.45);background:var(--gold-bg);}
   .lo-btn.has-said .lo-mark{display:inline-block;}
+
+  /* ===== v15.17 彩票 AI 开奖 ===== */
+  .draw-box{margin-top:14px;border:1px solid rgba(168,135,61,.24);border-radius:14px;
+    background:linear-gradient(180deg,rgba(168,135,61,.055),rgba(168,135,61,.012) 62%,transparent);
+    overflow:hidden;transition:border-color .3s ease,background .3s ease;}
+  .draw-box:hover{border-color:rgba(168,135,61,.42);}
+  .draw-box.open{border-color:rgba(168,135,61,.36);}
+  .draw-strip{width:100%;display:flex;align-items:center;gap:8px;padding:10px 12px;
+    border:none;background:transparent;color:var(--ink);font:inherit;text-align:left;cursor:pointer;
+    -webkit-tap-highlight-color:transparent;}
+  .draw-strip:active{background:rgba(168,135,61,.06);}
+  .draw-spark{width:22px;height:22px;flex:none;display:grid;place-items:center;border-radius:7px;
+    background:var(--gold-bg);border:1px solid rgba(168,135,61,.22);color:var(--gold);}
+  .draw-spark svg{width:12px;height:12px;}
+  .draw-title{font-size:11.5px;font-weight:600;letter-spacing:.1em;color:var(--gold);flex:none;}
+  .draw-state{flex:1;min-width:0;font-size:11.5px;letter-spacing:.02em;color:var(--ink-faint);
+    overflow:hidden;text-overflow:ellipsis;white-space:nowrap;}
+  .draw-state.won{color:var(--gold);font-weight:600;}
+  .draw-state.lost{color:var(--ink-soft);}
+  .draw-state.err{color:var(--danger);}
+  .draw-chev{width:13px;height:13px;color:var(--ink-faint);transition:transform .3s ease;flex:none;}
+  .draw-box.open .draw-chev{transform:rotate(180deg);}
+
+  .draw-panel{padding:11px 12px 13px;border-top:1px dashed rgba(168,135,61,.2);}
+  .draw-lead{font-size:11px;line-height:1.75;color:var(--ink-faint);margin-bottom:10px;}
+  .draw-sec{display:block;margin-bottom:10px;}
+  .draw-sec-k{display:block;font-size:10px;letter-spacing:.1em;color:var(--ink-faint);margin-bottom:5px;}
+  .draw-sec-v{display:block;font-size:11.5px;line-height:1.75;color:var(--ink-soft);}
+  .draw-balls{display:flex;gap:5px;flex-wrap:wrap;align-items:center;}
+  .draw-balls b{display:grid;place-items:center;width:27px;height:27px;border-radius:50%;
+    font-size:11.5px;font-weight:700;color:#fff;font-variant-numeric:tabular-nums;
+    box-shadow:inset 0 -2px 4px rgba(0,0,0,.14);}
+  .draw-balls b.rd{background:linear-gradient(160deg,#e8695f,#cf4a48);}
+  .draw-balls b.bl{background:linear-gradient(160deg,#5b97df,#3a76c9);}
+  .draw-balls b.miss{opacity:.38;filter:grayscale(.5);}
+  .draw-balls b.hit{box-shadow:0 0 0 2px rgba(168,135,61,.7),inset 0 -2px 4px rgba(0,0,0,.14);}
+  .draw-balls i{color:var(--ink-faint);font-style:normal;font-size:11px;margin:0 1px;}
+  .draw-res{margin-top:10px;padding:11px 12px;border-radius:11px;
+    border:1px solid var(--line-soft);background:var(--card-hover);}
+  .draw-res.won{border-color:rgba(168,135,61,.45);background:var(--gold-bg);}
+  .draw-res-t{display:flex;align-items:baseline;gap:8px;flex-wrap:wrap;
+    font-size:14px;font-weight:600;letter-spacing:.04em;color:var(--g800);}
+  .draw-res.won .draw-res-t{color:var(--gold);}
+  .draw-res-money{font-size:19px;font-weight:700;color:var(--gold);font-variant-numeric:tabular-nums;}
+  .draw-res-s{font-size:11px;line-height:1.8;color:var(--ink-faint);margin-top:5px;}
+  .draw-acts{display:flex;gap:8px;margin-top:11px;flex-wrap:wrap;align-items:center;}
+  .draw-btn{padding:7px 14px;border-radius:999px;border:1px solid rgba(168,135,61,.34);
+    background:transparent;color:var(--gold);font:inherit;font-size:11px;letter-spacing:.08em;
+    cursor:pointer;transition:all .28s ease;-webkit-tap-highlight-color:transparent;}
+  .draw-btn:hover{background:var(--gold-bg);border-color:rgba(168,135,61,.55);}
+  .draw-btn:active{transform:translateY(1px);}
+  .draw-btn.ghost{color:var(--ink-faint);border-color:var(--line);}
+  .draw-btn.ghost:hover{color:var(--g600);border-color:var(--g300);background:var(--g100);}
+  .draw-link{color:var(--gold);text-decoration:none;border-bottom:1px dotted rgba(168,135,61,.5);}
+  .draw-link:hover{border-bottom-style:solid;}
+  .draw-loading{display:inline-flex;align-items:center;gap:7px;color:var(--gold);}
+  .draw-spin{width:11px;height:11px;flex:none;border:1.6px solid rgba(168,135,61,.25);
+    border-top-color:var(--gold);border-radius:50%;animation:drawSpin .8s linear infinite;}
+  @keyframes drawSpin{to{transform:rotate(360deg);}}
+  .draw-err{color:var(--danger);font-size:11px;line-height:1.75;}
+  @media(max-width:380px){
+    .draw-balls b{width:24px;height:24px;font-size:10.5px;}
+    .draw-strip{align-items:flex-start;}
+    .draw-state{font-size:11px;white-space:normal;overflow:visible;text-overflow:clip;line-height:1.5;padding-top:1px;}
+    .draw-chev{margin-top:3px;}
+  }
 
   .lo-mask .modal{max-width:600px;width:100%;padding:0;max-height:86vh;display:flex;flex-direction:column;
     overflow:hidden;border-radius:20px;}
@@ -3334,7 +3402,7 @@ window.onerror = function (msg, url, line) {
   'use strict';
 
   // 版本号统一在此维护；localStorage 键沿用 v11 不变，切勿改名以免丢失用户数据
-  var APP_VERSION = '15.16.0';
+  var APP_VERSION = '15.17.0';
   // 送货单拍照识别：视觉模型默认名、兼容别名与各项安全上限
   var DEFAULT_VISION_MODEL = 'deepseek-flash';
   var VISION_MODEL_FALLBACK = 'deepseek-v4-flash-vision-exp';
@@ -6120,6 +6188,9 @@ window.onerror = function (msg, url, line) {
     var cls = 'note';
     if (isDone) cls += ' is-done';
     if (isTrash) cls += ' is-trash';
+    // 彩票号被删除线划掉就读不出来了，单独留个标记
+    var lotItem = isDone ? parseLotteryNote(n) : null;
+    if (lotItem) cls += ' is-lottery';
 
     var alertNow = false;
     if (n.remindAt && !isDone && !isTrash) {
@@ -6180,6 +6251,10 @@ window.onerror = function (msg, url, line) {
 
     var renderedText = renderMarkdown(window.JieLong ? window.JieLong.stripMark(n.text) : n.text, kw);
 
+    // 已完成的彩票：下面挂一个「AI 开奖」框，联网对一次当期号码
+    var drawHtml = '';
+    if (lotItem && noteCategory(n) === VIEW.DONE) drawHtml = drawBoxHTML(n, lotItem);
+
     // 只有「笔记」分类带这个入口：待办、店铺、完成、垃圾桶各说各的事，不掺和
     var loHtml = '';
     if (!isDone && !isTrash && noteCategory(n) === VIEW.NOTE) {
@@ -6192,7 +6267,7 @@ window.onerror = function (msg, url, line) {
     return '<article class="' + cls + '" data-id="' + escapeHTML(n.id) + '">' +
              '<div class="note-top">' + meta + acts + '</div>' +
              '<div class="note-text md-render">' + renderedText + '</div>' +
-             loHtml +
+             loHtml + drawHtml +
            '</article>';
   }
 
@@ -6376,6 +6451,486 @@ window.onerror = function (msg, url, line) {
     return 'ok';
   }
 
+  /* =========================================
+     v15.17 彩票 AI 开奖：已完成的彩票，联网对一次当期号码
+     边界：AI 只负责「查号码」，中没中、中几等奖由本机按官方奖级表算，
+     不让模型自己报「中了多少」。号码查不到就如实说，不猜。
+  ========================================= */
+  var LS_DRAW = 'bamboo.v16.lotterydraw';
+  var DRAW_TIMES = { ssq: '21:15', dlt: '21:25' };
+  var DRAW_GAME = { ssq: '双色球', dlt: '大乐透' };
+  var DRAW_PRIZE_NAME = {
+    ssq: { 1: '一等奖', 2: '二等奖', 3: '三等奖', 4: '四等奖', 5: '五等奖', 6: '六等奖' },
+    dlt: { 1: '一等奖', 2: '二等奖', 3: '三等奖', 4: '四等奖', 5: '五等奖',
+           6: '六等奖', 7: '七等奖', 8: '八等奖', 9: '九等奖' }
+  };
+  var drawCache = null;   // { noteId: rec }
+  var drawBusy = {};      // noteId -> true
+  var drawErr = {};       // noteId -> 错误文案
+  var drawOpen = {};      // noteId -> 展开
+
+  function readDrawCache() {
+    if (drawCache) return drawCache;
+    var items = {};
+    try {
+      var raw = localStorage.getItem(LS_DRAW);
+      if (raw) {
+        var j = JSON.parse(raw);
+        if (j && j.items && typeof j.items === 'object') items = j.items;
+      }
+    } catch (e) {}
+    drawCache = items;
+    return drawCache;
+  }
+  function writeDrawCache() {
+    var items = readDrawCache();
+    // 只留还在的笔记，避免删掉之后缓存一直长
+    var alive = {};
+    for (var i = 0; i < state.notes.length; i++) alive[state.notes[i].id] = true;
+    for (var k in items) {
+      if (Object.prototype.hasOwnProperty.call(items, k) && !alive[k]) delete items[k];
+    }
+    try { localStorage.setItem(LS_DRAW, JSON.stringify({ v: 1, items: items })); } catch (e) {}
+  }
+
+  function toInt(x) {
+    var n = parseInt(String(x).replace(/^0+(?=\d)/, ''), 10);
+    return isFinite(n) ? n : 0;
+  }
+
+  // 从「双色球 04 11 15 16 23 26 + 01 · 提醒 11-09 20:00 · 11-10 开奖」里取号码
+  // 只认彩种名后面那一段，避免把提醒日期、期号当成号码
+  function parseLotteryNote(n) {
+    if (!n || !hasLotteryTag(n)) return null;
+    var text = String(n.text || '');
+    var game = /大乐透/.test(text) ? 'dlt' : (/双色球/.test(text) ? 'ssq' : null);
+    if (!game) return null;
+
+    var body = text.replace(/第?\s*\d{5,7}\s*期/g, ' ')
+                   .replace(/\d{4}\s*[-\/.]\s*\d{1,2}\s*[-\/.]\s*\d{1,2}/g, ' ');
+    var main = [], sub = [];
+    var m = body.match(/((?:\d{1,2}[\s,、，]+){4,6}\d{1,2})\s*[+＋]\s*(\d{1,2}(?:[\s,、，]+\d{1,2})?)/);
+    if (m) {
+      main = (m[1].match(/\d{1,2}/g) || []).map(toInt);
+      sub = (m[2].match(/\d{1,2}/g) || []).map(toInt);
+    } else {
+      // 没写「+」：取彩种名之后第一段，按玩法个数切
+      var at = text.indexOf(DRAW_GAME[game]);
+      var seg = text.slice(at >= 0 ? at + DRAW_GAME[game].length : 0)
+                    .split(/[·•—–|｜]|提醒|开奖|[\r\n]/)[0];
+      var nums = (seg.match(/\d{1,2}/g) || []).map(toInt);
+      var pk = game === 'dlt' ? 5 : 6, sk = game === 'dlt' ? 2 : 1;
+      if (nums.length >= pk + sk) { main = nums.slice(0, pk); sub = nums.slice(pk, pk + sk); }
+    }
+
+    var g = (window.LotteryLab && window.LotteryLab.GAMES) ? window.LotteryLab.GAMES[game] : null;
+    var pick = g ? g.mainPick : (game === 'dlt' ? 5 : 6);
+    var subPick = g ? g.subPick : (game === 'dlt' ? 2 : 1);
+    var maxMain = g ? g.mainMax : (game === 'dlt' ? 35 : 33);
+    var maxSub = g ? g.subMax : (game === 'dlt' ? 12 : 16);
+    if (main.length !== pick || sub.length !== subPick) return null;
+    if (!validTicketNums(main, maxMain) || !validTicketNums(sub, maxSub)) return null;
+
+    var issue = '';
+    var im = text.match(/(?:第\s*)?(\d{5,7})\s*期/);
+    if (im) issue = im[1];
+
+    var date = noteDrawDate(text, n.createdAt);
+    return {
+      game: game,
+      issue: issue,
+      date: date,
+      main: main,
+      sub: sub,
+      sig: game + '|' + main.join(',') + '|' + sub.join(',') + '|' + (date || '') + '|' + issue
+    };
+  }
+
+  function validTicketNums(arr, max) {
+    var seen = {};
+    for (var i = 0; i < arr.length; i++) {
+      var v = arr[i];
+      if (!(v >= 1 && v <= max)) return false;
+      if (seen[v]) return false;
+      seen[v] = true;
+    }
+    return true;
+  }
+
+  // 「11-10 开奖」「11-10 21:15 开奖」「开奖：11-10」都认；年份缺省按笔记创建年补
+  function noteDrawDate(text, createdAt) {
+    var mm = text.match(/(\d{4})\s*[-\/.]\s*(\d{1,2})\s*[-\/.]\s*(\d{1,2})(?:\s*\d{1,2}[:：]\d{2})?\s*开奖/)
+          || text.match(/开奖[：:\s]*(\d{4})\s*[-\/.]\s*(\d{1,2})\s*[-\/.]\s*(\d{1,2})/);
+    if (mm) return mm[1] + '-' + pad2(+mm[2]) + '-' + pad2(+mm[3]);
+
+    var m = text.match(/(\d{1,2})\s*[-\/.]\s*(\d{1,2})(?:\s*\d{1,2}[:：]\d{2})?\s*开奖/)
+         || text.match(/开奖[：:\s]*(\d{1,2})\s*[-\/.]\s*(\d{1,2})/);
+    if (!m) return '';
+    var base = new Date(createdAt || Date.now());
+    var y = isNaN(base.getTime()) ? new Date().getFullYear() : base.getFullYear();
+    var mo = +m[1], d = +m[2];
+    if (!(mo >= 1 && mo <= 12 && d >= 1 && d <= 31)) return '';
+    var guess = new Date(y, mo - 1, d);
+    // 12 月底买的、1 月初开的：年份得往后挪一年
+    if (!isNaN(base.getTime()) && guess.getTime() < base.getTime() - 45 * 864e5) {
+      guess = new Date(y + 1, mo - 1, d);
+    }
+    return guess.getFullYear() + '-' + pad2(mo) + '-' + pad2(d);
+  }
+
+  // 还没到开奖时间就别去查了（省一次调用，也不会被「还没出」误导）
+  function drawWaitAt(item) {
+    if (!item || !item.date) return null;
+    var t = DRAW_TIMES[item.game] || '21:15';
+    var at = new Date(item.date + 'T' + t + ':00');
+    if (isNaN(at.getTime()) || Date.now() >= at.getTime()) return null;
+    return { at: at, label: item.date.slice(5).replace('-', '/') + ' ' + t };
+  }
+
+  function drawMoney(v) {
+    var x = Number(v);
+    if (!isFinite(x) || x <= 0) return '';
+    return '¥' + Math.round(x).toLocaleString('zh-CN');
+  }
+  // 收起那一行窄，几百万写成「¥1000 万」，完整数字留给展开后的详情
+  function drawMoneyShort(v) {
+    var x = Number(v);
+    if (!isFinite(x) || x <= 0) return '';
+    if (x >= 10000) {
+      var w = x / 10000;
+      return '¥' + (w >= 100 ? Math.round(w) : Math.round(w * 10) / 10) + '万';
+    }
+    return '¥' + Math.round(x);
+  }
+
+  function drawRecOf(n, item) {
+    var c = readDrawCache()[n.id];
+    if (!c || c.sig !== item.sig) return null;
+    // 「没查到」不长期钉死：开奖后十来分钟再点，允许重新查
+    if (!c.found && c.checkedAt && Date.now() - new Date(c.checkedAt).getTime() > 10 * 60 * 1000) return null;
+    return c;
+  }
+
+  function splitDrawReply(text) {
+    var s = String(text || '');
+    var i = s.indexOf('__WEB_REFS__');
+    var refs = [];
+    if (i >= 0) {
+      try { refs = JSON.parse(s.slice(i + 12)) || []; } catch (e) { refs = []; }
+      s = s.slice(0, i);
+    }
+    return { text: s, refs: Array.isArray(refs) ? refs : [] };
+  }
+
+  // 模型偶尔会在 JSON 外面包 ``` 或写两句解释，这里只抠第一个完整的 {}
+  function pickJsonObject(s) {
+    for (var i = 0; i < s.length; i++) {
+      if (s.charAt(i) !== '{') continue;
+      var depth = 0, inStr = false, esc = false;
+      for (var j = i; j < s.length; j++) {
+        var c = s.charAt(j);
+        if (inStr) {
+          if (esc) esc = false;
+          else if (c === '\\') esc = true;
+          else if (c === '"') inStr = false;
+          continue;
+        }
+        if (c === '"') inStr = true;
+        else if (c === '{') depth++;
+        else if (c === '}') {
+          depth--;
+          if (!depth) {
+            try { return JSON.parse(s.slice(i, j + 1)); } catch (e) { break; }
+          }
+        }
+      }
+    }
+    return null;
+  }
+
+  function drawQuery(item) {
+    var gname = DRAW_GAME[item.game];
+    var when = item.date ? item.date.replace(/^(\d{4})-(\d{2})-(\d{2})$/, '$1年$2月$3日') : '';
+    var subject = item.issue ? ('第 ' + item.issue + ' 期') : (when ? (when + ' 那一期') : '最近一期');
+    var q = gname + ' ' + (item.issue ? ('第' + item.issue + '期') : (when || '最近一期')) + ' 开奖结果 开奖号码 一等奖 奖金';
+    var ask = '请从资料里找出「' + gname + '」' + subject + '的开奖结果。';
+    var want = [
+      '只输出一个 JSON 对象：不要解释，不要 markdown 代码块，不要前后缀。',
+      '{"found":true,"issue":"期号","date":"YYYY-MM-DD","main":[...],"sub":[...],"firstPrize":数字或null,"secondPrize":数字或null,"source":"来源网址"}',
+      item.game === 'ssq'
+        ? 'main 必须是 6 个 1-33 的整数，sub 必须是 1 个 1-16 的整数。'
+        : 'main 必须是 5 个 1-35 的整数，sub 必须是 2 个 1-12 的整数。',
+      'firstPrize / secondPrize 是当期单注奖金（元）；资料里没有就填 null，绝对不要估算。',
+      '资料里没有这一期，就输出 {"found":false,"reason":"还没开奖"} 或 {"found":false,"reason":"没查到"}。',
+      '号码必须是 JSON 整数，不要字符串、不要前导零、不要在数组里混日期。'
+    ].join('\n');
+
+    return aiChat(ask, 0.2, {
+      webSearch: true,
+      query: q,
+      lead: '以下是刚刚联网搜到的真实资料。只依据这些资料作答，不要凭记忆补，也不要编号码：\n',
+      hint: want
+    }).then(function (text) {
+      var cut = splitDrawReply(text);
+      var j = pickJsonObject(cut.text);
+      var rec = {
+        sig: item.sig,
+        checkedAt: new Date().toISOString(),
+        refs: (cut.refs || []).slice(0, 3).map(function (r) {
+          return { title: String((r && r.title) || '').slice(0, 60), url: safeHttpUrl(r && r.url) };
+        }).filter(function (r) { return r.url; })
+      };
+
+      var ok = !!j && (j.found === true || j.found === 'true');
+      if (!ok) {
+        rec.found = false;
+        rec.reason = (j && j.reason) ? String(j.reason).slice(0, 40) : '没查到';
+        return rec;
+      }
+
+      var main = toNumArr(j.main);
+      var sub = toNumArr(j.sub);
+      var g = (window.LotteryLab && window.LotteryLab.GAMES) ? window.LotteryLab.GAMES[item.game] : null;
+      var maxMain = g ? g.mainMax : (item.game === 'dlt' ? 35 : 33);
+      var maxSub = g ? g.subMax : (item.game === 'dlt' ? 12 : 16);
+      var needMain = item.main.length, needSub = item.sub.length;
+      if (main.length !== needMain || sub.length !== needSub ||
+          !validTicketNums(main, maxMain) || !validTicketNums(sub, maxSub)) {
+        rec.found = false;
+        rec.reason = '开奖号码没看懂';
+        return rec;
+      }
+
+      var hit = (window.LotteryLab && window.LotteryLab.ticketHit)
+        ? window.LotteryLab.ticketHit({ main: item.main, sub: item.sub }, { main: main, sub: sub }, item.game)
+        : { k: countSame(item.main, main), b: countSame(item.sub, sub) };
+      var prize = (window.LotteryLab && window.LotteryLab.prizeOf)
+        ? window.LotteryLab.prizeOf(item.game, hit.k, hit.b) : null;
+
+      var amount = null, floatPrize = false;
+      if (prize) {
+        if (prize.amount != null) amount = prize.amount;
+        else {
+          floatPrize = true;
+          amount = prize.level === 1 ? Number(j.firstPrize) : (prize.level === 2 ? Number(j.secondPrize) : null);
+          if (!isFinite(amount) || amount <= 0) amount = null;
+        }
+      }
+
+      rec.found = true;
+      rec.issue = String(j.issue || '').slice(0, 12);
+      rec.date = String(j.date || '').slice(0, 10);
+      rec.main = main;
+      rec.sub = sub;
+      rec.hit = hit;
+      rec.level = prize ? prize.level : 0;
+      rec.prizeName = prize ? (DRAW_PRIZE_NAME[item.game] || {})[prize.level] || '' : '';
+      rec.amount = amount;
+      rec.floatPrize = !!(prize && floatPrize && amount == null);
+      rec.source = safeHttpUrl(j.source) || (rec.refs[0] && rec.refs[0].url) || '';
+      return rec;
+    });
+  }
+
+  // 模型有时把号码写成 "04,09,15" 或 "04 09 15"，都接住
+  function toNumArr(v) {
+    if (Array.isArray(v)) return v.map(toInt);
+    if (typeof v === 'string') return (v.match(/\d{1,2}/g) || []).map(toInt);
+    return [];
+  }
+
+  function countSame(a, b) {
+    var n = 0;
+    for (var i = 0; i < a.length; i++) if (b.indexOf(a[i]) >= 0) n++;
+    return n;
+  }
+
+  function checkDraw(id) {
+    var n = findNote(id);
+    if (!n || drawBusy[id]) return;
+    var item = parseLotteryNote(n);
+    if (!item) { toast('这条的号码没看懂，改一下再查'); return; }
+    drawOpen[id] = true;
+    if (!hasAI()) { render(); return; }   // 面板里已经写清楚了，不再弹 toast 挡住它
+    delete drawErr[id];
+    drawBusy[id] = true;
+    render();
+
+    var noteId = id;
+    drawQuery(item).then(function (rec) {
+      readDrawCache()[noteId] = rec;
+      writeDrawCache();
+    }).catch(function (e) {
+      drawErr[noteId] = (e && e.message) || '没查成，稍后再试';
+    }).then(function () {
+      drawBusy[noteId] = false;
+      render();
+      var box = drawBoxEl(noteId);
+      if (box && box.scrollIntoView) {
+        try { box.scrollIntoView({ block: 'nearest', behavior: 'smooth' }); } catch (e2) {}
+      }
+    });
+  }
+
+  function drawBoxEl(id) {
+    var list = document.querySelectorAll('.draw-box');
+    for (var i = 0; i < list.length; i++) {
+      if (list[i].getAttribute('data-draw') === id) return list[i];
+    }
+    return null;
+  }
+
+  function toggleDraw(id) {
+    var wasOpen = !!drawOpen[id];
+    drawOpen[id] = !wasOpen;
+    var n = findNote(id);
+    var item = n ? parseLotteryNote(n) : null;
+    render();
+    if (!wasOpen && item) {
+      var rec = drawRecOf(n, item);
+      // 点开就顺手查一次；已经查过、还没到开奖时间，就只展开
+      if (!rec && !drawWaitAt(item) && !drawBusy[id]) checkDraw(id);
+    }
+    var box = drawBoxEl(id);
+    if (box && box.scrollIntoView) {
+      try { box.scrollIntoView({ block: 'nearest', behavior: 'smooth' }); } catch (e) {}
+    }
+  }
+
+  // drawArr 为 null 时只画号码、不做命中标记（开奖号码本身不需要高亮）
+  function drawBallsHTML(mine, drawArr, cls) {
+    var out = '';
+    for (var i = 0; i < mine.length; i++) {
+      var v = mine[i];
+      if (!drawArr) { out += '<b class="' + cls + '">' + pad2(v) + '</b>'; continue; }
+      var hit = drawArr.indexOf(v) >= 0;
+      out += '<b class="' + cls + (hit ? ' hit' : ' miss') + '">' + pad2(v) + '</b>';
+    }
+    return out;
+  }
+
+  function drawBoxHTML(n, item) {
+    var rec = drawRecOf(n, item);
+    var busy = !!drawBusy[n.id];
+    var err = drawErr[n.id];
+    var open = !!drawOpen[n.id];
+    var wait = drawWaitAt(item);
+    var st = '点开查开奖结果', sc = '';
+    if (busy) { st = '正在联网查…'; sc = ' won'; }
+    else if (rec && rec.found && rec.level) { st = '中奖了 · ' + (rec.amount != null ? drawMoneyShort(rec.amount) : '奖金浮动'); sc = ' won'; }
+    else if (rec && rec.found) { st = '很遗憾，这期没中'; sc = ' lost'; }
+    else if (rec && !rec.found) { st = rec.reason || '没查到'; }
+    else if (err) { st = '没查成，点这里重试'; sc = ' err'; }
+    else if (wait) { st = '还没到开奖时间 · ' + wait.label; }
+    else if (!hasAI()) { st = '还没配 AI'; }
+
+    var chev = '<svg class="draw-chev" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M6 9l6 6 6-6"/></svg>';
+    var spark = '<span class="draw-spark"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><path d="M12 3l1.7 5.3L19 10l-5.3 1.7L12 17l-1.7-5.3L5 10l5.3-1.7z"/><path d="M18.5 16.5l.7 2.1 2.1.7-2.1.7-.7 2.1-.7-2.1-2.1-.7 2.1-.7z"/></svg></span>';
+
+    var panel = '';
+    if (open) {
+      panel = '<div class="draw-panel">' + drawPanelHTML(n, item, rec, busy, err, wait) + '</div>';
+    }
+
+    return '<div class="draw-box' + (open ? ' open' : '') + '" data-draw="' + escapeHTML(n.id) + '">' +
+      '<button class="draw-strip" type="button" data-act="draw" data-id="' + escapeHTML(n.id) + '" aria-expanded="' + (open ? 'true' : 'false') + '">' +
+        spark +
+        '<span class="draw-title">AI 开奖</span>' +
+        '<span class="draw-state' + sc + '">' + escapeHTML(st) + '</span>' +
+        chev +
+      '</button>' + panel + '</div>';
+  }
+
+  function drawPanelHTML(n, item, rec, busy, err, wait) {
+    var head = '<div class="draw-lead">DeepSeek 联网查号码，中没中由本机按奖级表算。</div>';
+
+    if (!hasAI()) {
+      return head +
+        '<div class="draw-res"><div class="draw-res-t">还没配 AI</div>' +
+        '<div class="draw-res-s">到设置里填上 DeepSeek 的接口地址、密钥和模型名，就能查了。查一次大约十几秒。</div></div>' +
+        '<div class="draw-acts"><button class="draw-btn" type="button" data-act="draw-cfg" data-id="' + escapeHTML(n.id) + '">去设置</button></div>';
+    }
+
+    if (busy) {
+      return head +
+        '<div class="draw-loading"><span class="draw-spin"></span><span>DeepSeek 正在联网查' +
+        (item.issue ? ('第 ' + escapeHTML(item.issue) + ' 期') : (item.date ? (' ' + escapeHTML(item.date.slice(5)) + ' 那一期') : '最近一期')) +
+        '…</span></div>';
+    }
+
+    if (err) {
+      return head +
+        '<div class="draw-err">' + escapeHTML(err) + '</div>' +
+        '<div class="draw-acts"><button class="draw-btn" type="button" data-act="draw-recheck" data-id="' + escapeHTML(n.id) + '">再试一次</button>' +
+        '<button class="draw-btn ghost" type="button" data-act="draw-cfg" data-id="' + escapeHTML(n.id) + '">检查 AI 设置</button></div>';
+    }
+
+    if (!rec) {
+      var why = wait
+        ? ('这一期按 ' + escapeHTML(wait.label) + ' 开奖，还没到点。现在查多半也只有一个「还没开奖」。')
+        : ((!item.date && !item.issue)
+            ? '这条没写开奖日期，只能按最近一期查。要是查回来的期号对不上，就把它补进笔记里再查。'
+            : '会用 DeepSeek 联网查一次，大约十几秒。查不到就如实说，不编号码。');
+      return head +
+        '<div class="draw-res"><div class="draw-res-t">' + (wait ? '还没到开奖时间' : '还没查过这一期') + '</div>' +
+        '<div class="draw-res-s">' + why + '</div></div>' +
+        '<div class="draw-acts"><button class="draw-btn" type="button" data-act="draw-check" data-id="' + escapeHTML(n.id) + '">' +
+        (wait ? '还是查一下' : '查开奖结果') + '</button></div>';
+    }
+
+    if (!rec.found) {
+      return head +
+        '<div class="draw-res"><div class="draw-res-t">没查到这一期</div>' +
+        '<div class="draw-res-s">' + escapeHTML(rec.reason || '资料里还没有这期的开奖号码') +
+        '。可能还没开奖，也可能搜索结果没收录。过一会儿再点一次。</div></div>' +
+        '<div class="draw-acts"><button class="draw-btn" type="button" data-act="draw-recheck" data-id="' + escapeHTML(n.id) + '">再查一次</button></div>';
+    }
+
+    var issueLine = (rec.issue ? ('第 ' + escapeHTML(rec.issue) + ' 期') : '') +
+                    (rec.date ? (rec.issue ? ' · ' : '') + escapeHTML(rec.date.slice(5)) : '');
+    var hitLine = '红球中 ' + rec.hit.k + ' 个 · 蓝球中 ' + rec.hit.b + ' 个';
+    if (item.game === 'dlt') hitLine = '前区中 ' + rec.hit.k + ' 个 · 后区中 ' + rec.hit.b + ' 个';
+
+    var res, acts = '';
+    var whenLine = issueLine ? ('<div>' + issueLine + '</div>') : '';
+    if (rec.level) {
+      var moneyTxt = rec.amount != null
+        ? '<span class="draw-res-money">' + drawMoney(rec.amount) + '</span>'
+        : (rec.floatPrize ? '<span class="draw-res-money">浮动</span>' : '');
+      res = '<div class="draw-res won"><div class="draw-res-t">中了' + escapeHTML(rec.prizeName) + moneyTxt + '</div>' +
+        '<div class="draw-res-s">' + whenLine + '<div>' + hitLine +
+        (rec.amount == null ? ' · 一、二等奖奖金浮动，以官方公告为准' : '') +
+        '</div></div></div>';
+    } else {
+      res = '<div class="draw-res"><div class="draw-res-t">很遗憾，这期没中</div>' +
+        '<div class="draw-res-s">' + whenLine + '<div>' + hitLine +
+        '。差一个号就是另一个结果，下期再来。</div></div></div>';
+    }
+
+    var src = rec.source
+      ? '<a class="draw-link" href="' + escapeHTML(rec.source) + '" target="_blank" rel="noopener noreferrer">开奖公告 ↗</a>'
+      : '';
+    var when = rec.checkedAt ? fmtDate(rec.checkedAt) : '';
+    acts = '<div class="draw-acts"><button class="draw-btn" type="button" data-act="draw-recheck" data-id="' + escapeHTML(n.id) + '">重查一次</button>' +
+      (src ? src : '') +
+      (when ? '<span style="font-size:10px;color:var(--ink-faint);letter-spacing:.06em;">' + escapeHTML(when) + ' 查的</span>' : '') +
+      '</div>';
+
+    var balls = '<div class="draw-sec"><span class="draw-sec-k">开奖号码</span><div class="draw-sec-v"><div class="draw-balls">' +
+      drawBallsHTML(rec.main, null, 'rd') +
+      '<i>+</i>' +
+      drawBallsHTML(rec.sub, null, 'bl') +
+      '</div></div></div>' +
+      '<div class="draw-sec"><span class="draw-sec-k">你这注</span><div class="draw-sec-v"><div class="draw-balls">' +
+      drawBallsHTML(item.main, rec.main, 'rd') +
+      '<i>+</i>' +
+      drawBallsHTML(item.sub, rec.sub, 'bl') +
+      '</div></div></div>';
+
+    return head + balls + res + acts;
+  }
+
+
   function setStatus(id, status) {
     var n = findNote(id);
     if (!n) return;
@@ -6553,6 +7108,9 @@ window.onerror = function (msg, url, line) {
       else if (act === 'share') openShareModal(id);
       else if (act === 'edit') openEditModal(id);
       else if (act === 'laoyou') openLaoyou(id);
+      else if (act === 'draw') toggleDraw(id);
+      else if (act === 'draw-check' || act === 'draw-recheck') checkDraw(id);
+      else if (act === 'draw-cfg') openDrawer();
       return; 
     }
 
