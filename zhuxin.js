@@ -10,13 +10,14 @@
 })(typeof window !== 'undefined' ? window : this, function (root) {
   'use strict';
 
-  var V = '2.0.0';
+  var V = '3.0.0';
   var KEY = {
     states: 'bamboo.v19.zx.states',
     tickets: 'bamboo.v19.zx.tickets',
     issues: 'bamboo.v19.zx.issues',
     logs: 'bamboo.v19.zx.logs',
-    cfg: 'bamboo.v19.zx.cfg'
+    cfg: 'bamboo.v19.zx.cfg',
+    ai: 'bamboo.v19.zx.ai'
   };
   var LIM = { tickets: 800, logs: 400, issues: 240 };
   var BASE_P = 0.0625;   /* 最低奖级门槛：双色球中蓝球 1/16，任何选法都改不了 */
@@ -366,6 +367,12 @@
   var CAT_MAP = {};
   CATALOG.forEach(function (s) { CAT_MAP[s.id] = s; });
 
+  function resetCatalog() {
+    CATALOG.length = CAT_RAW.length;
+    CAT_MAP = {};
+    CATALOG.forEach(function (s) { CAT_MAP[s.id] = s; });
+  }
+
   function families() {
     var seen = {}, out = [];
     CATALOG.forEach(function (s) {
@@ -382,6 +389,342 @@
     });
     return out;
   }
+
+  /* ==================================================================
+     AI 层
+     边界：AI 提假设、查事实，本机做验证、算账、判决。
+     模型说错一个号码，会被范围校验拦下；说错一个概率，会被样本数压住。
+     ================================================================== */
+  var KEYAI = KEY.ai;
+  var PROP_MAX = 12;
+
+  function readAI() {
+    var a = lsGet(KEYAI, null);
+    if (!a || typeof a !== 'object') a = {};
+    if (!a.bias || typeof a.bias !== 'object') a.bias = {};
+    if (!a.logs) a.logs = [];
+    if (!a.props) a.props = [];
+    return a;
+  }
+  function writeAI(a) { return lsSet(KEYAI, a); }
+
+  function aiOn() {
+    var o = root.__zxOpts;
+    if (!o || typeof o.aiChat !== 'function') return false;
+    /* 光有函数不算接上，得真的填了接口和 Key */
+    if (typeof o.aiReady === 'function') return !!o.aiReady();
+    return true;
+  }
+  function aiAsk(prompt, opts) {
+    if (!aiOn()) return Promise.reject(new Error('这台上没有配置 AI'));
+    return root.__zxOpts.aiChat(prompt, 0.25, opts || {});
+  }
+
+  /* 从模型回复里挖出第一个能 parse 的 JSON（对象或数组） */
+  function pickJSON(text) {
+    if (!text) return null;
+    var s = String(text);
+    var fence = s.match(/```(?:json)?\s*([\s\S]*?)```/);
+    if (fence) s = fence[1];
+
+    function tryParse(str) { try { return JSON.parse(str); } catch (e) { return null; } }
+    var whole = tryParse(s.trim());
+    if (whole) return whole;
+
+    var pairs = { '{': '}', '[': ']' };
+    for (var i = 0; i < s.length; i++) {
+      var open = s.charAt(i);
+      if (!pairs[open]) continue;
+      var close = pairs[open], depth = 0, inStr = false, esc2 = false;
+      for (var j = i; j < s.length; j++) {
+        var ch = s.charAt(j);
+        if (inStr) {
+          if (esc2) esc2 = false;
+          else if (ch === '\\') esc2 = true;
+          else if (ch === '"') inStr = false;
+          continue;
+        }
+        if (ch === '"') { inStr = true; continue; }
+        if (ch === open) depth++;
+        else if (ch === close) {
+          depth--;
+          if (depth === 0) {
+            var got = tryParse(s.slice(i, j + 1));
+            if (got) return got;
+            break;
+          }
+        }
+      }
+    }
+    return null;
+  }
+
+  /* ---------- 偏见乘子：AI 的话只能撬动 ±18% ---------- */
+  function biasMul(familyId) {
+    var v = readAI().bias[familyId];
+    if (!v) return 1;
+    return clamp(1 + 0.18 * clamp(Number(v) || 0, -1, 1), 0.82, 1.18);
+  }
+  /* 每两期减半：说对了影响留两期，说错了八期左右归零 */
+  function decayBias() {
+    var a = readAI();
+    a.turns = (a.turns || 0) + 1;
+    if (a.turns % 2 === 0) {
+      Object.keys(a.bias).forEach(function (k) {
+        a.bias[k] = Number(a.bias[k]) * 0.5;
+        if (Math.abs(a.bias[k]) < 0.06) delete a.bias[k];
+      });
+    }
+    writeAI(a);
+    return Object.keys(a.bias).length;
+  }
+
+  /* ---------- 接入点一：联网查开奖 ---------- */
+  function aiDraw(gameKey, issue) {
+    var g = gameOf(gameKey);
+    var q = g.name + ' 第' + issue + '期 开奖结果 开奖号码';
+    var want = [
+      '只输出一个 JSON 对象：不要解释，不要 markdown 代码块。',
+      '{"found":true,"issue":"期号","date":"YYYY-MM-DD","main":[...],"sub":[...],"source":"来源网址"}',
+      g.key === 'ssq'
+        ? 'main 必须是 6 个 1-33 的整数，sub 必须是 1 个 1-16 的整数。'
+        : 'main 必须是 5 个 1-35 的整数，sub 必须是 2 个 1-12 的整数。',
+      '号码必须是 JSON 整数，不要字符串，不要前导零，不要混日期。',
+      '资料里没有第 ' + issue + ' 期，就输出 {"found":false,"reason":"还没开奖"} 或 {"found":false,"reason":"没查到"}。',
+      '绝对不要拿别的期的号码来顶，也不要凭记忆猜。'
+    ].join('\n');
+
+    return aiAsk('请从资料里找出「' + g.name + '」第 ' + issue + ' 期的开奖号码。', {
+      webSearch: true,
+      query: q,
+      lead: '以下是刚刚联网搜到的真实资料。只依据这些资料作答，不要凭记忆补，也不要编号码：\n',
+      hint: want
+    }).then(function (text) {
+      var j = pickJSON(text);
+      if (!j) return { ok: false, msg: 'AI 的回复没读懂' };
+      if (!(j.found === true || j.found === 'true')) {
+        return { ok: false, msg: (j.reason ? String(j.reason).slice(0, 24) : '没查到') };
+      }
+      var main = numArr(j.main).slice(0, g.mainCount);
+      var sub = numArr(j.sub).slice(0, g.subCount);
+      if (main.length !== g.mainCount || sub.length !== g.subCount ||
+          uniq(main).length !== main.length || uniq(sub).length !== sub.length ||
+          main.some(function (x) { return x < 1 || x > g.mainMax; }) ||
+          sub.some(function (x) { return x < 1 || x > g.subMax; })) {
+        return { ok: false, msg: '查到的号码不成形' };
+      }
+      var refs = [];
+      var m = String(text).match(/__WEB_REFS__(\[[\s\S]*\])/);
+      if (m) { try { refs = JSON.parse(m[1]).slice(0, 3); } catch (e) { refs = []; } }
+      return {
+        ok: true, issue: String(j.issue || issue).slice(0, 12), date: String(j.date || '').slice(0, 10),
+        main: sortNum(main), sub: sortNum(sub), source: String(j.source || '').slice(0, 120), refs: refs
+      };
+    });
+  }
+
+  /* ---------- 接入点二：AI 读账，提出偏见 ---------- */
+  function aiDigest(limit) {
+    var states = readStates(), logs = readLogs().slice(0, limit || 16);
+    var lines = ['最近 ' + logs.length + ' 期记录：'];
+    logs.forEach(function (g) {
+      var tks = [];
+      (g.items || []).forEach(function (it) {
+        tks.push(it.id + (it.hit ? '✓' : '✗'));
+      });
+      lines.push('第' + g.issue + '期 开 ' + (g.draw && g.draw.main ? g.draw.main.join(' ') : '?') +
+        (g.draw && g.draw.sub && g.draw.sub.length ? ' + ' + g.draw.sub.join(' ') : '') +
+        ' | ' + (tks.length ? tks.join(' ') : '无票'));
+    });
+    lines.push('');
+    lines.push('各族累计（样本 / 中奖 / 实测率 / 我先前的先验）：');
+    var fam = {};
+    CATALOG.forEach(function (c) {
+      var st = states[c.id] || { n: 0, k: 0 };
+      if (!fam[c.family]) fam[c.family] = { n: 0, k: 0, prior: 0, c: 0 };
+      fam[c.family].n += st.n; fam[c.family].k += st.k;
+      fam[c.family].prior += c.prior; fam[c.family].c++;
+    });
+    Object.keys(fam).forEach(function (f) {
+      var o = fam[f];
+      if (!o.n) return;
+      lines.push((FAMILY[f] || f) + ' ' + f + '：' + o.n + ' 注 / 中 ' + o.k + ' / 实测 ' +
+        (o.k / o.n * 100).toFixed(2) + '% / 先验 ' + (o.prior / o.c * 100).toFixed(2) + '%');
+    });
+    lines.push('');
+    lines.push('样本最多的八个状态：');
+    Object.keys(states).map(function (id) { return { id: id, n: states[id].n, k: states[id].k }; })
+      .filter(function (x) { return x.n >= 3; })
+      .sort(function (a, b) { return b.n - a.n; }).slice(0, 8)
+      .forEach(function (x) {
+        var c = CAT_MAP[x.id] || {};
+        lines.push(x.id + ' ' + (c.name || '') + '：' + x.n + ' 注 / 中 ' + x.k + ' / 实测 ' +
+          (x.k / x.n * 100).toFixed(1) + '% / 先验 ' + ((c.prior || 0) * 100).toFixed(1) + '%');
+      });
+    return lines.join('\n');
+  }
+
+  function aiReflect() {
+    var digest = aiDigest(16);
+    var fams = Object.keys(FAMILY).map(function (k) { return k + '=' + FAMILY[k]; }).join('，');
+    var want = [
+      '只输出一个 JSON 对象，不要解释，不要 markdown 代码块：',
+      '{"read":"一句话说这批账最刺眼的地方（40 字内）",',
+      ' "bias":[{"family":"F.XXX","delta":-1到1的小数,"why":"证据（30字内）"}],',
+      ' "watch":["S.XXX"],"next":"下一批该重点验什么（40 字内）"}',
+      'bias 最多 3 条，delta 为正表示这个族的表现好于我先前的先验，为负表示更差。',
+      '族的可用值：' + fams + '。',
+      '样本少于 12 注的族不要写进 bias——那是噪声，不是证据。',
+      'watch 里放 1-3 个状态 id，只能从上面出现过的 id 里挑。',
+      '你是被请来挑刺的，不是来安慰我的。有反例就直说。'
+    ].join('\n');
+
+    return aiAsk('这是一台记账机器攒下的开奖记录。请你通读，指出我先前的判断哪里错了。\n\n' + digest, {
+      hint: want
+    }).then(function (text) {
+      var j = pickJSON(text);
+      if (!j || typeof j !== 'object' || Array.isArray(j)) return { ok: false, msg: 'AI 的回复没读懂' };
+      var bias = [];
+      (Array.isArray(j.bias) ? j.bias : []).slice(0, 3).forEach(function (b) {
+        if (!b || !FAMILY[b.family]) return;
+        var d = Number(b.delta);
+        if (!isFinite(d) || Math.abs(d) < 0.05) return;
+        bias.push({ family: b.family, name: FAMILY[b.family], delta: clamp(d, -1, 1), why: String(b.why || '').slice(0, 60) });
+      });
+      var watch = (Array.isArray(j.watch) ? j.watch : [])
+        .filter(function (id) { return !!CAT_MAP[id]; }).slice(0, 3);
+      return {
+        ok: true, at: nowISO(), read: String(j.read || '').slice(0, 80),
+        bias: bias, watch: watch, next: String(j.next || '').slice(0, 80),
+        n: readLogs().length, samples: stats().samples
+      };
+    });
+  }
+
+  /* ---------- 接入点三：AI 提新状态，本机验证准入 ---------- */
+  var PARAM_DOC = [
+    'sumLo,sumHi：和值上下限（整数）',
+    'spanLo,spanHi：跨度上下限',
+    'oddMin,oddMax：奇数个数的上下限',
+    'zone：[三区个数] 如 [2,2,2]',
+    'primeMin,primeMax：质数个数上下限',
+    'consecLen + consecMin：必须有一组连续 consecLen 个（consecMin 填 1）',
+    'consecZone：head / mid / tail，连号必须落在这个区',
+    'keepN,keepSide：保留上期 keepN 个，keepSide 取 big（大号优先）或 small',
+    'coldN：取遗漏最久的 coldN 个；coldHigh：取次冷的几个',
+    'hotN：取最热的几个；hotWarm：取温热的几个',
+    'tailSame：至少几个同尾；tailScat：尾数全不同（填 1）',
+    'tailBig：尾数 ≥5 的至少 4 个；tailSmall：尾数 <5 的至少 4 个',
+    'arith：等差（填 1）；step：固定步长；mirror：必须有一对镜像号（和为 mainMax+1）',
+    'sameParity：全奇或全偶（填 1）'
+  ].join('\n');
+
+  function aiPropose(k) {
+    k = k || 3;
+    var ids = CATALOG.map(function (c) { return c.id; });
+    var fams = Object.keys(FAMILY).map(function (x) { return x + '=' + FAMILY[x]; }).join('，');
+    var want = [
+      '只输出一个 JSON 数组，不要解释，不要 markdown 代码块：',
+      '[{"id":"S.XXX","name":"中文名(6字内)","family":"F.XXX","type":"T.XXX",',
+      '  "rule":"一句话规则","params":{...},"prior":0.03,"why":"为什么值得一试（30字内）"}]',
+      '一共 ' + k + ' 个。id 用大写字母数字和点，必须以 S. 开头，不能和已有 id 重复。',
+      'family 只能取：' + fams + '。type 自拟，同族的放同一个 type。',
+      'params 只能用下面这些键：\n' + PARAM_DOC,
+      'params 至少两个约束，别只写一个——一个约束的买法库里已经有了。',
+      'prior 一律填 0.03，不要给我更高的数：你提的东西还没有任何证据。'
+    ].join('\n');
+
+    return aiAsk('竹芯的状态库里现有 ' + CATALOG.length + ' 个状态。已有 id：\n' +
+      ids.join(' ') + '\n\n请提出 ' + k + ' 个现有库里没有的买法状态，要求是：' +
+      '把两个以上约束叠在一起，且这个组合在直觉上有一点道理（不是纯随机拼）。', {
+      hint: want
+    }).then(function (text) {
+      var arr = pickJSON(text);
+      if (!arr) return { ok: false, msg: 'AI 的回复没读懂' };
+      if (!Array.isArray(arr)) arr = (arr && Array.isArray(arr.states)) ? arr.states : [];
+
+      var ctx = ctxOf(readCfg().game || 'ssq');
+      var ok = [], rejected = [];
+      arr.slice(0, k + 2).forEach(function (p) {
+        if (!p || typeof p !== 'object') return;
+        var id = String(p.id || '').toUpperCase().replace(/[^A-Z0-9.]/g, '');
+        if (!/^S\.[A-Z0-9.]{2,26}$/.test(id)) { rejected.push('编号不成形'); return; }
+        if (CAT_MAP[id]) { rejected.push(id + ' 已存在'); return; }
+        if (!FAMILY[p.family]) { rejected.push(id + ' 族不认'); return; }
+        var params = (p.params && typeof p.params === 'object') ? p.params : null;
+        if (!params || !Object.keys(params).length) { rejected.push(id + ' 没有参数'); return; }
+        if (Object.keys(params).length < 2) { rejected.push(id + ' 约束太少'); return; }
+
+        var cand = {
+          id: id, name: String(p.name || id).slice(0, 10), family: p.family,
+          familyName: FAMILY[p.family], type: String(p.type || ('T.' + p.family.replace(/^F\./, ''))).slice(0, 20),
+          rule: String(p.rule || '').slice(0, 60), params: params,
+          prior: clamp(Number(p.prior) || 0.03, 0.02, 0.05), why: String(p.why || '').slice(0, 80), by: 'ai'
+        };
+        CAT_MAP[id] = cand;
+        var t = makeTicket(id, '2025001', readCfg().game || 'ssq', ctx);
+        delete CAT_MAP[id];
+        if (!t || t.main.length !== ctx.g.mainCount || t.residual > 0.6) {
+          rejected.push(id + ' 出不了票');
+          return;
+        }
+        cand.residual = t.residual;
+        cand.sample = t.main;
+        ok.push(cand);
+      });
+
+      if (!ok.length) return { ok: false, msg: rejected[0] || 'AI 提的都不合格' };
+
+      // 准入：进目录
+      ok.forEach(function (c) {
+        CATALOG.push(c);
+        CAT_MAP[c.id] = c;
+      });
+      var a = readAI();
+      a.props = ok.concat(a.props).slice(0, PROP_MAX);
+      writeAI(a);
+      return { ok: true, added: ok, rejected: rejected };
+    });
+  }
+
+  /* AI 读完账，本机决定要不要听：偏见写入，下期采样生效，然后逐期衰减 */
+  function applyBias(r) {
+    if (!r || !r.ok) return 0;
+    var a = readAI();
+    (r.bias || []).forEach(function (b) { a.bias[b.family] = b.delta; });
+    a.logs = [r].concat(a.logs || []).slice(0, 20);
+    writeAI(a);
+    return (r.bias || []).length;
+  }
+
+  /* 结算完自己去看一眼：不点按钮也会读，但一分钟内不重复读，失败就闭嘴 */
+  function autoReflect() {
+    if (!aiOn() || ui.autoBusy) return;
+    var a = readAI();
+    var last = a.logs[0];
+    if (last && last.at && (Date.now() - new Date(last.at).getTime()) < 60000) return;
+    var s = stats();
+    if (s.settled < 3 || s.samples < 9) return;
+
+    ui.autoBusy = true;
+    aiReflect().then(function (r) {
+      ui.autoBusy = false;
+      if (!r || !r.ok) return;
+      applyBias(r);
+      if (ui.open && ui.tab === 'log') { paint(false); }
+    }).catch(function () { ui.autoBusy = false; });
+  }
+
+  /* 启动时把已准入的 AI 提案装回目录 */
+  function loadProps() {
+    var a = readAI();
+    (a.props || []).forEach(function (p) {
+      if (!p || !p.id || CAT_MAP[p.id]) return;
+      CAT_MAP[p.id] = p;
+      CATALOG.push(p);
+    });
+  }
+  loadProps();
 
   /* ============ 历史数据 ============ */
   function LL() { return (root && root.LotteryLab) || null; }
@@ -786,7 +1129,8 @@
       var st = states[c.id] || { n: 0, k: 0 };
       var a0 = c.prior * PRIOR_K, b0 = (1 - c.prior) * PRIOR_K;
       var a = a0 + st.k, b = b0 + (st.n - st.k);
-      return { id: c.id, v: betaDraw(a, b, Math.random), n: st.n };
+      /* AI 的偏见在这里生效：只撬动采样权重，不动先验，也进不了账本 */
+      return { id: c.id, v: betaDraw(a, b, Math.random) * biasMul(c.family), n: st.n };
     });
     draws.sort(function (x, y) { return y.v - x.v; });
     var out = [];
@@ -873,7 +1217,7 @@
     var tickets = readTickets();
     var states = readStates();
     var issues = readIssues();
-    var hit = 0, spend = 0, back = 0, floatN = 0, touched = [];
+    var hit = 0, spend = 0, back = 0, floatN = 0, touched = [], items = [];
 
     tickets.forEach(function (t) {
       if (t.game !== gameKey || t.issue !== issue || t.settled) return;
@@ -884,6 +1228,8 @@
       spend += 2;
       if (r.money > 0) back += r.money;
       else if (r.money < 0) floatN++;
+
+      items.push({ id: t.stateId, hit: r.hit ? 1 : 0, k: r.k || 0, b: r.b || 0 });
 
       var st = states[t.stateId];
       if (!st) return;
@@ -907,18 +1253,21 @@
     else issues.unshift({ id: issue, game: gameKey, createdAt: nowISO(), settled: true, draw: { main: dm, sub: ds }, settledAt: nowISO() });
     writeIssues(issues);
 
-    var log = buildLog(gameKey, issue, dm, ds, touched, states, { hit: hit, spend: spend, back: back, floatN: floatN });
+    var log = buildLog(gameKey, issue, dm, ds, touched, states,
+      { hit: hit, spend: spend, back: back, floatN: floatN }, items);
     var logs = readLogs();
     logs.unshift(log);
     writeLogs(logs);
+
+    /* 旧偏见减半：AI 的判断必须每期重新挣一次 */
+    decayBias();
 
     return { ok: true, issue: issue, hit: hit, spend: spend, back: back, log: log, draw: { main: dm, sub: ds } };
   }
 
   /* ============ 反思 ============ */
-  function buildLog(gameKey, issue, dm, ds, touched, states, tally) {
-    var rises = [], falls = [], refuted = [], thin = [];
-    var starts = [], thin = [];
+  function buildLog(gameKey, issue, dm, ds, touched, states, tally, items) {
+    var rises = [], falls = [], refuted = [], thin = [], starts = [];
     touched.forEach(function (id) {
       var c = CAT_MAP[id], st = states[id];
       if (!c || !st) return;
@@ -950,7 +1299,8 @@
       draw: { main: dm, sub: ds },
       tally: tally, conv: conv,
       rises: rises.slice(0, 3), falls: falls.slice(0, 3), refuted: refuted.slice(0, 3),
-      thinCount: thin.length,
+      thinCount: thin.length, starts: starts.length,
+      items: (items || []).slice(0, 12),
       text: lines.join('\n'),
       ai: ''
     };
@@ -961,13 +1311,16 @@
     return JSON.stringify({
       app: 'zhuxin', v: V, at: nowISO(),
       states: readStates(), tickets: readTickets(),
-      issues: readIssues(), logs: readLogs(), cfg: readCfg()
+      issues: readIssues(), logs: readLogs(), cfg: readCfg(),
+      ai: readAI()
     }, null, 2);
   }
   function wipe() {
     Object.keys(KEY).forEach(function (k) {
       try { root.localStorage.removeItem(KEY[k]); } catch (e) { }
     });
+    /* 状态目录回到出厂的 68 格，AI 提的提案一并退出 */
+    resetCatalog();
   }
 
   function stats() {
@@ -997,7 +1350,11 @@
   /* ==================================================================
      UI
      ================================================================== */
-  var ui = { open: false, tab: 'core', game: 'ssq', plan: null, fam: {}, detail: null, toastT: 0, el: null };
+  var ui = {
+    open: false, tab: 'core', game: 'ssq', plan: null, fam: {}, detail: null, toastT: 0, el: null,
+    aiDraw: null, aiDrawBusy: false, aiErr: '', aiIssue: '',
+    aiRefBusy: false, aiPropBusy: false, aiProp: null, autoBusy: false
+  };
 
   function $(id) { return root.document.getElementById(id); }
   function up(node, sel) {
@@ -1028,10 +1385,11 @@
       '<section class="zx-hero" id="zxHero"></section>' +
       '<nav class="zx-tabs" id="zxTabs">' +
       '<button data-tab="core" class="on">芯核</button>' +
-      '<button data-tab="issue">开一期</button>' +
-      '<button data-tab="lib">状态库</button>' +
+      '<button data-tab="issue">出票</button>' +
+      '<button data-tab="lib">状态</button>' +
       '<button data-tab="settle">结算</button>' +
       '<button data-tab="log">反思</button>' +
+      '<button data-tab="flow">回路</button>' +
       '</nav>' +
       '<main id="zxBody"></main>' +
       '<div class="zx-foot">竹芯不预测。它只记账、算账、认错。</div>' +
@@ -1107,6 +1465,7 @@
     else if (ui.tab === 'issue') h = issueHTML();
     else if (ui.tab === 'lib') h = libHTML();
     else if (ui.tab === 'settle') h = settleHTML();
+    else if (ui.tab === 'flow') h = flowHTML();
     else h = logHTML();
     body.innerHTML = h;
     var tabs = $('zxTabs');
@@ -1122,6 +1481,105 @@
 
   function secHead(t, s) {
     return '<div class="zx-sh"><h3>' + t + '</h3><span>' + s + '</span></div>';
+  }
+
+  /* ---------- 回路 ---------- */
+  function flowHTML() {
+    var a = readAI();
+    var biasKeys = Object.keys(a.bias || {});
+    var aiOk = aiOn();
+    var pts = [[110, 30], [179.3, 70], [179.3, 150], [110, 190], [40.7, 150], [40.7, 70]];
+
+    var svg = '<svg viewBox="0 0 220 220" class="zx-loop-svg">' +
+      '<circle cx="110" cy="110" r="80" class="zx-loop-bg"/>' +
+      '<circle cx="110" cy="110" r="80" class="zx-loop-dash" transform="rotate(-90 110 110)" stroke-dasharray="52 31.78"/>';
+    for (var i = 0; i < 6; i++) {
+      svg += '<circle cx="' + pts[i][0] + '" cy="' + pts[i][1] + '" r="14" class="zx-loop-pt' +
+        (i === 3 ? ' real' : '') + '"/>' +
+        '<text x="' + pts[i][0] + '" y="' + (pts[i][1] + 3.6) + '" class="zx-loop-n">' + (i + 1) + '</text>';
+    }
+    svg += '<text x="110" y="103" class="zx-loop-c1">竹 芯</text>' +
+      '<text x="110" y="123" class="zx-loop-c2">一圈 = 一期</text>' +
+      '</svg>';
+
+    var steps = [
+      ['状态库', '本机',
+        '族是方向，型是手法，状态才是下注的那一格。每一格由一组约束定义，配一个先验和一句「为什么是这个数」。先验是偏见，不是事实。',
+        '先验 = 手填 2.0%–6.6%\n强度 = 40 次虚拟观测',
+        'bamboo.v19.zx.states'],
+      ['采样', '本机 + AI',
+        '对每一格抽一次 Beta 分布，取最大的三个。后验高的容易被挑中，但每期硬留一个名额给样本最少的那格——只挑高分，就永远不知道低分的有没有被冤枉。',
+        'a = 先验×40 + 中奖数\nb = (1−先验)×40 + 未中数\n取 β(a,b) 最大的 3 个\nAI 偏见 ×0.82–1.18',
+        'bamboo.v19.zx.ai'],
+      ['出票', '本机',
+        '约束交给出号引擎：先按三区配额造骨架，再用模拟退火换号，直到残差归零。同一期、同一状态，永远出同一注——所以每一注都能复核。',
+        '残差 = Σ 各维偏差\n残差 = 0 才出票\n种子 = 期号 + 状态 + 彩种',
+        'bamboo.v19.zx.tickets'],
+      ['开奖', '现实 / AI',
+        '号码不是算出来的，是开出来的。AI 联网只做一件事：把号码抄回来。个数不对、范围超了、有重复，一律退回。',
+        '双色球 6+1｜大乐透 5+2\n越界 / 重复 / 缺号 → 拒收',
+        '只取当次，不落账'],
+      ['结算', '本机',
+        '官方奖级表在本机跑。AI 不碰钱，也不碰概率——它编一个数，你可能信三个月。账本按 2 元一注记投入，一、二等奖只记次数，不猜金额。',
+        '命中 = |票 ∩ 开奖|\n奖级 → 固定奖金额\n一/二等奖：只记次数',
+        'bamboo.v19.zx.logs'],
+      ['后验 · 反思', '本机 + AI',
+        '中没中写回状态，先验被后验顶掉一点。AI 通读最近 16 期，指出哪个族的先验错得最离谱；本机把它折成采样权重，然后每期减半——它的判断必须重新挣。',
+        'a += 中｜b += 未中\n逼近度 = 1 − e^(-n/260)\nAI 偏见每期 ×0.5',
+        'bamboo.v19.zx.states']
+    ];
+
+    var h = '<section class="zx-blk">';
+    h += '<div class="zx-loop">' + svg + '</div>';
+    h += '<p class="zx-loop-cap">顺时针走一圈，就是一期。<br>每一圈都让某个先验离现实近一点。</p>';
+    h += '</section>';
+
+    h += '<div class="zx-steps">';
+    steps.forEach(function (st, i) {
+      var w = st[1];
+      var wcls = w.indexOf('AI') >= 0 ? ' ai' : (w.indexOf('现实') >= 0 ? ' real' : '');
+      h += '<section class="zx-step">' +
+        '<div class="zx-step-n">' + pad2(i + 1) + '</div>' +
+        '<div class="zx-step-b">' +
+        '<div class="zx-step-h"><b>' + st[0] + '</b><span class="zx-step-w' + wcls + '">' + w + '</span></div>' +
+        '<p>' + st[2] + '</p>' +
+        '<code>' + st[3] + '</code>' +
+        '<div class="zx-step-k">存 → ' + st[4] + '</div>' +
+        '</div></section>';
+    });
+    h += '</div>';
+
+    h += '<section class="zx-blk">';
+    h += secHead('谁说了算', aiOk ? 'AI 已接上' : 'AI 没配置');
+    h += '<div class="zx-who">' +
+      '<div><b class="real">现实</b><span>决定开什么号。它不解释，只出结果。</span></div>' +
+      '<div><b>本机</b><span>出票、算奖级、更新后验、落账。所有数字都在这儿写。</span></div>' +
+      '<div><b class="ai">AI</b><span>查开奖、读账挑刺、提新买法。只能提议，不能落账。</span></div>' +
+      '</div>';
+    if (biasKeys.length) {
+      h += '<div class="zx-chips2">';
+      biasKeys.forEach(function (k) {
+        var v = a.bias[k], up = v > 0;
+        h += '<span class="' + (up ? 'up' : 'down') + '">' + esc(FAMILY[k] || k) + ' ' +
+          (up ? '+' : '') + Math.round(v * 18) + '% 权重</span>';
+      });
+      h += '</div>';
+      h += '<p class="zx-fine">这是 AI 上回读账留下的偏见，正在逐期减半。它不改先验，只改下一期先挑谁。</p>';
+    } else {
+      h += '<p class="zx-fine">AI 的偏见没有存量。每次结算后自动减半，三期左右归零——它说的话有保质期。</p>';
+    }
+    h += '</section>';
+
+    h += '<section class="zx-blk">';
+    h += secHead('为什么不让 AI 算账', aiOk ? 'DeepSeek 已连' : '未配置 AI');
+    h += '<p class="zx-flow-p">模型会编。编一个号码，这一期的账就废了；编一个概率，你可能信三个月。' +
+      '所以竹芯只让它做两件不碰账的事：<b>抄事实</b>、<b>提假设</b>。' +
+      '抄错被范围校验拦下，提错被样本数压住。</p>';
+    h += '<p class="zx-fine">' + CATALOG.length + ' 个状态数学上完全等价。样本足够时它们都会向 6.25% 靠拢——' +
+      '那一天不是找到规律，是认清没有。</p>';
+    h += '</section>';
+
+    return h;
   }
 
   /* ---------- 芯核 ---------- */
@@ -1311,6 +1769,26 @@
       '<div><b>' + CATALOG.filter(function (c) { return states[c.id] && states[c.id].n > 0; }).length + '</b><i>有样本</i></div>' +
       '</div>';
     h += '<p class="zx-fine">族是方向，型是手法，状态才是真正拿去下注的那一格。点开看每个状态的编号、规则和它的偏见。</p>';
+    if (aiOn()) {
+      h += '<button class="zx-btn wide zx-ai-btn" data-act="aipropose"' + (ui.aiPropBusy ? ' disabled' : '') + '>' +
+        (ui.aiPropBusy ? '<span class="zx-spin2"></span>DeepSeek 正在想新买法…' : '<i class="zx-ai-ico">✦</i>让 AI 提 3 个库里没有的买法') + '</button>';
+      h += '<p class="zx-fine">AI 提的进不进得来，由本机验：编号不能重、约束至少两条、必须出得了票、残差归零。' +
+        '过了才收，先验一律压到 3% 以下——它还没有任何证据。</p>';
+    }
+    if (ui.aiProp) {
+      if (ui.aiProp.ok) {
+        h += '<div class="zx-aiprop">' +
+          '<b>收了 ' + ui.aiProp.added.length + ' 个</b>' +
+          ui.aiProp.added.map(function (x) {
+            return '<p><code>' + esc(x.id) + '</code>' + esc(x.name) + ' · 残差 ' + x.residual.toFixed(2) +
+              ' · 样票 ' + x.sample.map(pad2).join(' ') + '</p>';
+          }).join('') +
+          (ui.aiProp.rejected.length ? '<i>退回：' + esc(ui.aiProp.rejected.join('；')) + '</i>' : '') +
+          '</div>';
+      } else {
+        h += '<div class="zx-aierr">' + esc(ui.aiProp.msg) + '<span>它提的东西本机验不过，就不收。</span></div>';
+      }
+    }
     h += '</section>';
 
     fams.forEach(function (f) {
@@ -1344,7 +1822,8 @@
     var w = Math.min(100, (p.mean / 0.14) * 100);
     var det = ui.detail === sid;
     var h = '<button class="zx-st' + (det ? ' on' : '') + '" data-act="st" data-s="' + sid + '">';
-    h += '<span class="zx-st-l"><code>' + esc(sid.replace(/^S\./, '')) + '</code><b>' + esc(c.name) + '</b></span>';
+    h += '<span class="zx-st-l"><code>' + esc(sid.replace(/^S\./, '')) + '</code><b>' + esc(c.name) +
+      (c.by === 'ai' ? '<em class="zx-st-ai">AI</em>' : '') + '</b></span>';
     h += '<span class="zx-st-r"><i>' + pct(p.mean, 1) + '</i><em>' + st.n + ' 注</em></span>';
     h += '<span class="zx-st-bar"><i style="width:' + w.toFixed(1) + '%"></i></span>';
     h += '</button>';
@@ -1355,7 +1834,8 @@
   function stateDetail(c, st, p) {
     var ev = evidenceOf(st);
     var h = '<div class="zx-det">';
-    h += '<div class="zx-det-id"><code>' + esc(c.id) + '</code></div>';
+    h += '<div class="zx-det-id"><code>' + esc(c.id) + '</code>' +
+      (c.by === 'ai' ? '<span class="zx-det-ai">AI 提的 · 本机验过票 · 等开奖</span>' : '') + '</div>';
     h += '<p class="zx-det-rule"><b>规则</b>' + esc(c.rule) + '</p>';
     h += '<p class="zx-det-why"><b>为什么先验是 ' + pct(c.prior, 2) + '</b>' + esc(c.why) + '</p>';
     h += '<div class="zx-ci">' +
@@ -1376,6 +1856,12 @@
       h += '</div><p class="zx-fine">这条是信念的移动轨迹。往下走，说明开奖在教训它。</p>';
     }
     h += '</div>';
+    return h;
+  }
+
+  function ballRow(arr) {
+    var h = '';
+    arr.forEach(function (n) { h += '<b class="zx-b">' + pad2(n) + '</b>'; });
     return h;
   }
 
@@ -1401,15 +1887,47 @@
       return h;
     }
 
+    var aiD = (ui.aiDraw && ui.aiDraw.queryIssue === def) ? ui.aiDraw : null;
+    var preMain = aiD ? aiD.main.map(pad2).join(' ') : '';
+    var preSub = aiD ? aiD.sub.map(pad2).join(' ') : '';
+
     h += '<section class="zx-blk">';
     h += secHead('录入开奖', '第 ' + def + ' 期 · ' + tickets.filter(function (t) { return t.issue === def; }).length + ' 注待结');
     h += '<div class="zx-form">' +
-      '<label><span>期号</span><input id="zxIssue" value="' + esc(def) + '" inputmode="numeric"></label>' +
-      '<label><span>主号（' + g.mainCount + ' 个）</span><input id="zxMain" placeholder="' + (ui.game === 'ssq' ? '01 05 12 18 23 30' : '02 09 17 24 33') + '" inputmode="numeric"></label>' +
-      '<label><span>' + g.subName + '（' + g.subCount + ' 个）</span><input id="zxSub" placeholder="' + (ui.game === 'ssq' ? '08' : '03 11') + '" inputmode="numeric"></label>' +
+      '<label><span>期号</span><input id="zxIssue" value="' + esc(ui.aiIssue || def) + '" inputmode="numeric"></label>' +
+      '<label><span>主号（' + g.mainCount + ' 个）</span><input id="zxMain" value="' + preMain + '" placeholder="' + (ui.game === 'ssq' ? '01 05 12 18 23 30' : '02 09 17 24 33') + '" inputmode="numeric"></label>' +
+      '<label><span>' + g.subName + '（' + g.subCount + ' 个）</span><input id="zxSub" value="' + preSub + '" placeholder="' + (ui.game === 'ssq' ? '08' : '03 11') + '" inputmode="numeric"></label>' +
       '</div>';
-    h += '<button class="zx-btn primary wide" data-act="settle">结算这一期</button>';
-    h += '<p class="zx-fine">奖级按官方奖级表在本机算，不联网、不问模型。号码超出范围的会被拦下。</p>';
+
+    if (aiOn()) {
+      h += '<button class="zx-btn wide zx-ai-btn" data-act="aidraw"' + (ui.aiDrawBusy ? ' disabled' : '') + '>' +
+        (ui.aiDrawBusy
+          ? '<span class="zx-spin2"></span>DeepSeek 正在联网查第 ' + esc(ui.aiIssue || def) + ' 期…'
+          : '<i class="zx-ai-ico">✦</i>让 AI 联网查这一期') + '</button>';
+    } else {
+      h += '<p class="zx-fine">这台还没接 AI。到设置里填上 DeepSeek 的接口和 Key，它就能自己去查开奖。</p>';
+    }
+
+    if (aiD) {
+      h += '<div class="zx-aidraw">' +
+        '<div class="zx-aidraw-h"><span>AI 查到 · 第 ' + esc(aiD.issue) + ' 期</span><i>' + esc(aiD.date || '') + '</i></div>' +
+        '<div class="zx-aidraw-b">' + ballRow(aiD.main) +
+        (aiD.sub.length ? '<span class="zx-bsep"></span>' + ballRow(aiD.sub) : '') + '</div>' +
+        (aiD.source ? '<a class="zx-aidraw-s" href="' + esc(aiD.source) + '" target="_blank" rel="noopener">' +
+          esc(aiD.source.replace(/^https?:\/\//, '').slice(0, 42)) + '</a>' : '') +
+        (aiD.issue !== aiD.queryIssue
+          ? '<p class="zx-warn">它回复里写的是第 ' + esc(aiD.issue) + ' 期，跟你查的 ' + esc(aiD.queryIssue) +
+            ' 对不上。这组号先别用。</p>' : '') +
+        '<p class="zx-fine">AI 只抄号码。命中数、奖级、金额还是本机算。核对无误再结算。</p>' +
+        '</div>';
+    }
+    if (ui.aiErr) {
+      h += '<div class="zx-aierr">' + esc(ui.aiErr) + '<span>没关系，手动填一样能结算。</span></div>';
+    }
+
+    h += '<button class="zx-btn primary wide" data-act="settle">' +
+      (aiD ? '确认这组号，结算' : '结算这一期') + '</button>';
+    h += '<p class="zx-fine">奖级在本机按官方奖级表算。越界、重复、缺号，一律拦下。</p>';
     h += '</section>';
 
     if (list.length > 1) {
@@ -1449,6 +1967,42 @@
     h += '<p class="zx-fine">这本账一直记着。中奖 ' + sum.hit + ' 次' +
       (sum.floatN ? '，其中 ' + sum.floatN + ' 注是一/二等奖，金额浮动，没有计入上面的净额' : '') +
       '。竹芯不替你判断值不值，只保证数字不撒谎。</p>';
+    h += '</section>';
+
+    /* AI 读账 */
+    var aiLog = readAI().logs[0];
+    h += '<section class="zx-blk">';
+    h += secHead('AI 读账', aiOn() ? (aiLog ? esc(aiLog.at.slice(5, 16).replace('T', ' ')) : '还没读过') : '未配置 AI');
+    if (aiOn()) {
+      h += '<button class="zx-btn wide zx-ai-btn" data-act="aireflect"' + (ui.aiRefBusy ? ' disabled' : '') + '>' +
+        (ui.aiRefBusy ? '<span class="zx-spin2"></span>DeepSeek 正在通读这批账…' : '<i class="zx-ai-ico">✦</i>让 AI 通读这批账，指出我错在哪') + '</button>';
+    } else {
+      h += '<p class="zx-fine">接上 AI 之后，它会通读最近 16 期，指出哪个族的先验错得最离谱。</p>';
+    }
+    if (aiLog) {
+      h += '<div class="zx-airead">';
+      if (aiLog.read) h += '<p class="zx-airead-r">「' + esc(aiLog.read) + '」</p>';
+      if (aiLog.bias && aiLog.bias.length) {
+        h += '<div class="zx-chips2">';
+        aiLog.bias.forEach(function (b) {
+          h += '<span class="' + (b.delta > 0 ? 'up' : 'down') + '">' + esc(b.name) + ' ' +
+            (b.delta > 0 ? '+' : '') + Math.round(b.delta * 18) + '% 权重</span>';
+        });
+        h += '</div>';
+        h += '<div class="zx-airead-why">';
+        aiLog.bias.forEach(function (b) {
+          h += '<p><b>' + esc(b.name) + '</b>' + esc(b.why) + '</p>';
+        });
+        h += '</div>';
+      }
+      if (aiLog.watch && aiLog.watch.length) {
+        h += '<p class="zx-airead-k">盯 · ' + aiLog.watch.map(function (x) { return '<code>' + esc(x) + '</code>'; }).join(' ') + '</p>';
+      }
+      if (aiLog.next) h += '<p class="zx-airead-k">下一批 · ' + esc(aiLog.next) + '</p>';
+      h += '<p class="zx-fine">这些话只换成下期采样里 ±18% 的权重，不改先验，也不进账本。每两期减半——' +
+        '说对了，影响留两期；说错了，八期左右归零。</p>';
+      h += '</div>';
+    }
     h += '</section>';
 
     logs.slice(0, 40).forEach(function (g) {
@@ -1503,6 +2057,61 @@
         paint();
         return;
       }
+      if (act === 'aidraw') {
+        if (ui.aiDrawBusy) return;
+        var el = $('zxIssue');
+        var want = (el && el.value.trim()) || nextIssue(ui.game);
+        ui.aiIssue = want; ui.aiErr = ''; ui.aiDraw = null; ui.aiDrawBusy = true;
+        paint(false);
+        aiDraw(ui.game, want).then(function (r) {
+          ui.aiDrawBusy = false;
+          if (r.ok && toInt(r.issue) !== toInt(want)) {
+            ui.aiErr = '它查到的是第 ' + r.issue + ' 期，不是你要的 ' + want + ' 期。这组号不用。';
+          } else if (r.ok) {
+            r.queryIssue = want; ui.aiDraw = r; ui.aiIssue = want;
+            toast('查到了，核对一下');
+          } else ui.aiErr = '没查到：' + r.msg;
+          paint(false);
+        }).catch(function (e) {
+          ui.aiDrawBusy = false;
+          ui.aiErr = (e && e.message) ? e.message : '联网失败';
+          paint(false);
+        });
+        return;
+      }
+      if (act === 'aireflect') {
+        if (ui.aiRefBusy) return;
+        ui.aiRefBusy = true;
+        paint(false);
+        aiReflect().then(function (r) {
+          ui.aiRefBusy = false;
+          if (!r.ok) { toast(r.msg || 'AI 没读懂'); paint(false); return; }
+          var n = applyBias(r);
+          toast(n ? 'AI 动了 ' + n + ' 个族的权重' : '读了，但它没找到站得住的证据');
+          paint(false);
+        }).catch(function (e) {
+          ui.aiRefBusy = false;
+          toast((e && e.message) ? e.message : '联网失败');
+          paint(false);
+        });
+        return;
+      }
+      if (act === 'aipropose') {
+        if (ui.aiPropBusy) return;
+        ui.aiPropBusy = true; ui.aiProp = null;
+        paint(false);
+        aiPropose(3).then(function (r) {
+          ui.aiPropBusy = false;
+          ui.aiProp = r;
+          toast(r.ok ? '收了 ' + r.added.length + ' 个新状态' : (r.msg || '都不合格'));
+          paint(false);
+        }).catch(function (e) {
+          ui.aiPropBusy = false;
+          ui.aiProp = { ok: false, msg: (e && e.message) ? e.message : '联网失败' };
+          paint(false);
+        });
+        return;
+      }
       if (act === 'export') {
         try {
           var blob = new Blob([exportAll()], { type: 'application/json' });
@@ -1551,9 +2160,11 @@
         var res = settleIssue(ui.game, iss, dm, ds);
         if (!res.ok) { toast(res.msg || '结算失败'); return; }
         ui.plan = null;
+        ui.aiDraw = null; ui.aiIssue = ''; ui.aiErr = '';
         toast(res.hit ? '中了 ' + res.hit + ' 注' : '这期没中');
         ui.tab = 'log';
         paint();
+        autoReflect();
         return;
       }
     });
@@ -1608,6 +2219,13 @@
     postOf: postOf, evidenceOf: evidenceOf, convergence: convergence,
     nextIssue: nextIssue, planIssue: planIssue, issueTickets: issueTickets, settleIssue: settleIssue,
     stats: stats, exportAll: exportAll, wipe: wipe,
+    _ai: {
+      on: aiOn, draw: aiDraw, reflect: aiReflect, propose: aiPropose,
+      applyBias: applyBias, bias: function () { return readAI().bias; },
+      log: function () { return readAI().logs[0] || null; },
+      logs: function () { return readAI().logs; },
+      props: function () { return readAI().props; }
+    },
     open: open, close: close, isOpen: function () { return !!(ui && ui.open); },
     _ui: function () { return ui; }
   };
