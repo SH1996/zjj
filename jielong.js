@@ -39,6 +39,8 @@
     { name: '鲜肉包', price: 2.5, by: '个', alias: ['鲜肉'] },
     { name: '酱肉包', price: 2.5, by: '个', alias: ['酱肉'] },
     { name: '麻辣牛肉包', price: 2.5, by: '个' },
+    // 「牛肉包」和「麻辣牛肉包」是两样：以前靠包含匹配混成一个，AI 顺手补一行就成了两倍钱
+    { name: '牛肉包', price: 2.5, by: '个' },
     { name: '豆腐包', price: 2, by: '个', alias: ['麻辣豆腐包'] },
     { name: '豆沙包', price: 2, by: '个' },
     { name: '豇豆包', price: 2, by: '个' },
@@ -267,7 +269,9 @@
    */
   function qtyBefore(s, start) {
     var before = s.slice(0, start);
-    var reU = new RegExp('(半|[0-9]{1,2}|[一二两三四五六七八九十])\\s*([' + UNIT_CHARS + '])\\s*$');
+    // 末尾不许有多余空格：「小笼包 半笼 豆浆」里那个「半笼」是小笼包的，
+    // 以前 \s*$ 放过去了，结果记成「豆浆半笼」，小笼包反倒按整笼收钱。
+    var reU = new RegExp('(半|[0-9]{1,2}|[一二两三四五六七八九十])\\s*([' + UNIT_CHARS + '])$');
     var m = before.match(reU);
     if (m) {
       var q = m[1] === '半' ? 1 : (/^[0-9]+$/.test(m[1]) ? parseInt(m[1], 10) : (cnToNum(m[1]) || 1));
@@ -361,7 +365,7 @@
           var j = cnToNum(jiao);
           if (!isNaN(j) && j < 10) v = round2(v + j / 10);
         }
-        money.push({ val: v, at: off, len: m.length });
+        money.push({ val: v, at: off, len: m.length, yuan: true });
         return blank(m.length);
       });
 
@@ -369,17 +373,25 @@
 
     var used = [];
     var items = [];
+    // 一段里的数量只能被用一次：「豆浆2杯 玉米汁」的 2 归豆浆，
+    // 不能因为玉米汁往前一扫又看见「2杯」就也记 2（这正是件数翻倍的另一个来源）
+    function taken(a, b) {
+      for (var u = 0; u < used.length; u++) if (a < used[u][1] && b > used[u][0]) return true;
+      return false;
+    }
     for (var h = 0; h < hits.length; h++) {
       var it = hits[h];
       var qb = qtyBefore(s, it.start);
+      if (qb && taken(it.start - qb.len, it.start)) qb = null;
       var qa = qtyAfter(s, it.end);
-      var qty = 1, half = false;
-      if (qb && !qb.bare) { qty = qb.qty; half = !!qb.half; used.push([it.start - qb.len, it.start]); }
-      else if (qa && !qa.bare) { qty = qa.qty; used.push([it.end, it.end + qa.len]); }
-      else if (qb && qb.bare) { qty = qb.qty; used.push([it.start - qb.len, it.start]); }
-      else if (qa && qa.bare) { qty = qa.qty; used.push([it.end, it.end + qa.len]); }
-      if (!(qty > 0 && qty < 100)) qty = 1;
-      items.push({ name: it.name, qty: qty, half: half, start: it.start, end: it.end });
+      if (qa && taken(it.end, it.end + qa.len)) qa = null;
+      var qty = 1, half = false, qtyRaw = false;
+      if (qb && !qb.bare) { qty = qb.qty; half = !!qb.half; qtyRaw = true; used.push([it.start - qb.len, it.start]); }
+      else if (qa && !qa.bare) { qty = qa.qty; qtyRaw = true; used.push([it.end, it.end + qa.len]); }
+      else if (qb && qb.bare) { qty = qb.qty; qtyRaw = true; used.push([it.start - qb.len, it.start]); }
+      else if (qa && qa.bare) { qty = qa.qty; qtyRaw = true; used.push([it.end, it.end + qa.len]); }
+      if (!(qty > 0 && qty < 100)) { qty = 1; qtyRaw = false; }
+      items.push({ name: it.name, qty: qty, half: half, qtyRaw: qtyRaw, start: it.start, end: it.end });
     }
 
     var nums = [];
@@ -408,14 +420,59 @@
 
     var out = { items: items, amt: amt, amtCount: amtCount, nums: nums, moneyCount: money.length, totalLike: false };
 
+    /* 逐样配单价：「豆浆2杯 4元 牛肉包1个 2.5元 共6.5元」里，
+     * 4 归豆浆、2.5 归牛肉包、剩下的 6.5 才是整单总价。
+     * 只认带「元/块」的钱，且必须紧跟在商品后面——裸数字太容易把件数当钱。
+     * 配上的数当成「这一样的小计」，数量大于 1 时再除以件数得单价。 */
+    var units = {}, usedMoney = {}, lastItem = -1;
+    var seq = [];
+    for (var s0 = 0; s0 < items.length; s0++) seq.push({ t: 'i', idx: s0, at: items[s0].start });
+    for (var s1 = 0; s1 < money.length; s1++) seq.push({ t: 'm', idx: s1, at: money[s1].at });
+    seq.sort(function (x, y) { return x.at - y.at; });
+
+    for (var s2 = 0; s2 < seq.length; s2++) {
+      var tk = seq[s2];
+      if (tk.t === 'i') { lastItem = tk.idx; continue; }
+      var mv = money[tk.idx];
+      if (!mv.yuan || lastItem < 0 || units[lastItem] != null) { lastItem = -1; continue; }
+      var qy = items[lastItem].qty || 1;
+      // 数量大于 1 时，后面还得有别的东西（商品或另一笔钱），才敢当「这一样的小计」；
+      // 不然「牛肉包2个 5元」会被读成 5 元一个
+      var hasAfter = false;
+      for (var s3 = s2 + 1; s3 < seq.length; s3++) {
+        if (seq[s3].t === 'i' || seq[s3].t === 'm') { hasAfter = true; break; }
+      }
+      if (qy > 1 && !hasAfter) { lastItem = -1; continue; }
+      units[lastItem] = mv.val;
+      usedMoney[tk.idx] = 1;
+      lastItem = -1;
+    }
+
+    var restMoney = [];
+    for (var s4 = 0; s4 < money.length; s4++) if (!usedMoney[s4]) restMoney.push(money[s4]);
+
+    if (Object.keys(units).length) {
+      out.units = units;
+      if (restMoney.length) {
+        // 配完每样还有一笔剩下的钱 → 那是整单总价
+        out.amt = restMoney[restMoney.length - 1].val;
+        out.totalLike = true;
+      } else {
+        out.amt = null;
+        out.totalLike = false;
+      }
+    }
+
     // 一样东西给一个数 → 这项的小计；几样东西只给一个数 → 这一单多少钱
-    if (amt != null && items.length && amtCount < items.length) out.totalLike = true;
-    // 「一个红薯2 … 4元」：带元的那个是整单总价，裸数字才是商品价
-    if (money.length && nums.length && items.length === 1) out.totalLike = true;
-    // 单独一段只有钱，没有商品（「，15 块」）
-    if (amt != null && !items.length) out.totalLike = true;
-    // 写成等式的（「2+2.5+3=7.5」），右边就是整单总价
-    if (eqTotal != null && isFinite(eqTotal) && eqTotal > 0) out.totalLike = true;
+    if (!out.units) {
+      if (amt != null && items.length && amtCount < items.length) out.totalLike = true;
+      // 「一个红薯2 … 4元」：带元的那个是整单总价，裸数字才是商品价
+      if (money.length && nums.length && items.length === 1) out.totalLike = true;
+      // 单独一段只有钱，没有商品（「，15 块」）
+      if (amt != null && !items.length) out.totalLike = true;
+      // 写成等式的（「2+2.5+3=7.5」），右边就是整单总价
+      if (eqTotal != null && isFinite(eqTotal) && eqTotal > 0) out.totalLike = true;
+    }
 
     // 剥商品、数量、金额，剩下的才是名字；名字里的数字（y2、²⁵）要留住
     var rest = s;
@@ -525,11 +582,14 @@
     var note = findNote(work);
 
     var segs = [];
+    var chunks = [];              // 每一段原文 + 拆出来的东西，核实页要原样展示
     var restChunks = [];          // 连纯名字段（「😴」）也要留，不然名字会丢
     var parts = work.split(SEG_SPLIT);
     for (var p = 0; p < parts.length; p++) {
       if (!trim(parts[p])) continue;
       var sg = parseSeg(parts[p]);
+      sg.raw = trim(parts[p]);
+      chunks.push(sg);
       restChunks.push(sg.rest);
       if (!sg.items.length && sg.amt == null) continue;
       segs.push(sg);
@@ -555,7 +615,12 @@
       for (var i2 = 0; i2 < g2.items.length; i2++) {
         var one = g2.items[i2];
         var unit = null;
-        if (g2.amt != null && g2.items.length === 1 && one.qty > 0) {
+        if (g2.units && g2.units[i2] != null) {
+          // 原文在这一样后面写了钱（「豆浆2杯 4元」），4 是这一样的小计
+          var sub = g2.units[i2];
+          unit = (one.qty > 0) ? round2(sub / one.qty) : sub;
+          if (!(unit > 0 && unit < 1000)) unit = null;
+        } else if (g2.amt != null && g2.items.length === 1 && one.qty > 0) {
           if (!g2.totalLike) {
             unit = round2(g2.amt / one.qty);
           } else if (g2.nums && g2.nums.length === 1 && g2.moneyCount > 0) {
@@ -566,12 +631,27 @@
           }
           if (!(unit > 0 && unit < 1000)) unit = null;
         }
-        items.push({ name: one.name, qty: one.qty, unit: unit, fromText: unit != null });
+        items.push({ name: one.name, qty: one.qty, half: !!one.half, unit: unit, fromText: unit != null });
       }
     }
 
     var restAll = restChunks.join(' ');
     var name = findName(restAll);
+
+    /* 名字没找出来、可第一段又正好是个商品词 —— 十有八九是名字撞了商品名
+     * （有人昵称就叫「豆浆」）。不自动改，交给核实页问。
+     * 名字找得到的（「赵六 小笼包半笼」）就不猜，免得把真商品当人名。 */
+    var nameAsItem = '';
+    var firstItemChunk = -1;
+    for (var c1 = 0; c1 < chunks.length; c1++) {
+      if (chunks[c1].items.length) { firstItemChunk = c1; break; }
+    }
+    if (!name && firstItemChunk > -1 && items.length > 1) {
+      var fc = chunks[firstItemChunk];
+      if (fc.items.length && !fc.items[0].qtyRaw) {
+        nameAsItem = fc.items[0].name;
+      }
+    }
     /* 「A栋 77 一个红糖馒头」：77 被当金额残渣剥了，名字就空了。
      * 商品前面那一段再找一次——楼栋已经剥掉，那里只剩名字，77 能认出来。 */
     if (!name) {
@@ -597,11 +677,21 @@
       no: no == null ? idx + 1 : no,
       raw: raw,
       name: name,
+      nameAsItem: nameAsItem,
       building: b ? b.key : '',
       room: b ? b.room : '',
       items: items,
       total: total,
       note: note,
+      chunks: chunks.map(function (c) {
+        return {
+          raw: c.raw,
+          amt: c.amt,
+          totalLike: !!c.totalLike,
+          items: c.items.map(function (x) { return { name: x.name, qty: x.qty, qtyRaw: !!x.qtyRaw }; }),
+          rest: trim(c.rest)
+        };
+      }),
       conf: Math.min(1, conf),
       issues: issues,
       manual: false
@@ -637,7 +727,301 @@
       conf: conf,
       skipped: skipped
     };
+    // 先把历史楼栋补上，再算「要问什么」——已经补出楼栋的不用再问
+    if (opts.residents) fillMissingBuildings(record, opts.residents);
+    record.asks = buildAsks(record, opts);
+    if (opts.deferFinalize) return record;
     return finalize(record, opts);
+  }
+
+  /* ==================== 3.5 核实页：出结果之前先问清楚 ==================== */
+
+  /* 出结果之前，把所有「拿不准」的地方攒成一张清单，让人点一遍。
+   * 只问真的拿不准的：能按档案补的楼栋不问、价目表认得的词不问、差价不到四成不问。 */
+
+  function editDist(a, b) {
+    a = String(a || ''); b = String(b || '');
+    if (a === b) return 0;
+    if (!a.length) return b.length;
+    if (!b.length) return a.length;
+    var prev = [], cur = [], i, j;
+    for (j = 0; j <= b.length; j++) prev[j] = j;
+    for (i = 1; i <= a.length; i++) {
+      cur[0] = i;
+      for (j = 1; j <= b.length; j++) {
+        cur[j] = Math.min(prev[j] + 1, cur[j - 1] + 1, prev[j - 1] + (a.charAt(i - 1) === b.charAt(j - 1) ? 0 : 1));
+      }
+      for (j = 0; j <= b.length; j++) prev[j] = cur[j];
+    }
+    return prev[b.length];
+  }
+
+  /* 给生词找几个「可能是它」的候选。只用来出按钮，绝不自动套用。 */
+  function nearItems(word, n) {
+    var w = normItemName(word);
+    var out = [];
+    if (!w) return out;
+    var list = menuMerged();
+    for (var i = 0; i < list.length; i++) {
+      var nm = list[i].name, k = normItemName(nm);
+      var d = editDist(w, k);
+      // 互相包含的算很接近（「牛肉堡 / 牛肉包」差 1 字，「小笼 / 小笼包」差 2 字）
+      if (k.indexOf(w) > -1 || w.indexOf(k) > -1) d = Math.min(d, 1);
+      // 首字不一样的基本不是同一样，压一压避免乱推荐
+      if (w.charAt(0) !== k.charAt(0)) d += 2;
+      out.push({ name: nm, price: list[i].price, by: list[i].by || '个', d: d });
+    }
+    out.sort(function (a, b) { return a.d - b.d || a.name.length - b.name.length; });
+    var cap = Math.max(2, Math.floor(w.length / 2) + 1);
+    return out.filter(function (x) { return x.d <= cap; }).slice(0, n || 3);
+  }
+
+  function orderByNo(record, no) {
+    var list = (record && record.orders) || [];
+    for (var i = 0; i < list.length; i++) if (list[i].no === no) return list[i];
+    return null;
+  }
+
+  function buildAsks(record, opts) {
+    opts = opts || {};
+    var asks = [];
+    var orders = record.orders || [];
+    var price = opts.price || {};
+    var residents = opts.residents || null;
+
+    // 当天已经出现过的楼栋，拿来当「没写楼栋」的选项
+    var seen = {}, bldList = [];
+    for (var q = 0; q < orders.length; q++) {
+      var bb = orders[q].building;
+      if (bb && !seen[bb]) { seen[bb] = 1; bldList.push(bb); }
+    }
+    bldList.sort(compareBuilding);
+
+    for (var i = 0; i < orders.length; i++) {
+      var o = orders[i];
+      // 「半笼」写在行里，先标上，不然会把半笼价跟整笼价比、白报一条差
+      try { applyHalfFromRaw(o); } catch (e) { }
+
+      /* 1. 行首撞了商品名：先问这是不是人名 */
+      if (o.nameAsItem) {
+        asks.push({
+          id: 'nameitem|' + o.no,
+          kind: 'nameitem',
+          no: o.no,
+          raw: o.raw,
+          word: o.nameAsItem,
+          q: '开头这个「' + o.nameAsItem + '」，是名字还是商品？',
+          hint: '它后面没跟数量、也没跟单价，看着像名字。',
+          options: [
+            { key: 'name', label: '是名字', sub: '从商品里拿掉' },
+            { key: 'item', label: '是商品', sub: '算他买了一份' }
+          ]
+        });
+      }
+
+      /* 2. 没写楼栋 */
+      if (!o.building) {
+        var hit = (o.name && residents) ? findResidentInBook(o.name, residents) : null;
+        var bo = [];
+        if (hit && hit.building) bo.push({ key: 'bld:' + hit.building, label: hit.building, sub: '按记录' });
+        for (var k = 0; k < bldList.length && bo.length < 6; k++) {
+          if (hit && hit.building === bldList[k]) continue;
+          bo.push({ key: 'bld:' + bldList[k], label: bldList[k], sub: '' });
+        }
+        bo.push({ key: 'bld:', label: '先空着', sub: '待会儿自己填' });
+        asks.push({
+          id: 'bld|' + o.no,
+          kind: 'bld',
+          no: o.no,
+          raw: o.raw,
+          word: o.name || '',
+          q: (o.name ? '「' + o.name + '」' : '这一单') + '没写楼栋',
+          hint: (hit && hit.building) ? '档案里他上次在 ' + hit.building + '。' : '点一个就行，点完记进档案。',
+          options: bo
+        });
+      }
+
+      /* 3. 没看出名字（撞了商品名的先问上一条，别重复问） */
+      if (!o.name && o.items.length && !o.nameAsItem) {
+        asks.push({
+          id: 'namemiss|' + o.no,
+          kind: 'namemiss',
+          no: o.no,
+          raw: o.raw,
+          word: '',
+          q: '这一单没看出名字',
+          hint: '照着原文填，不填也能过，但送达对不上人。',
+          input: true,
+          inputHint: '照原文填个名字',
+          options: [{ key: 'skip', label: '先空着', sub: '' }]
+        });
+      }
+
+      /* 3.1 一样东西都没认出来：整行会当备注丢掉，得让人补一句 */
+      if (!o.items.length && o.name) {
+        asks.push({
+          id: 'noitem|' + o.no,
+          kind: 'noitem',
+          no: o.no,
+          raw: o.raw,
+          word: '',
+          q: '这一单没认出买的是什么',
+          hint: '照原文补一句就行，比如「牛肉包2个」。补完会记进价目表，下次自动认。',
+          input: true,
+          inputHint: '比如 牛肉包2个',
+          options: [{ key: 'skip', label: '先当备注过', sub: '稍后自己补' }]
+        });
+      }
+
+      /* 4. 生词：价目表里没有，问一次，记住 */
+      for (var m = 0; m < o.items.length; m++) {
+        var it = o.items[m];
+        if (menuOf(it.name) || price[it.name]) continue;
+        var near = nearItems(it.name, 3);
+        var io = [];
+        for (var n2 = 0; n2 < near.length; n2++) {
+          io.push({
+            key: 'to:' + near[n2].name,
+            label: near[n2].name,
+            sub: '¥' + money(near[n2].price) + '/' + near[n2].by
+          });
+        }
+        io.push({ key: 'new', label: '是新商品', sub: '按原文价记账' });
+        io.push({ key: 'not', label: '不是商品', sub: '是名字或备注' });
+        asks.push({
+          id: 'item|' + o.no + '|' + it.name,
+          kind: 'item',
+          no: o.no,
+          raw: o.raw,
+          word: it.name,
+          q: '「' + it.name + '」价目表里没有，归哪样？',
+          hint: '选一次就记住，下次同样写法不再问。',
+          options: io
+        });
+      }
+
+      /* 5. 单价跟表价差太多（四成以上才问） */
+      for (var p2 = 0; p2 < o.items.length; p2++) {
+        var i2 = o.items[p2];
+        if (i2.unit == null || !(i2.unit > 0)) continue;
+        var mo = menuOf(i2.name);
+        if (!mo) continue;
+        var base = (i2.half && mo.half) ? round2(mo.unit / 2) : mo.unit;
+        if (!(base > 0)) continue;
+        if (Math.abs(i2.unit - base) / base < 0.4) continue;
+        asks.push({
+          id: 'price|' + o.no + '|' + i2.name,
+          kind: 'price',
+          no: o.no,
+          raw: o.raw,
+          word: i2.name,
+          q: '「' + i2.name + '」写的是 ¥' + money(i2.unit) + '，表价 ¥' + money(base),
+          hint: '按原文记会少收或多收，你定用哪个。',
+          options: [
+            { key: 'text', label: '按原文', sub: '¥' + money(i2.unit) },
+            { key: 'menu', label: '按表价', sub: '¥' + money(base) }
+          ]
+        });
+      }
+    }
+    return asks;
+  }
+
+  /* 把一个选择落到订单上。返回 true 表示这一条处理完了。 */
+  function applyAsk(record, ask, key, text) {
+    var o = orderByNo(record, ask.no);
+    if (!o) return false;
+
+    if (ask.kind === 'nameitem') {
+      if (key === 'name') {
+        var keep = [], dropped = false;
+        for (var i = 0; i < o.items.length; i++) {
+          if (!dropped && o.items[i].name === ask.word) { dropped = true; continue; }
+          keep.push(o.items[i]);
+        }
+        o.items = keep;
+        o.name = ask.word;
+      }
+      return true;
+    }
+
+    if (ask.kind === 'bld') {
+      var b = (key.indexOf('bld:') === 0) ? key.slice(4) : '';
+      o.building = b;
+      o.buildingFrom = b ? 'check' : '';
+      o.bldConfirmed = b ? 1 : 0;
+      o.bldGuess = 0;
+      return true;
+    }
+
+    if (ask.kind === 'namemiss') {
+      if (key !== 'skip') {
+        var nm = trim(text || '');
+        if (nm) o.name = nm;
+      }
+      return true;
+    }
+
+    /* 整行没认出东西：让人照原文补一句，本地拿这句话重拆一遍 */
+    if (ask.kind === 'noitem') {
+      if (key === 'skip') return true;
+      var txt = trim(text || '');
+      if (!txt) return true;
+      var sg = null;
+      try { sg = parseSeg(txt); } catch (e) { sg = null; }
+      if (!sg || !sg.items.length) return false;
+      for (var n0 = 0; n0 < sg.items.length; n0++) {
+        var gi = sg.items[n0];
+        o.items.push({ name: gi.name, qty: gi.qty || 1, half: !!gi.half, unit: null, fromText: false });
+        if (!menuOf(gi.name)) learnAlias(gi.name, gi.name);   // 记下来，下次不用再补
+      }
+      // 原来那笔「总价」是从没认出商品的废段里捡的，多半是件数，别留着
+      o.total = (sg.amt != null && sg.totalLike) ? sg.amt : null;
+      return true;
+    }
+
+    if (ask.kind === 'item') {
+      if (key.indexOf('to:') === 0) {
+        var to = key.slice(3);
+        learnAlias(ask.word, to);
+        for (var j = 0; j < o.items.length; j++) if (o.items[j].name === ask.word) o.items[j].name = to;
+        return true;
+      }
+      if (key === 'new') {
+        learnAlias(ask.word, ask.word);
+        for (var j2 = 0; j2 < o.items.length; j2++) {
+          if (o.items[j2].name === ask.word && o.items[j2].unit > 0) setPrice(ask.word, o.items[j2].unit, 'learn');
+        }
+        return true;
+      }
+      if (key === 'not') {
+        learnAlias(ask.word, '');
+        var keep2 = [];
+        for (var j3 = 0; j3 < o.items.length; j3++) if (o.items[j3].name !== ask.word) keep2.push(o.items[j3]);
+        o.items = keep2;
+        return true;
+      }
+      return false;
+    }
+
+    if (ask.kind === 'price') {
+      var it = null;
+      for (var k2 = 0; k2 < o.items.length; k2++) if (o.items[k2].name === ask.word) { it = o.items[k2]; break; }
+      if (!it) return true;
+      if (key === 'menu') {
+        var mo2 = menuOf(it.name);
+        if (mo2) {
+          it.unit = (it.half && mo2.half) ? round2(mo2.unit / 2) : mo2.unit;
+          it.priceFrom = 'book';
+          it.fromText = false;
+        }
+      } else {
+        it.priceFrom = 'text';
+        it.fromText = true;
+      }
+      return true;
+    }
+    return false;
   }
 
   // 补齐：分组、金额、装箱
@@ -1595,11 +1979,128 @@
   function normItemName(s) {
     return trim(s).replace(/[（(][^）)]*[）)]/g, '').replace(/\s+/g, '');
   }
+
+  /* 学过的写法：词 → 正名。「牛肉堡」学成「牛肉包」之后，下次直接归位。
+   * 值是空字符串表示「学过，确认它不是商品」（人名/备注），别再问。 */
+  var ALIAS_KEY = 'bamboo.v11.jielong.alias';
+  var ALIAS_MEM = null;
+  function readAlias() {
+    if (ALIAS_MEM) return ALIAS_MEM;
+    try {
+      if (!root || !root.localStorage) return (ALIAS_MEM = {});
+      var raw = root.localStorage.getItem(ALIAS_KEY);
+      var o = raw ? JSON.parse(raw) : {};
+      ALIAS_MEM = (o && typeof o === 'object' && !(o instanceof Array)) ? o : {};
+    } catch (e) { ALIAS_MEM = {}; }
+    return ALIAS_MEM;
+  }
+  function writeAlias(o) {
+    ALIAS_MEM = o || {};
+    try {
+      if (!root || !root.localStorage) return false;
+      root.localStorage.setItem(ALIAS_KEY, JSON.stringify(ALIAS_MEM));
+      return true;
+    } catch (e) { return false; }
+  }
+  /* 学一个写法。target 给正名表示「归到这样」，给 '' 表示「不是商品」。 */
+  function learnAlias(word, target) {
+    var w = normItemName(word);
+    if (!w) return false;
+    var o = readAlias();
+    var next = {};
+    for (var k in o) if (Object.prototype.hasOwnProperty.call(o, k)) next[k] = o[k];
+    next[w] = target == null ? '' : String(target);
+    return writeAlias(next);
+  }
+  function forgetAlias(word) {
+    var w = normItemName(word);
+    var o = readAlias(), next = {}, hit = false;
+    for (var k in o) {
+      if (!Object.prototype.hasOwnProperty.call(o, k)) continue;
+      if (k === w) { hit = true; continue; }
+      next[k] = o[k];
+    }
+    if (hit) writeAlias(next);
+    return hit;
+  }
+  /* 查记忆：null = 没学过；'' = 学过且不是商品；其余 = 正名 */
+  function aliasOf(word) {
+    var w = normItemName(word);
+    if (!w) return null;
+    var o = readAlias();
+    return Object.prototype.hasOwnProperty.call(o, w) ? String(o[w] || '') : null;
+  }
+  function aliasList() {
+    var o = readAlias(), out = [];
+    for (var k in o) if (Object.prototype.hasOwnProperty.call(o, k)) out.push({ word: k, to: String(o[k] || '') });
+    out.sort(function (a, b) { return a.word < b.word ? -1 : 1; });
+    return out;
+  }
+  /* 价目表改动：店里改价、加新品、改别名，都存这一层，覆盖内置那张表。
+   * 内置表是「出厂价」，这里只记你动过的，删了还能退回去。 */
+  var MENU_EDIT_KEY = 'bamboo.v11.jielong.menu';
+  var MENU_EDIT_MEM = null;
+  var MENU_MERGED = null;
+  function readMenuEdit() {
+    if (MENU_EDIT_MEM) return MENU_EDIT_MEM;
+    try {
+      if (!root || !root.localStorage) return (MENU_EDIT_MEM = {});
+      var raw = root.localStorage.getItem(MENU_EDIT_KEY);
+      var o = raw ? JSON.parse(raw) : {};
+      MENU_EDIT_MEM = (o && typeof o === 'object' && !(o instanceof Array)) ? o : {};
+    } catch (e) { MENU_EDIT_MEM = {}; }
+    return MENU_EDIT_MEM;
+  }
+  function writeMenuEdit(o) {
+    MENU_EDIT_MEM = o || {};
+    MENU_IDX = null;
+    MENU_MERGED = null;
+    try {
+      if (!root || !root.localStorage) return false;
+      root.localStorage.setItem(MENU_EDIT_KEY, JSON.stringify(MENU_EDIT_MEM));
+      return true;
+    } catch (e) { return false; }
+  }
+  /* 合并后的价目表：内置表 + 改价 + 新品，去掉标了 hidden 的 */
+  function menuMerged() {
+    if (MENU_MERGED) return MENU_MERGED;
+    var ov = readMenuEdit(), out = [], seen = {}, k;
+    for (var i = 0; i < MENU.length; i++) {
+      var m = MENU[i];
+      var o = ov[m.name] || {};
+      seen[m.name] = 1;
+      if (o.hidden) continue;
+      out.push({
+        name: m.name,
+        price: (o.price != null && isFinite(o.price)) ? Number(o.price) : m.price,
+        by: o.by || m.by || '个',
+        half: (o.half != null) ? !!o.half : !!m.half,
+        alias: (o.alias != null) ? o.alias : (m.alias || []),
+        base: true
+      });
+    }
+    for (k in ov) {
+      if (!Object.prototype.hasOwnProperty.call(ov, k) || seen[k]) continue;
+      var x = ov[k] || {};
+      if (x.hidden || !(x.price >= 0)) continue;
+      out.push({
+        name: k,
+        price: Number(x.price),
+        by: x.by || '个',
+        half: !!x.half,
+        alias: x.alias || [],
+        base: false
+      });
+    }
+    MENU_MERGED = out;
+    return out;
+  }
   function menuIndex() {
     if (MENU_IDX) return MENU_IDX;
     MENU_IDX = {};
-    for (var i = 0; i < MENU.length; i++) {
-      var m = MENU[i];
+    var list = menuMerged();
+    for (var i = 0; i < list.length; i++) {
+      var m = list[i];
       var rec = { name: m.name, unit: m.price, by: m.by || '个', half: !!m.half };
       if (!MENU_IDX[normItemName(m.name)]) MENU_IDX[normItemName(m.name)] = rec;
       var al = m.alias || [];
@@ -1609,26 +2110,31 @@
     }
     return MENU_IDX;
   }
+  /* 查价目表：只认「正名」和「显式别名」。
+   * v16 起删掉了「包含即匹配」——以前「牛肉包」会被 indexOf 顺到「麻辣牛肉包」，
+   * AI 拆单再顺手补一行，一个包子就变成两样、多算一倍钱。
+   * 现在查不到就是查不到，交给「核实页」问一句，问完记进别名库，下次不用再问。 */
   function menuOf(name) {
     var k = normItemName(name);
     if (!k) return null;
     var idx = menuIndex();
     if (idx[k]) return idx[k];
-    var best = null, bl = 0;
-    for (var key in idx) {
-      if (!idx.hasOwnProperty(key) || key.length < 2 || key.length <= bl) continue;
-      if (k.indexOf(key) > -1) { best = idx[key]; bl = key.length; }
+    var learned = aliasOf(name);
+    if (learned === '') return null;           // 学过：这不是商品
+    if (learned) {
+      var lk = idx[normItemName(learned)];
+      if (lk) return lk;
     }
-    return best;
+    return null;                                // 不猜
   }
-  function menuList() { return MENU.slice(); }
+  function menuList() { return menuMerged().slice(); }
 
 
   /* 价目表的一段文字，给 AI 看：同价的归一行，能半笼的单独写清楚半价 */
   function menuText() {
-    var lines = [], group = {}, order = [];
-    for (var i = 0; i < MENU.length; i++) {
-      var m = MENU[i];
+    var lines = [], group = {}, order = [], list = menuMerged();
+    for (var i = 0; i < list.length; i++) {
+      var m = list[i];
       var k = m.price + '|' + (m.by || '个');
       if (m.half) {
         order.push({ half: true, m: m });
@@ -1650,17 +2156,37 @@
     return lines.join('\n');
   }
 
-  // 金额页那张价目表（点开看的）
+  // 金额页那张价目表（点开看的，每行都能点进去改）
   function menuRows() {
-    var h = '';
-    for (var i = 0; i < MENU.length; i++) {
-      var m = MENU[i];
-      h += '<div class="jl-menu-row"><b>' + esc(m.name) + '</b>' +
+    var h = '', list = menuMerged();
+    for (var i = 0; i < list.length; i++) {
+      var m = list[i];
+      h += '<button type="button" class="jl-menu-row" data-act="menuedit" data-name="' + esc(m.name) + '">' +
+        '<b>' + esc(m.name) + '</b>' +
         '<em>¥' + money(m.price) + '/' + (m.by || '个') +
-        (m.half ? '<u>半笼 ¥' + money(round2(m.price / 2)) + '</u>' : '') + '</em></div>';
+        (m.half ? '<u>半笼 ¥' + money(round2(m.price / 2)) + '</u>' : '') + '</em>' +
+        '<i>改</i></button>';
     }
+    h += '<button type="button" class="jl-menu-row jl-menu-add" data-act="menuedit" data-name="">' +
+      '<b>＋ 加一样</b><em>名称、单价、单位</em><i></i></button>';
     return h;
   }
+  /* 学过的写法：核实页点过的「这是牛肉包」「这不是商品」，都在这 */
+  function aliasRows() {
+    var list = aliasList();
+    if (!list.length) return '';
+    var h = '<div class="jl-alias-box"><b>学过的写法</b><span>核实的时候点过的，下次同样写法不再问</span>' +
+      '<div class="jl-alias-list">';
+    for (var i = 0; i < list.length; i++) {
+      var it = list[i];
+      h += '<span class="jl-alias-tag">' + esc(it.word) + '<i>→</i>' +
+        (it.to ? esc(it.to) : '<em>不是商品</em>') +
+        '<button type="button" data-act="aliasdel" data-word="' + esc(it.word) + '" aria-label="删掉">×</button></span>';
+    }
+    h += '</div></div>';
+    return h;
+  }
+
   function canHalf(name) {
     var e = menuOf(name);
     return !!(e && e.half);
@@ -2416,8 +2942,9 @@
     // 群里爱写简称／漏「包」字，列给 AI 让它统一写回价目表里的规范名。
     // 以前提示词第 13 条写着「单价照【本店价目表】填」，可整张表压根没塞进来，AI 是盲拆。
     var aliasLines = [];
-    for (var ai = 0; ai < MENU.length; ai++) {
-      var am = MENU[ai];
+    var alist = menuMerged();
+    for (var ai = 0; ai < alist.length; ai++) {
+      var am = alist[ai];
       if (am.alias && am.alias.length) aliasLines.push(am.name + ' ← ' + am.alias.join('、'));
     }
     // 认人认货的规矩在拆单这一步就用得上：谁的名字是昵称、哪一栋从不写、谁常有两单
@@ -2794,6 +3321,7 @@
     refPrice: null,   // 价格本快照，判断「这次比平时给少了」用
     auditBusy: false, // AI 正在逐条核问题
     auditErr: '',     // 上次核对失败的原因
+    check: null,      // 核实页：{record, asks, picked}
     lpAt: 0           // 长按发生的时刻，抬手那一下别当成选楼栋
   };
   var D = null;
@@ -2856,7 +3384,7 @@
   function viewHome() {
     var h = '';
     h += '<div class="jl-lead">' +
-      '<p>把微信群接龙<b>最后一条</b>整段粘进来。AI 会拆成楼栋、认规格和价钱、配好箱子。</p>' +
+      '<p>把微信群接龙<b>最后一条</b>整段粘进来。按价目表拆成楼栋、箱子，<b>出结果前先让你核对一遍</b>。</p>' +
       '</div>';
 
     h += '<div class="jl-paste">' +
@@ -2868,21 +3396,14 @@
       esc(V.date || todayStr()) + '"></label>' +
       '</div>';
 
-    var ai = !!(D && D.hasAI());
     h += '<div class="jl-actions">' +
-      '<button type="button" class="jl-primary" data-act="' + (ai ? 'parse-ai' : 'parse') + '"' +
+      '<button type="button" class="jl-primary" data-act="parse"' +
       (V.busy ? ' disabled' : '') + '>' +
-      (V.busy ? '正在读这一单…' : (ai ? 'AI 识别这一单' : '识别这一单')) + '</button>' +
-      (ai ? '<button type="button" class="jl-ghost" data-act="parse"' + (V.busy ? ' disabled' : '') + '>不联网，本地拆</button>' : '') +
+      (V.busy ? '正在拆这一单…' : '识别这一单') + '</button>' +
       '</div>';
 
-    if (!ai) {
-      h += '<p class="jl-hint">还没配 AI，只能按字面拆：规格写得乱、只写「共 12 元」的那种会拆不准。' +
-        '到右上角「设置」填接口和密钥就能用 AI。</p>';
-    } else {
-      h += '<p class="jl-hint">AI 会认「两杯/两份」这类规格，分清末尾是<b>总价</b>还是<b>单价</b>，' +
-        '忘写楼栋的按名字从过往记录里补。要等十几秒，正常。</p>';
-    }
+    h += '<p class="jl-hint">拆完先列一遍拿不准的地方（楼栋、名字、生词、单价），你点一下就好。' +
+      'AI 只在最后复核，不参与算账，也不许往单子里加行。</p>';
 
     var hist = listRecords().slice(0, 3);
     if (hist.length) {
@@ -2976,6 +3497,98 @@
       '</div>';
   }
 
+  /* ---------- 核实页：出结果之前先让人点一遍 ---------- */
+
+  function markWord(raw, word) {
+    var s = String(raw || '');
+    var w = String(word || '');
+    if (!w) return esc(s);
+    var i = s.indexOf(w);
+    if (i < 0) return esc(s);
+    return esc(s.slice(0, i)) + '<mark>' + esc(w) + '</mark>' + esc(s.slice(i + w.length));
+  }
+
+  function askKindLabel(k) {
+    if (k === 'nameitem') return '名字还是商品';
+    if (k === 'bld') return '楼栋';
+    if (k === 'namemiss') return '名字';
+    if (k === 'noitem') return '商品';
+    if (k === 'item') return '生词';
+    if (k === 'price') return '单价';
+    return '';
+  }
+
+  function viewCheck() {
+    var c = V.check;
+    if (!c) return '<div class="jl-empty">没有要核对的</div>';
+    var asks = c.asks || [];
+    var rec = c.record;
+    var picked = c.picked || {};
+    var left = 0, i;
+    for (i = 0; i < asks.length; i++) if (!picked[asks[i].id]) left++;
+
+    var h = '';
+    h += '<div class="jl-lead jl-check-lead"><b>' +
+      (left ? '有 ' + left + ' 处想跟你确认' : '都对上了') + '</b>' +
+      '<p>原文一个字没动。下面点一下就行，点完再出订单。</p></div>';
+
+    /* 原文切片：只读，原样列出 */
+    h += '<div class="jl-srcbox jl-srcbox-check">' +
+      '<div class="jl-srcbox-h"><span>原文</span><em>只读 · 不能改</em></div>';
+    for (i = 0; i < rec.orders.length; i++) {
+      var rl = rec.orders[i];
+      // 原文自己带序号的就不再叠一个，免得出现「1 1. 张三…」
+      h += '<div class="jl-src-line">' +
+        (/^\s*[0-9]+\s*[.、．)）:：]/.test(rl.raw) ? '' : '<i>' + rl.no + '</i>') +
+        '<em>' + esc(rl.raw) + '</em></div>';
+    }
+    h += '</div>';
+
+    if (!asks.length) {
+      h += '<div class="jl-empty">这一单没有拿不准的地方<br><span>直接生成就行</span></div>';
+    }
+
+    for (i = 0; i < asks.length; i++) {
+      var a = asks[i];
+      var done = picked[a.id];
+      h += '<div class="jl-ask' + (done ? ' done' : '') + '">';
+      h += '<div class="jl-ask-h"><b class="jl-ask-n">' + (i + 1) + '</b>' +
+        '<span class="jl-ask-tag">' + askKindLabel(a.kind) + '</span>' +
+        '<span class="jl-ask-no">#' + a.no + '</span>' +
+        (done ? '<em class="jl-ask-ok">✓ 已确认</em>' : '') + '</div>';
+      h += '<div class="jl-ask-raw">' + markWord(a.raw, a.word) + '</div>';
+      h += '<div class="jl-ask-q">' + esc(a.q) + '</div>';
+      if (done) {
+        h += '<div class="jl-ask-picked"><b>' + esc(done.label) + '</b>' +
+          (done.text ? '<em>「' + esc(done.text) + '」</em>' : '') +
+          '<button type="button" class="jl-ask-redo" data-act="askredo" data-id="' + esc(a.id) + '">改</button></div>';
+      } else {
+        if (a.hint) h += '<div class="jl-ask-hint">' + esc(a.hint) + '</div>';
+        h += '<div class="jl-ask-ops">';
+        for (var o = 0; o < a.options.length; o++) {
+          var op = a.options[o];
+          h += '<button type="button" class="jl-ask-op" data-act="askpick" data-id="' + esc(a.id) +
+            '" data-key="' + esc(op.key) + '">' + esc(op.label) +
+            (op.sub ? '<i>' + esc(op.sub) + '</i>' : '') + '</button>';
+        }
+        h += '</div>';
+        if (a.input) {
+          h += '<div class="jl-ask-in"><input type="text" class="jl-ask-input" data-askinput="' + esc(a.id) +
+            '" placeholder="' + esc(a.inputHint || '照原文填') + '" autocomplete="off">' +
+            '<button type="button" class="jl-ask-save" data-act="asksave" data-id="' + esc(a.id) + '">就用这个</button></div>';
+        }
+      }
+      h += '</div>';
+    }
+
+    h += '<div class="jl-fixbar jl-check-bar">' +
+      '<button type="button" class="jl-primary" data-act="checkdone"' + (left ? ' disabled' : '') + '>' +
+      (left ? '还剩 ' + left + ' 处' : '都对上了，生成订单') + '</button>' +
+      (left ? '<button type="button" class="jl-ghost" data-act="checkskip">剩下按原文先过</button>' : '') +
+      '</div>';
+    return h;
+  }
+
   /* ---------- 详情 ---------- */
 
   function viewDetail() {
@@ -2995,8 +3608,8 @@
       '</div>';
 
     h += '<div class="jl-foot-note">' +
-      'AI 负责认人认规格、分清总价还是单价、按名字补楼栋、排箱，也对着原文逐条核问题、把数错的件数改回来；' +
-      '件数和金额始终在这台设备上算，价格本也只存在本机。' +
+      '拆单、算账全在这台设备上做：按价格表切块、按原文数量记账，AI 不会往单子里加行。' +
+      'AI 只在最后拿原文复核，每条结论都会附上原文片段；价格本、别名也只在存在本机。' +
       '</div>';
     return h;
   }
@@ -3426,16 +4039,20 @@
       var v = vd[key];
       var one = {
         no: it.no, code: it.code, level: it.level, title: it.title, detail: it.detail,
-        src: it.src, key: key, aiWhy: '', aiDrop: '', aiAdd: false, memWhy: it.memWhy || ''
+        src: it.src, key: key, aiWhy: '', aiQuote: '', aiDrop: '', aiAdd: false, memWhy: it.memWhy || ''
       };
       // 老板亲手教的比 AI 的话硬：他说这条要当真，AI 判成误报也留下
       if (v && v.v === 'drop' && !overrule[key] && !it.memWhy) {
         one.aiDrop = v.why || '对着原文看，这条不成立';
+        one.aiQuote = v.quote || '';
         undo(it);
         dropped.push(one);
         continue;
       }
-      if (v && v.v === 'keep') one.aiWhy = v.why || '对着原文核过，确实是这样';
+      if (v && v.v === 'keep') {
+        one.aiWhy = v.why || '对着原文核过，确实是这样';
+        one.aiQuote = v.quote || '';
+      }
       issues.push(one);
     }
 
@@ -3478,7 +4095,13 @@
       over: round2(overSum),
       orders: orders.length,
       error: issues.filter(function (x) { return x.level === 'error'; }).length,
-      ai: audit ? { at: audit.at || 0, kept: kept, drop: dropped.length } : null,
+      ai: audit ? {
+        at: audit.at || 0,
+        kept: kept,
+        drop: dropped.length,
+        meta: audit.meta || null,
+        noProof: audit.noProof || 0
+      } : null,
       aiCands: cands.raw.length,
       memDrop: cands.memDrop || 0,
       memKeep: cands.memKeep || 0,
@@ -3676,8 +4299,10 @@
     L.push('- 一单里被拆成两样的（「玉米蒸饺」拆成玉米+蒸饺）、件数明显跟「两个」对不上的，是真的问题。');
     L.push('');
     L.push('【输出】只输出一个 JSON 对象，不要 markdown 代码块，不要任何解释。');
-    L.push('{"verdict":[{"no":2,"code":"pricelow","v":"drop","why":"行末 6 元是总价，2 元是单价，跟平时一样"}],"fix":[{"no":3,"name":"牛肉堡","qty":1,"why":"原文只写了一个牛肉堡"}],"add":[]}');
+    L.push('{"verdict":[{"no":2,"code":"pricelow","v":"drop","quote":"李四 豆浆2杯 6元","why":"行末 6 元是总价"}],"fix":[{"no":3,"name":"牛肉堡","qty":1,"quote":"李四 牛肉堡1个","why":"原文只写了一个"}],"add":[]}');
     L.push('- verdict 要把上面每一条疑点都判一遍，v 只能是 keep（确实有问题）或 drop（程序看错了）。没有疑点时给空数组。');
+    L.push('- 每条 verdict 和 fix 都必须带 quote：从【接龙原文】里原样复制一小段（5–20 个字），要能让人看出你判的是哪一句。');
+    L.push('  改字、拼接、自己编的片段一律作废——程序会拿 quote 去原文里逐字找，找不到这条结论直接丢掉。');
     L.push('- why 不超过 30 个字，写清依据；drop 时要指出程序错在哪。');
     L.push('- fix 最多 5 条，只改件数：no 是单号，name 必须跟【程序拆出来的】里一模一样，qty 是 1–99 的整数。只改这一单里已经有的商品，不要新增、不要改名、不要动金额。');
     L.push('- fix 只在原文明确写了数量、且你数清楚时才给；原文没写数量、或者你也不确定，就不要给这条 fix。');
@@ -3701,6 +4326,18 @@
     var vs = Array.isArray(obj.verdict) ? obj.verdict : [];
     var wantFix = Array.isArray(obj.fix) ? obj.fix.length : 0;
 
+    /* 证据核对：AI 每条结论都要摘一段原文，程序拿它回原文逐字找。
+     * 找不到就是编的——这条不算数。宁可多留一条疑点，也不能让它凭空下结论。 */
+    var srcNorm = String(auditSrcText(record) || '').replace(/\s+/g, '');
+    var noProof = 0;
+    function proofOf(q) {
+      var raw = String(q == null ? '' : q).trim();
+      var s = raw.replace(/[\s「」“”"']/g, '');
+      if (!s || s.length < 3) return '';
+      if (srcNorm.indexOf(s) < 0) return '';
+      return raw;          // 显示时保留原来的空格，校验时才去掉
+    }
+
     var known = {};
     for (var i = 0; i < cands.raw.length; i++) known[issueKey(cands.raw[i])] = 1;
 
@@ -3714,7 +4351,9 @@
       if (!known[key] || verdict[key]) continue;
       var d = v.v === 'drop' ? 'drop' : (v.v === 'keep' ? 'keep' : '');
       if (!d) continue;
-      verdict[key] = { v: d, why: trim(v.why).slice(0, 40) };
+      var pv = proofOf(v.quote);
+      if (!pv) { noProof++; continue; }
+      verdict[key] = { v: d, why: trim(v.why).slice(0, 40), quote: pv };
       if (d === 'keep') kept++; else drop++;
     }
 
@@ -3760,23 +4399,20 @@
           if (trim(fo.items[f2].name) === fname) { same += fo.items[f2].qty || 0; if (!hit) hit = fo.items[f2]; }
         }
         if (!hit || same === fq) continue;
+        var pf = proofOf(fx.quote);
+        if (!pf) { noProof++; continue; }        // 没摘原文，不许改
         var localQ = rawQtyOf(fo, fname);
-        if (localQ != null) {
-          if (localQ !== fq) continue;       // 本地不认这个数，宁可不改
-        } else {
-          var whyTxt = trim(fx.why);
-          var frag = (whyTxt.match(/[「"“]([^」"”]{2,20})[」"”]/) || [])[1] || '';
-          if (!frag || String(fo.raw || '').indexOf(frag) < 0) continue;
-        }
+        if (localQ != null && localQ !== fq) continue;   // 本地不认这个数，宁可不改
         var dupFix = false;
         for (var f3 = 0; f3 < fix.length; f3++) if (fix[f3].no === fo.no && fix[f3].name === fname) { dupFix = true; break; }
         if (dupFix) continue;
-        fix.push({ no: fo.no, name: fname, qty: fq, before: same, why: trim(fx.why).slice(0, 40) });
+        fix.push({ no: fo.no, name: fname, qty: fq, before: same, quote: pf, why: trim(fx.why).slice(0, 40) });
       }
     }
 
     if (!kept && !drop && !fix.length) {
-      if (wantFix) return { ok: false, error: 'AI 想改件数，但跟原文对不上，没动' };
+      if (wantFix) return { ok: false, error: 'AI 想改件数，但没摘对原文，没动' };
+      if (noProof) return { ok: false, error: 'AI 给了 ' + noProof + ' 条结论，但都没摘对原文，全作废了' };
       // 明确回了空数组，说明它看过原文、只是没挑出问题；什么都没回才算没核成
       var answered = Array.isArray(obj.verdict) || Array.isArray(obj.fix);
       if (!answered) return { ok: false, error: 'AI 一条都没判对' };
@@ -3787,7 +4423,8 @@
       kept: kept,
       drop: drop,
       fix: fix,
-      audit: { at: Date.now(), verdict: verdict, add: add, overrule: {} }
+      noProof: noProof,
+      audit: { at: Date.now(), verdict: verdict, add: add, overrule: {}, noProof: noProof }
     };
   }
 
@@ -3913,7 +4550,9 @@
     V.auditBusy = true;
     if (V.tab === 'issue') paint();
     var token = rec;
+    var t0 = Date.now();
     D.askAI(buildAuditPrompt(rec, cands), { maxTokens: 2400 }).then(function (out) {
+      var ms = Date.now() - t0;
       if (V.record !== token) { V.auditBusy = false; return; }
       V.auditBusy = false;
       var r = parseAuditPayload(out, cands, rec);
@@ -3927,6 +4566,13 @@
       }
       V.auditErr = '';
       rec.auditErr = '';
+      // 把「谁核的、花了多久、查了几条」记下来，摆给人看
+      r.audit.meta = {
+        model: (D && D.modelName) ? String(D.modelName() || '') : '',
+        ms: ms,
+        checked: cands.raw.length,
+        at: new Date().toISOString()
+      };
       var changed = (r.fix && r.fix.length) ? applyQtyFix(rec, r.fix) : 0;
       applyAudit(rec, r.audit);
       if (V.tab === 'issue') paint(); else refreshIssueBadge();
@@ -3997,6 +4643,16 @@
       '</div>';
     if (V.auditErr && !V.auditBusy && aiOn) {
       h += '<p class="jl-ai-err-tip">AI 没连上不影响拆单。常见是 Key 过期、余额不足、接口地址填错：到右上角「设置 → 测一下能不能连上」能看到具体是哪一样。</p>';
+    }
+
+    /* 核过的凭证：谁核的、多久、查了几条、有没有没摘对原文被作废的 */
+    if (a.ai && a.ai.meta && !V.auditBusy) {
+      var mt = a.ai.meta, bits = [];
+      bits.push(mt.model ? mt.model : '已接 AI');
+      if (mt.ms) bits.push((mt.ms / 1000).toFixed(1) + ' 秒');
+      if (mt.checked != null) bits.push('查了 ' + mt.checked + ' 条');
+      if (a.ai.noProof) bits.push(a.ai.noProof + ' 条没摘对原文·已作废');
+      h += '<p class="jl-audit-meta">' + esc(bits.join(' · ')) + '</p>';
     }
 
     /* ---------- AI 照原文改了件数：改了什么、怎么撤回 ---------- */
@@ -4072,6 +4728,7 @@
           (it.code === 'histbld' ? okBldHtml(it.no) : '') +
           (it.memWhy ? '<p class="jl-mem-why">你的规矩：' + esc(it.memWhy) + '</p>' : '') +
           (it.aiWhy ? '<p class="jl-ai-why">AI：' + esc(it.aiWhy) + '</p>' : '') +
+          (it.aiQuote ? '<p class="jl-ai-quote">原文「' + esc(it.aiQuote) + '」</p>' : '') +
           '</div>';
       }
       h += '</div>';
@@ -4097,6 +4754,7 @@
           '</div>' +
           (d.src ? '<p class="jl-issue-src">原文：' + esc(d.src) + '</p>' : '') +
           '<p class="jl-ai-why">AI：' + esc(d.aiDrop) + '</p>' +
+          (d.aiQuote ? '<p class="jl-ai-quote">原文「' + esc(d.aiQuote) + '」</p>' : '') +
           '</div>';
       }
       h += '</div></details>';
@@ -4144,8 +4802,8 @@
 
     h += '<p class="jl-hint">单价按本店价目表带出来；改过的只存本机，下一单还是先按本店价。</p>';
 
-    h += '<details class="jl-menu-book"><summary>本店价目表 · ' + MENU.length + ' 样 · 点开对一下</summary>' +
-      '<div class="jl-menu-grid">' + menuRows() + '</div></details>';
+    h += '<details class="jl-menu-book"><summary>本店价目表 · ' + menuMerged().length + ' 样 · 点开能改价</summary>' +
+      '<div class="jl-menu-grid">' + menuRows() + '</div>' + aliasRows() + '</details>';
 
     h += '<div class="jl-sec-title">按人核一遍</div>';
     h += '<div class="jl-people">';
@@ -4409,6 +5067,13 @@
     } else if (V.view === 'memory') {
       title = 'AI 资料库';
       sub = readMemory().length + ' 条规矩';
+    } else if (V.view === 'check') {
+      title = '核对一下';
+      var leftN = 0;
+      if (V.check && V.check.asks) {
+        for (var ci = 0; ci < V.check.asks.length; ci++) if (!V.check.picked[V.check.asks[ci].id]) leftN++;
+      }
+      sub = leftN ? leftN + ' 处待确认' : '都确认了';
     } else {
       sub = '粘一段，拆成楼栋和箱子';
     }
@@ -4417,6 +5082,7 @@
     if (V.view === 'home') body = viewHome();
     else if (V.view === 'history') body = viewHistory();
     else if (V.view === 'memory') body = viewMemory();
+    else if (V.view === 'check') body = viewCheck();
     else body = viewDetail();
 
     HOST.innerHTML =
@@ -4429,7 +5095,9 @@
         ? '<button type="button" class="jl-topbtn" data-act="save">保存</button>'
         : (V.view === 'history' || V.view === 'memory'
           ? '<button type="button" class="jl-topbtn" data-act="close">关闭</button>'
-          : '<button type="button" class="jl-topbtn" data-act="history">记录</button>')) +
+          : (V.view === 'check'
+            ? '<button type="button" class="jl-topbtn" data-act="back">取消</button>'
+            : '<button type="button" class="jl-topbtn" data-act="history">记录</button>'))) +
       '</div>' +
       '<div class="jl-body">' +
       (V.err ? '<div class="jl-errbar">' + esc(V.err) + '</div>' : '') +
@@ -4456,6 +5124,7 @@
     V.err = '';
     V.openBld = '';
     V.refPrice = null;
+    V.check = null;
     paint();
   }
 
@@ -4575,6 +5244,10 @@
     });
   }
 
+  /* v16：拆单只走本地。
+   * AI 不再产出订单行——它一加行，账就跟着错（「一个牛肉包」被拆成两样、多算一倍）。
+   * 本地拆完先过「核实页」，人点完才定稿；AI 只在最后拿原文复核。
+   * useAi 参数留着只为兼容旧调用，不再影响拆单。 */
   function doParse(useAi) {
     var ta = HOST.querySelector('#jlText');
     var text = ta ? ta.value : V.text;
@@ -4587,62 +5260,93 @@
     paint();
 
     var opts = parseOpts();
+    var ropts = {};
+    for (var k in opts) if (Object.prototype.hasOwnProperty.call(opts, k)) ropts[k] = opts[k];
+    ropts.deferFinalize = true;
 
-    var finish = function (rec, src) {
-      V.busy = false;
-      if (!rec || !rec.orders.length) {
-        V.err = '这一单一条都没拆出来，看看是不是粘错了段落';
-        paint();
-        return;
-      }
-      V.noteId = null;
-      learnPrices(rec);
-      // 原文留着：AI 核问题时必须对着原句看，光看拆出来的结果会把好人冤枉
-      rec.sourceText = trim(text).slice(0, 3000);
-      applyRecord(rec);
-      persist(true);
-      var t = rec.orders.length, b = rec.buildings.length;
-      toast('拆出 ' + t + ' 单 / ' + b + ' 栋，已存进「接龙」');
-      if (src === 'ai') kickBoxAI(rec);
-      // 排箱先跑，核对晚一步，别把两个 AI 请求挤在一起
-      var autoRec = rec;
-      setTimeout(function () {
-        if (V.record === autoRec && !autoRec.audit) kickAuditAI(autoRec, false);
-      }, 1400);
-    };
+    var rec = null;
+    try { rec = parseText(text, ropts); } catch (e) { rec = null; }
 
-    var localFallback = function (why) {
-      var local = null;
-      try { local = parseText(text, opts); } catch (e) {}
-      if (local && local.orders.length) {
-        finish(local, 'local');
-        if (why) toast(why);
-      } else {
-        V.busy = false;
-        V.err = 'AI 和本地都没拆出来：' + (why || '格式太乱');
-        paint();
-      }
-    };
-
-    if (!useAi) {
-      var rec = null;
-      try { rec = parseText(text, opts); } catch (e) { rec = null; }
-      setTimeout(function () { finish(rec, 'local'); }, 60);
+    V.busy = false;
+    if (!rec || !rec.orders.length) {
+      V.err = '这一单一条都没拆出来，看看是不是粘错了段落';
+      paint();
       return;
     }
 
-    if (!D || !D.hasAI()) { V.busy = false; V.err = '还没配 AI'; paint(); return; }
-    D.askAI(buildPrompt(text, opts.residents), { maxTokens: 4000 }).then(function (out) {
-      var opts2 = {};
-      for (var kk in opts) if (Object.prototype.hasOwnProperty.call(opts, kk)) opts2[kk] = opts[kk];
-      opts2.sourceText = text;
-      var r = parseAiPayload(out, opts2);
-      if (r.ok) { finish(r.record, 'ai'); return; }
-      localFallback('AI 没拆好（' + r.error + '），已改用本地规则');
-    }).catch(function (e) {
-      var msg = (e && e.message) ? String(e.message) : 'AI 没回应';
-      localFallback('AI 没连上（' + msg + '），已用本地规则');
-    });
+    var srcText = trim(text).slice(0, 3000);
+    // 有拿不准的，先列出来让人点一遍；没有就直接出结果
+    if (rec.asks && rec.asks.length) {
+      V.check = { record: rec, asks: rec.asks, picked: {}, text: srcText };
+      V.view = 'check';
+      paint();
+      return;
+    }
+    commitParse(rec, srcText);
+  }
+
+  /* 核实完（或者压根不用核）→ 定稿、存档、开跑 AI 复核 */
+  function commitParse(rec, srcText) {
+    var opts = parseOpts();
+    try { finalize(rec, opts); } catch (e) { }
+    V.check = null;
+    V.noteId = null;
+    learnPrices(rec);
+    // 原文留着：AI 核问题时必须对着原句看，光看拆出来的结果会把好人冤枉
+    rec.sourceText = srcText || '';
+    applyRecord(rec);
+    persist(true);
+    var t = rec.orders.length, b = rec.buildings.length;
+    toast('拆出 ' + t + ' 单 / ' + b + ' 栋，已存进「接龙」');
+    var autoRec = rec;
+    setTimeout(function () {
+      if (V.record === autoRec && !autoRec.audit) kickAuditAI(autoRec, false);
+    }, 1400);
+  }
+
+  /* 核实页：点一个选项 → 落到订单 → 记下「已确认」 */
+  function askPick(id, key, text) {
+    var c = V.check;
+    if (!c) return;
+    var ask = null;
+    for (var i = 0; i < c.asks.length; i++) if (c.asks[i].id === id) { ask = c.asks[i]; break; }
+    if (!ask) return;
+
+    var val = key, label = '', shown = '';
+    if (key === 'input') {
+      shown = trim(text || '');
+      label = shown || '先空着';
+    } else {
+      for (var j = 0; j < ask.options.length; j++) {
+        if (ask.options[j].key === key) { label = ask.options[j].label; break; }
+      }
+      if (!label) return;
+    }
+
+    applyAsk(c.record, ask, val, text);
+    c.picked[id] = { key: val, label: label, text: shown };
+    paint();
+    setTimeout(scrollToAsk, 40);
+  }
+
+  function scrollToAsk() {
+    if (!HOST || !HOST.querySelector) return;
+    var el = HOST.querySelector('.jl-ask:not(.done)');
+    if (el && el.scrollIntoView) {
+      try { el.scrollIntoView({ behavior: 'smooth', block: 'center' }); } catch (e) { }
+    }
+  }
+
+  function checkDone(skip) {
+    var c = V.check;
+    if (!c) return;
+    if (!skip) {
+      var left = 0;
+      for (var i = 0; i < c.asks.length; i++) if (!c.picked[c.asks[i].id]) left++;
+      if (left) { toast('还有 ' + left + ' 处没点'); return; }
+    }
+    var rec = c.record, src = c.text;
+    commitParse(rec, src);
   }
 
   function openRecord(id) {
@@ -5108,6 +5812,87 @@
 
   /* ---------- 单条编辑 ---------- */
 
+  /* 价目表编辑：名称 / 别名 / 单价 / 单位 / 半份。
+   * 别名写进去才算同一样；不写就是两样东西——这就是「牛肉包 vs 麻辣牛肉包」的正解。 */
+  function menuEditSheet(name) {
+    var isNew = !name;
+    var list = menuMerged(), cur = null;
+    for (var i = 0; i < list.length; i++) if (list[i].name === name) { cur = list[i]; break; }
+    if (!isNew && !cur) return;
+
+    var bys = ['个', '杯', '笼', '根', '份', '袋', '盒', '碗', '张'];
+    var byOpt = bys.map(function (b) {
+      var on = (cur && cur.by === b) || (!cur && b === '个');
+      return '<option value="' + b + '"' + (on ? ' selected' : '') + '>' + b + '</option>';
+    }).join('');
+
+    var mask = document.createElement('div');
+    mask.className = 'jl-mask';
+    mask.innerHTML =
+      '<div class="jl-sheet-edit">' +
+      '<div class="jl-ehead"><b>' + (isNew ? '加一样' : '改「' + esc(name) + '」') + '</b>' +
+      '<button type="button" data-x="close">×</button></div>' +
+      '<label class="jl-efield"><span>名称</span><input id="jlMName" value="' + esc(cur ? cur.name : '') + '" placeholder="价目表里怎么写"></label>' +
+      '<label class="jl-efield"><span>别名</span><input id="jlMAlias" value="' + esc(cur ? (cur.alias || []).join('/') : '') + '" placeholder="牛肉/牛包，用 / 隔开"></label>' +
+      '<p class="jl-hint jl-mhint">写进别名的才算同一样。不写就是两样东西——「牛肉包」和「麻辣牛肉包」不会再被合成一个，也不会被拆成两行。</p>' +
+      '<label class="jl-efield"><span>单价</span><input id="jlMPrice" type="number" min="0" step="0.5" inputmode="decimal" value="' + (cur ? cur.price : '') + '" placeholder="2.5"></label>' +
+      '<label class="jl-efield"><span>单位</span><select id="jlMBy">' + byOpt + '</select></label>' +
+      '<label class="jl-efield"><span>能卖半份</span><input id="jlMHalf" type="checkbox"' + (cur && cur.half ? ' checked' : '') + '></label>' +
+      '<div class="jl-eacts">' +
+      (isNew ? '' : '<button type="button" class="jl-ghost" data-x="mdel">删掉</button>') +
+      '<button type="button" class="jl-primary" data-x="msave">保存</button>' +
+      '</div></div>';
+    document.body.appendChild(mask);
+
+    function close() { if (mask.parentNode) mask.parentNode.removeChild(mask); }
+    function snapshot() {
+      var ov = readMenuEdit(), next = {};
+      for (var k in ov) if (Object.prototype.hasOwnProperty.call(ov, k)) next[k] = ov[k];
+      return next;
+    }
+    function after() {
+      close();
+      if (V.record) rebuild(); else paint();
+    }
+
+    mask.addEventListener('click', function (ev) {
+      var t = ev.target;
+      if (t === mask) { close(); return; }
+      var x = t.getAttribute ? t.getAttribute('data-x') : null;
+      if (x === 'close') { close(); return; }
+
+      if (x === 'mdel') {
+        if (!window.confirm('把「' + name + '」从价目表里删掉？以后遇到它会问你一次。')) return;
+        var d = snapshot();
+        d[name] = { hidden: true };
+        writeMenuEdit(d);
+        after();
+        toast('已删掉：' + name);
+        return;
+      }
+
+      if (x === 'msave') {
+        var nm = trim(mask.querySelector('#jlMName').value);
+        var pr = parseFloat(mask.querySelector('#jlMPrice').value);
+        var alTxt = trim(mask.querySelector('#jlMAlias').value);
+        var by = mask.querySelector('#jlMBy').value;
+        var hf = mask.querySelector('#jlMHalf').checked;
+        if (!nm) { toast('名称得写一个'); return; }
+        if (!isFinite(pr) || pr < 0) { toast('单价填个数'); return; }
+        var aliasArr = alTxt ? alTxt.split(/[\/／、,，\s]+/).filter(function (z) { return !!z; }) : [];
+        // 改名：旧名留成别名，老单里写的旧名还能查到价
+        if (!isNew && nm !== name && aliasArr.indexOf(name) < 0) aliasArr.push(name);
+        var d2 = snapshot();
+        d2[nm] = { price: pr, by: by, half: hf, alias: aliasArr };
+        if (!isNew && nm !== name) d2[name] = { hidden: true };
+        writeMenuEdit(d2);
+        after();
+        toast(isNew ? '加上了：' + nm : '改好了：' + nm);
+        return;
+      }
+    });
+  }
+
   function editOrder(no) {
     if (!V.record) return;
     var o = null;
@@ -5250,11 +6035,12 @@
     }
 
     // 商品先认：价目表里的名字（含别名）出现了，就认定是这条货的规矩
-    for (var i = 0; i < MENU.length; i++) {
-      if (s.indexOf(MENU[i].name) >= 0) { out.item = MENU[i].name; break; }
-      var al = MENU[i].alias || [];
+    var mlist = menuMerged();
+    for (var i = 0; i < mlist.length; i++) {
+      if (s.indexOf(mlist[i].name) >= 0) { out.item = mlist[i].name; break; }
+      var al = mlist[i].alias || [];
       for (var j = 0; j < al.length; j++) {
-        if (al[j] && s.indexOf(al[j]) >= 0) { out.item = MENU[i].name; break; }
+        if (al[j] && s.indexOf(al[j]) >= 0) { out.item = mlist[i].name; break; }
       }
       if (out.item) break;
     }
@@ -5962,6 +6748,36 @@
     }
     if (act === 'parse') { doParse(false); return; }
     if (act === 'parse-ai') { doParse(true); return; }
+    if (act === 'askpick') {
+      askPick(btn.getAttribute('data-id'), btn.getAttribute('data-key'), '');
+      return;
+    }
+    if (act === 'askredo') {
+      if (V.check && V.check.picked) delete V.check.picked[btn.getAttribute('data-id')];
+      paint();
+      return;
+    }
+    if (act === 'asksave') {
+      var sid = btn.getAttribute('data-id');
+      var inp = null, all = HOST.querySelectorAll ? HOST.querySelectorAll('[data-askinput]') : [];
+      for (var ii = 0; ii < all.length; ii++) {
+        if (all[ii].getAttribute('data-askinput') === sid) { inp = all[ii]; break; }
+      }
+      askPick(sid, 'input', inp ? inp.value : '');
+      return;
+    }
+    if (act === 'checkdone') { checkDone(false); return; }
+    if (act === 'checkskip') { checkDone(true); return; }
+    if (act === 'menuedit') { menuEditSheet(btn.getAttribute('data-name') || ''); return; }
+    if (act === 'aliasdel') {
+      var aw = btn.getAttribute('data-word') || '';
+      if (!aw) return;
+      if (!window.confirm('忘掉「' + aw + '」这个写法？下次遇到会重新问你。')) return;
+      forgetAlias(aw);
+      if (V.record) rebuild(); else paint();
+      toast('忘了：' + aw);
+      return;
+    }
     if (act === 'open') { openRecord(btn.getAttribute('data-id')); return; }
     if (act === 'tab') { V.tab = btn.getAttribute('data-v'); paint(); return; }
     if (act === 'bld') {
@@ -6245,6 +7061,12 @@
     effectivePrice: effectivePrice,
     MENU: MENU,
     menuOf: menuOf,
+    buildAsks: buildAsks,
+    applyAsk: applyAsk,
+    learnAlias: learnAlias,
+    aliasList: aliasList,
+    aliasOf: aliasOf,
+    nearItems: nearItems,
     menuText: menuText,
     menuList: menuList,
     canHalf: canHalf,
