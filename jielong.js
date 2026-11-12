@@ -607,7 +607,7 @@
   // 补齐：分组、金额、装箱
   function round2(n) { return Math.round((Number(n) || 0) * 100) / 100; }
 
-  // 原文没写楼栋的人，用历史记录里的住处补上
+  // 原文没写楼栋的人，用住户档案里的住处补上
   function fillMissingBuildings(record, residents) {
     if (!residents) return 0;
     var n = 0;
@@ -616,55 +616,66 @@
       var o = orders[i];
       if (o.building || !o.name) continue;
       var hit = residents[o.name];
+      if (!hit || !hit.building) {
+        var near = findResidentInBook(o.name, residents);
+        if (near && near.exact) hit = near;   // 「张三（3栋）」和「张三」算同一个人
+      }
       if (!hit || !hit.building) continue;
+      /* 只填过一次、又是很久以前的，先别自作主张——留到问题里问一句。
+       * 老板亲口交代过的（hits 99）无条件信。 */
+      var fresh = daysAgoOf(hit.at) <= 45;
+      if (!(hit.hits >= 2 || hit.hits >= 99 || fresh)) continue;
       o.building = hit.building;
       if (!o.room && hit.room) o.room = hit.room;
       o.buildingFrom = 'history';
+      o.bldHits = hit.hits;
+      o.bldAt = hit.at || '';
+      o.bldSaid = hit.from === 'said';
       n++;
     }
     return n;
   }
 
-  // 按名字在过往接龙记录里找这个人的楼栋：精确优先，再放宽到「去掉常见称呼后缀」
-  // （张三 → 张三姐 / 张三哥 / 小张）。查不到返回 null。
+  // 按名字在住户档案 + 过往接龙里找这个人的楼栋。查不到返回 null。
   function lookupBuildingByName(name) {
     name = trim(name || '');
     if (!name) return null;
-    var book = residentBook(listRecords);
-    if (book[name] && book[name].building) return { building: book[name].building, room: book[name].room || '', at: book[name].at || '' };
-    var strip = function (x) { return trim(x).replace(/(姐|哥|阿姨|叔|先生|女士|老板|小|老|大)$/, ''); };
-    var sName = strip(name);
-    if (sName && book[sName] && book[sName].building) {
-      return { building: book[sName].building, room: book[sName].room || '', at: book[sName].at || '' };
-    }
-    var ks = Object.keys(book);
-    for (var i = 0; i < ks.length; i++) {
-      var k = ks[i];
-      if (book[k].building && strip(k) === name) {
-        return { building: book[k].building, room: book[k].room || '', at: book[k].at || '' };
-      }
-    }
-    return null;
+    return findResidentInBook(name, residentBook(listRecords));
   }
 
-  // 问题清单里「没写楼栋」那一行的按钮：去过往记录按名字查，查到就填、查不到记一笔
-  function lookupBld(no) {
+  /* 把楼栋直接填到某一单上。填完要重算楼栋分组、金额、装箱——
+   * 以前只改 order 不重算，页面还按旧分组显示，看着像没填上。 */
+  function fillBld(no, bld, room) {
+    var rec = V.record;
+    if (!rec || !rec.orders) return;
+    var o = null;
+    for (var i = 0; i < rec.orders.length; i++) if (rec.orders[i].no === no) { o = rec.orders[i]; break; }
+    if (!o) return;
+    var key = normBuilding(String(bld || '').replace(/(栋|幢|号楼|座|#)$/, ''), '');
+    if (!key) return;
+    o.building = key;
+    if (room) o.room = String(room).replace(/\s+/g, '');
+    o.buildingFrom = 'manual';
+    o.bldConfirmed = 1;
+    o.bldDismiss = 0;
+    o.bldLookedUp = 0;
+    rebuild();
+    persist(true);
+    toast('已填上 ' + key + (o.room ? ' ' + o.room : '') + '，往后就记住了');
+  }
+
+  // 问题清单里「没写楼栋」那一行：先按名字查，查到就直接填
+  function lookupBld(no, bld, room) {
     var rec = V.record;
     if (!rec || !rec.orders) return;
     var o = null;
     for (var i = 0; i < rec.orders.length; i++) if (rec.orders[i].no === no) { o = rec.orders[i]; break; }
     if (!o || o.building) return;
+    if (bld) { fillBld(no, bld, room); return; }
     var nm = trim(o.name || '');
     var hit = nm ? lookupBuildingByName(nm) : null;
     if (hit) {
-      o.building = hit.building;
-      if (!o.room && hit.room) o.room = hit.room;
-      o.buildingFrom = 'history';
-      o.bldLookedUp = false;
-      rec.buildings = groupByBuilding(rec.orders);
-      persist(true);
-      paint();
-      toast('已在过往记录找到「' + nm + '」：' + hit.building + (hit.room ? (' ' + hit.room) : '') + '，已补上');
+      fillBld(no, hit.building, hit.room);
     } else {
       o.bldLookedUp = true;
       persist(true);
@@ -673,15 +684,78 @@
     }
   }
 
-  // 「没写楼栋」问题行底部：没查过出按钮，查过没找到出灰字提示
+  /* 「没写楼栋」问题行底部：AI 主动把查到的结果摆出来，问一句「要不要填」。
+   * 查不到也不装死——给相近的名字让人挑，一个都没有就说清「填一次就记住了」。 */
   function bldLookupHtml(no) {
     var rec = V.record;
     if (!rec || !rec.orders) return '';
     var o = null;
     for (var i = 0; i < rec.orders.length; i++) if (rec.orders[i].no === no) { o = rec.orders[i]; break; }
     if (!o || o.building) return '';
-    if (o.bldLookedUp) return '<p class="jl-looked">已查过往记录，没找到这个人的楼栋</p>';
-    return '<button type="button" class="jl-issue-act" data-act="lookupbld" data-no="' + no + '">在过往接龙里按名字查楼栋</button>';
+    if (o.bldDismiss) return '<p class="jl-looked">你说过不是他，先按「未写楼栋」放着；问到了点开这条直接填。</p>';
+
+    var nm = trim(o.name || '');
+    if (!nm) return '<p class="jl-looked">没写名字，先在群里问一句是谁的，问到了点开这条补上楼栋。</p>';
+
+    var book = currentBook();
+    var hit = book[nm] || null;
+    var near = null;
+    if (!hit) {
+      near = findResidentInBook(nm, book);
+      if (near && near.exact) hit = near;
+    }
+    if (hit) {
+      var tail = [];
+      if (hit.hits >= 99 || hit.from === 'said') tail.push('你以前交代过');
+      else if (hit.hits > 1) tail.push('记着 ' + hit.hits + ' 次');
+      else tail.push('记着 1 次');
+      if (hit.at) tail.push('最近 ' + shortDay(hit.at));
+      var alt = (hit.alts && hit.alts.length) ? '；另在 ' + hit.alts[0].key + ' 待过' : '';
+      return '<div class="jl-bldq">' +
+        '<p class="jl-bldq-t">查到他以前在 <b>' + esc(hit.building + (hit.room ? ' ' + hit.room : '')) + '</b></p>' +
+        '<p class="jl-bldq-s">' + esc(tail.join('，') + alt) + '。要不要按这个填上？</p>' +
+        '<div class="jl-bldq-a">' +
+        '<button type="button" class="jl-bldq-y" data-act="fillbld" data-no="' + o.no +
+        '" data-b="' + esc(hit.building) + '" data-r="' + esc(hit.room || '') + '">就填 ' + esc(hit.building) + '</button>' +
+        '<button type="button" class="jl-bldq-n" data-act="nobldno" data-no="' + o.no + '">不是他</button>' +
+        '</div></div>';
+    }
+
+    var cands = (near && near.cands) ? near.cands : [];
+    if (cands.length) {
+      var h = '<div class="jl-bldq"><p class="jl-bldq-t">没查到「' + esc(nm) + '」，是不是这些人？</p><div class="jl-bldq-a">';
+      for (var c = 0; c < cands.length; c++) {
+        h += '<button type="button" class="jl-cand" data-act="usecand" data-no="' + o.no +
+          '" data-name="' + esc(cands[c].name) + '" data-b="' + esc(cands[c].building) +
+          '" data-r="' + esc(cands[c].room || '') + '">' + esc(cands[c].name) +
+          ' <em>' + esc(cands[c].building) + '</em></button>';
+      }
+      h += '<button type="button" class="jl-bldq-n" data-act="lookupbld" data-no="' + o.no + '">都不是</button></div></div>';
+      return h;
+    }
+    // 渲染时就已经按名字查过一遍了，没查到就直接说，别让人再点一下才知道
+    var bookEmpty = !Object.keys(book).length;
+    return '<p class="jl-looked">' + (bookEmpty
+        ? '记录里还没有人住哪栋。点开这条填一次，往后就记住了。'
+        : '按名字查过了，记录里没有他。点开这条填一次，往后就记住了。') + '</p>' +
+      (bookEmpty ? '' : '<button type="button" class="jl-issue-act" data-act="lookupbld" data-no="' + o.no + '">再查一遍</button>');
+  }
+
+  // 「楼栋是按记录补的」那一行：点一下就算确认过，往后不再烦
+  function okBldHtml(no) {
+    var o = orderOf(no);
+    if (!o || !o.building || o.bldConfirmed) return '';
+    return '<button type="button" class="jl-issue-act" data-act="okbld" data-no="' + no + '">对，就是这栋</button>';
+  }
+
+  function okBld(no) {
+    var o = orderOf(no);
+    if (!o || !o.building) return;
+    o.bldConfirmed = 1;
+    o.buildingFrom = 'manual';
+    persist(true);
+    paint();
+    toast('记下了：' + o.building);
   }
 
   /* 半笼兜底：原文写了「半笼」，可 AI 拆单常把 half 弄丢，还会把「玉米饺」
@@ -717,6 +791,37 @@
       if (orders[z0].buildingFrom !== 'history') orders[z0].buildingFrom = '';
     }
     if (opts.residents) fillMissingBuildings(record, opts.residents);
+
+    /* AI 有时会把自己猜的楼栋也标成「按记录补的」，出了错分不清是谁的锅。
+     * 本地档案里对不上，就把这个标记撤掉，当普通楼栋看。 */
+    if (opts.residents) {
+      for (var z9 = 0; z9 < orders.length; z9++) {
+        var o9 = orders[z9];
+        if (!o9.building || o9.buildingFrom !== 'history') continue;
+        var b9 = opts.residents[o9.name];
+        if (!b9) {
+          var nb9 = findResidentInBook(o9.name, opts.residents);
+          b9 = (nb9 && nb9.exact) ? nb9 : null;
+        }
+        if (!b9 || b9.building !== o9.building) o9.buildingFrom = '';
+      }
+    }
+
+    /* 还有一种更危险：原文没写楼栋、档案里也没有，AI 自己编了一个。
+     * 不拦，但标出来让人核对——送错楼比少送一单麻烦得多。 */
+    if (record.source === 'ai') {
+      for (var z8 = 0; z8 < orders.length; z8++) {
+        var o8 = orders[z8];
+        o8.bldGuess = 0;
+        if (!o8.building || o8.buildingFrom === 'history' || o8.buildingFrom === 'manual') continue;
+        var raw8 = String(o8.raw || '').replace(/\s+/g, '');
+        if (!raw8) continue;
+        var k8 = String(o8.building).replace(/\s+/g, '');
+        if (raw8.indexOf(k8) > -1 || (k8.length > 1 && raw8.indexOf(k8.replace(/栋$/, '')) > -1)) continue;
+        var bk8 = opts.residents && (opts.residents[o8.name] || findResidentInBook(o8.name, opts.residents));
+        if (!bk8 || bk8.building !== o8.building) o8.bldGuess = 1;
+      }
+    }
 
     // 金额
     var missing = {};
@@ -1584,52 +1689,359 @@
   }
 
   /* 住户簿：名字 → 常住的楼栋房号。
-   * 有人接龙忘写楼栋，就靠这个按名字补——次数多的楼栋优先，房号取最近一次。
+   * 以前只从「现存的接龙记录」里现算：老板一清记录、换台设备，人就全不认识了，
+   * 同一个人忘写楼栋永远查不出来。现在存两份：
+   *   ① 住户档案（localStorage）——每存一单沉淀一次，记录删了也还记得；
+   *   ② 现有接龙记录——别的设备记的、或还没沉淀进来的，用它补。
+   * 选楼栋的规矩也改了：先看近半年，再看总次数。搬过家的人不该被旧楼栋拽回去。
    */
+  var RESIDENT_KEY = 'bamboo.v11.jielong.residents';
+  var RESIDENT_MAX = 400;
+  var RESIDENT_RECENT_DAYS = 180;
+
+  function readResidentFile() {
+    try {
+      if (!root || !root.localStorage) return {};
+      var raw = root.localStorage.getItem(RESIDENT_KEY);
+      if (!raw) return {};
+      var obj = JSON.parse(raw);
+      if (!obj || !obj.people || typeof obj.people !== 'object') return {};
+      return obj.people;
+    } catch (e) { return {}; }
+  }
+
+  function writeResidentFile(people) {
+    try {
+      if (!root || !root.localStorage) return false;
+      var ks = Object.keys(people || {});
+      if (ks.length > RESIDENT_MAX) {   // 太久没露面的先让位，别把 localStorage 塞满
+        ks.sort(function (a, b) {
+          return String(people[a].at || '') < String(people[b].at || '') ? 1 : -1;
+        });
+        var cut = {};
+        for (var i = 0; i < RESIDENT_MAX; i++) cut[ks[i]] = people[ks[i]];
+        people = cut;
+      }
+      root.localStorage.setItem(RESIDENT_KEY, JSON.stringify({ v: 1, people: people }));
+      return true;
+    } catch (e) { return false; }
+  }
+
+  function bumpResident(people, name, bld, room, at, key) {
+    name = trim(name || ''); bld = trim(bld || '');
+    if (!name || !bld) return false;
+    var p = people[name];
+    if (!p) p = people[name] = { name: name, blds: {}, at: '' };
+    var b = p.blds[bld];
+    if (!b) b = p.blds[bld] = { n: 0, room: '', at: '' };
+    /* 同一单会被存好几次（改个房号、拍张照都会 persist），
+     * 没有 key 去重的话「记着 5 次」能吹成 20 次，建议就不准了。 */
+    if (key) {
+      b.keys = b.keys || {};
+      if (b.keys[key]) return false;
+      b.keys[key] = 1;
+      var bk = Object.keys(b.keys);
+      if (bk.length > 24) delete b.keys[bk[0]];
+    }
+    b.n++;
+    if (room) b.room = room;
+    if (at && String(at) > String(b.at || '')) b.at = String(at);
+    if (at && String(at) > String(p.at || '')) p.at = String(at);
+    return true;
+  }
+
+  // 一条订单的稳定指纹：记录 id + 序号 + 楼栋。改楼栋会算新的一次，旧楼栋留着备查。
+  function residentKey(rec, o) {
+    var rid = (rec && rec.id) ? rec.id : ((rec && rec.date) || '') + '|' + ((rec && rec.title) || '');
+    return rid + '#' + (o && o.no != null ? o.no : '') + '|' + ((o && o.building) || '');
+  }
+
+  /* 往后每存一单，就把「谁住哪栋」记进档案。
+   * 按记录补出来的不再喂回去——那不是新消息，喂回去只会把猜错的一直传下去。 */
+  function rememberResidents(rec) {
+    if (!rec || !rec.orders) return 0;
+    var people = readResidentFile();
+    var n = 0;
+    var day = rec.date || todayStr();
+    for (var i = 0; i < rec.orders.length; i++) {
+      var o = rec.orders[i];
+      if (!o.name || !o.building) continue;
+      if (o.buildingFrom === 'history') continue;
+      if (bumpResident(people, o.name, o.building, o.room, day, residentKey(rec, o))) n++;
+    }
+    if (n) writeResidentFile(people);
+    return n;
+  }
+
+  /* 每回打开接龙都扫一遍现有记录，把还没沉淀进来的补进档案。
+   * 用 residentKey 去重，跑多少遍都不会把次数算重——换设备、云端刚同步下来也能补上。 */
+  function seedResidents(rows) {
+    try {
+      if (!root || !root.localStorage) return;
+      var people = readResidentFile();
+      var changed = 0;
+      for (var i = 0; i < (rows || []).length; i++) {
+        var d = rows[i].data;
+        if (!d || !d.orders) continue;
+        for (var j = 0; j < d.orders.length; j++) {
+          var o = d.orders[j];
+          if (o.name && o.building && o.buildingFrom !== 'history') {
+            if (bumpResident(people, o.name, o.building, o.room, d.date || rows[i].date,
+              residentKey({ id: rows[i].id, date: rows[i].date, title: rows[i].title }, o))) changed++;
+          }
+        }
+      }
+      if (changed) writeResidentFile(people);
+    } catch (e) {}
+  }
+
+  function daysAgoOf(d) {
+    if (!d) return 99999;
+    var s = String(d);
+    var t = Date.parse(s.length <= 10 ? s + 'T00:00:00' : s);
+    if (isNaN(t)) return 99999;
+    return Math.floor((Date.now() - t) / 86400000);
+  }
+
+  /* 一个人可能有好几栋的记录（搬过家、替别人带过）。
+   * 半年内待过的楼栋优先，里面再挑次数最多的；半年内都没待过，才看总次数。 */
+  function pickBld(p) {
+    var keys = Object.keys((p && p.blds) || {});
+    if (!keys.length) return null;
+    var recent = [], all = [];
+    for (var i = 0; i < keys.length; i++) {
+      var b = p.blds[keys[i]];
+      var one = { key: keys[i], n: b.n || 0, at: b.at || '', room: b.room || '', days: daysAgoOf(b.at) };
+      all.push(one);
+      if (one.days <= RESIDENT_RECENT_DAYS) recent.push(one);
+    }
+    var pool = recent.length ? recent : all;
+    if (recent.length) {
+      pool.sort(function (x, y) {
+        if (y.n !== x.n) return y.n - x.n;   // 半年内：常去的优先
+        if (x.days !== y.days) return x.days - y.days;
+        return 0;
+      });
+    } else {
+      // 半年都没来过：按最后一次算，别拿一年前的次数压人（多半搬走了）
+      pool.sort(function (x, y) { return x.days - y.days; });
+    }
+    var best = pool[0];
+    var alts = [];
+    for (var j = 0; j < all.length; j++) if (all[j].key !== best.key) alts.push(all[j]);
+    alts.sort(function (x, y) { return x.days - y.days; });
+    return { key: best.key, n: best.n, at: best.at, room: best.room, days: best.days, alts: alts };
+  }
+
   function residentBook(listFn) {
+    var people = readResidentFile();
     var rows = typeof listFn === 'function' ? listFn() : [];
-    var tmp = {};
-    for (var i = rows.length - 1; i >= 0; i--) {   // 从旧到新扫，新的覆盖旧的
+
+    // 记录里的次数补进档案：只补不累加，免得每次读都翻一倍
+    var hist = {};
+    for (var i = rows.length - 1; i >= 0; i--) {
       var d = rows[i].data;
       if (!d || !d.orders) continue;
       for (var j = 0; j < d.orders.length; j++) {
         var o = d.orders[j];
-        var nm = trim(o.name);
-        if (!nm || !o.building) continue;
-        if (!tmp[nm]) tmp[nm] = { name: nm, count: {}, room: '', at: '' };
-        var t = tmp[nm];
-        t.count[o.building] = (t.count[o.building] || 0) + 1;
-        if (o.room) t.room = o.room;
-        t.at = rows[i].date || t.at;
+        if (o.name && o.building) bumpResident(hist, o.name, o.building, o.room, d.date || rows[i].date);
       }
     }
-    var out = {};
-    var names = Object.keys(tmp);
-    for (var n = 0; n < names.length; n++) {
-      var r = tmp[names[n]];
-      var best = '', bc = 0;
-      var ks = Object.keys(r.count);
-      for (var k = 0; k < ks.length; k++) {
-        if (r.count[ks[k]] >= bc) { bc = r.count[ks[k]]; best = ks[k]; }
+    var hNames = Object.keys(hist);
+    for (var n = 0; n < hNames.length; n++) {
+      var hp = hist[hNames[n]], fp = people[hNames[n]];
+      if (!fp) { people[hNames[n]] = hp; continue; }
+      if (String(hp.at || '') > String(fp.at || '')) {
+        for (var hb in hp.blds) {
+          if (!hp.blds.hasOwnProperty(hb)) continue;
+          if (!fp.blds[hb]) fp.blds[hb] = hp.blds[hb];
+          else {
+            fp.blds[hb].n = Math.max(fp.blds[hb].n || 0, hp.blds[hb].n || 0);
+            if (String(hp.blds[hb].at || '') > String(fp.blds[hb].at || '')) {
+              fp.blds[hb].at = hp.blds[hb].at;
+              if (hp.blds[hb].room) fp.blds[hb].room = hp.blds[hb].room;
+            }
+          }
+        }
+        fp.at = hp.at;
       }
-      out[names[n]] = { building: best, room: r.room, hits: bc, at: r.at };
+    }
+
+    var out = {};
+    var names = Object.keys(people);
+    for (var k = 0; k < names.length; k++) {
+      var p = people[names[k]];
+      var pick = pickBld(p);
+      if (!pick) continue;
+      out[names[k]] = {
+        name: names[k], building: pick.key, room: pick.room || '',
+        hits: pick.n, at: pick.at || '', alts: pick.alts || []
+      };
+    }
+
+    /* 老板亲口教过的（「王姐住 3 栋，她从来不写楼栋」）比统计更硬，
+     * 但只在他还没在别处写过楼栋时兜底用。 */
+    var mem = readMemory();
+    for (var mi = 0; mi < mem.length; mi++) {
+      var m = mem[mi];
+      if (!m || !m.name || (m.code !== 'nobld' && m.code !== 'histbld')) continue;
+      /* 老板亲口交代过，但要是交代完他又在别的楼栋实打实接过好几次，
+       * 那就是搬了家——以更近的记录为准，别把人送回旧楼。 */
+      var old = out[m.name];
+      if (old && old.hits >= 2 && String(old.at || '') > String(m.day || '')) continue;
+      var fb = findBuilding(m.note || '') || findBuilding(m.src || '');
+      if (!fb || !fb.key) continue;
+      out[m.name] = {
+        name: m.name, building: fb.key, room: fb.room || '', hits: 99,
+        at: m.day || '', alts: old ? old.alts || [] : [], from: 'said'
+      };
     }
     return out;
   }
 
-  // 给 AI 看的住户名单，只保留常出现的，别把 prompt 撑爆
+  /* 名字对不上是「查不到」的头号原因：群里一会儿「张三」一会儿「张三姐」，
+   * 还爱写「1. 张三」「张三（3栋）」「小张」。先归一，再按像的程度打分。 */
+  function normName(s) {
+    return trim(String(s == null ? '' : s))
+      .replace(/[\u200b-\u200f\ufeff]/g, '')
+      .replace(/[（(][^）)]{0,12}[）)]/g, '')
+      .replace(/[0-9]{1,2}\s*[.、．)）:：]\s*/g, '')
+      .replace(/^[#＃]/, '')
+      .replace(/[\s·・.。*~～]+/g, '')
+      .replace(/(阿姨|叔叔|老板娘|老板|先生|女士|同学|老师|师傅|姐|哥|叔|姨|儿|仔)$/g, '');
+  }
+
+  function nameLev(a, b) {
+    var n = a.length, m = b.length;
+    if (!n) return m;
+    if (!m) return n;
+    var pre = new Array(m + 1);
+    for (var j = 0; j <= m; j++) pre[j] = j;
+    for (var i = 1; i <= n; i++) {
+      var cur = [i];
+      for (var k = 1; k <= m; k++) {
+        cur[k] = Math.min(pre[k] + 1, cur[k - 1] + 1, pre[k - 1] + (a.charAt(i - 1) === b.charAt(k - 1) ? 0 : 1));
+      }
+      pre = cur;
+    }
+    return pre[m];
+  }
+
+  // 100 一模一样；92 归一后一样（可信）；78/66/60 只是「像」，必须人点头
+  function nameScore(a, b) {
+    if (!a || !b) return 0;
+    if (a === b) return 100;
+    var na = normName(a), nb = normName(b);
+    if (!na || !nb) return 0;
+    if (na === nb) return 92;
+    if (na.length < 2 || nb.length < 2) return 0;
+    if (na.indexOf(nb) === 0 || nb.indexOf(na) === 0) return 78;
+    if (na.length >= 3 && nb.length >= 3 && (na.indexOf(nb) > -1 || nb.indexOf(na) > -1)) return 66;
+    var lim = Math.min(na.length, nb.length) >= 3 ? 1 : 0;
+    if (lim && nameLev(na, nb) <= lim) return 60;
+    return 0;
+  }
+
+  // 在住户簿里找这个人：一个最像的 + 至多 3 个备选
+  function findResidentInBook(name, book) {
+    name = trim(name || '');
+    if (!name || !book) return null;
+    var best = null, bestScore = 0, cands = [];
+    var keys = Object.keys(book);
+    for (var i = 0; i < keys.length; i++) {
+      var r = book[keys[i]];
+      if (!r || !r.building) continue;
+      var s = nameScore(name, keys[i]);
+      if (!s) continue;
+      var one = {
+        name: keys[i], building: r.building, room: r.room || '',
+        hits: r.hits || 0, at: r.at || '', alts: r.alts || [], from: r.from || '', score: s
+      };
+      if (s > bestScore) {
+        if (best) cands.push(best);
+        best = one; bestScore = s;
+      } else if (s >= 60) {
+        cands.push(one);
+      }
+    }
+    if (!best) return null;
+    cands.sort(function (x, y) { return y.score - x.score || String(y.at).localeCompare(String(x.at)); });
+    best.cands = bestScore >= 92 ? cands.slice(0, 3) : [{
+      name: best.name, building: best.building, room: best.room,
+      hits: best.hits, at: best.at, score: best.score
+    }].concat(cands).slice(0, 3);
+    best.exact = bestScore >= 92;
+    return best;
+  }
+
+  function shortDay(d) {
+    var s = String(d || '');
+    var m = s.match(/^(\d{4})-(\d{2})-(\d{2})/);
+    if (!m) return s.slice(0, 10);
+    return m[2] + '.' + m[3];
+  }
+
+  /* 渲染问题清单时一屏要问好几次「这人住哪」，每次都重扫一遍笔记太笨。
+   * 3 秒内复用同一份，够快也不会拿到过期的。 */
+  var bookCache = null, bookCacheAt = 0;
+  function currentBook() {
+    var now = Date.now();
+    if (bookCache && now - bookCacheAt < 3000) return bookCache;
+    bookCache = residentBook(listRecords);
+    bookCacheAt = now;
+    return bookCache;
+  }
+
+  function orderOf(no) {
+    var rec = V.record;
+    if (!rec || !rec.orders) return null;
+    for (var i = 0; i < rec.orders.length; i++) if (rec.orders[i].no === no) return rec.orders[i];
+    return null;
+  }
+
+  // 这一单没写楼栋时，档案里能给出什么线索（没有就 null）
+  function orderBldHint(o, book) {
+    if (!o || o.building) return null;
+    var nm = trim(o.name || '');
+    if (!nm) return null;
+    book = book || currentBook();
+    var hit = book[nm];
+    if (!hit) {
+      var near = findResidentInBook(nm, book);
+      if (near && near.exact) hit = near;
+    }
+    return (hit && hit.building) ? hit : null;
+  }
+
+  // 给 AI 看的住户名单：次数、最近日期、另一栋都带上，让它能挑「最近那栋」
   function residentsText(book) {
     var list = [];
     var names = Object.keys(book || {});
     for (var i = 0; i < names.length; i++) {
       var r = book[names[i]];
       if (!r || !r.building) continue;
-      list.push({ name: names[i], building: r.building, room: r.room || '', hits: r.hits || 1 });
+      list.push({
+        name: names[i], building: r.building, room: r.room || '',
+        hits: r.hits || 1, at: r.at || '', alts: r.alts || [], from: r.from || ''
+      });
     }
-    list.sort(function (a, b) { return b.hits - a.hits; });
+    list.sort(function (a, b) {
+      if (b.hits !== a.hits) return b.hits - a.hits;
+      return String(b.at).localeCompare(String(a.at));
+    });
     var out = [];
-    for (var j = 0; j < list.length && j < 80; j++) {
-      out.push(list[j].name + '→' + list[j].building + (list[j].room ? list[j].room : ''));
+    var len = 0;
+    for (var j = 0; j < list.length && j < 120 && len < 3000; j++) {
+      var x = list[j];
+      var tail = [];
+      if (x.from === 'said') tail.push('老板交代过');
+      else if (x.hits) tail.push(x.hits + '次');
+      if (x.at) tail.push(shortDay(x.at));
+      if (x.alts && x.alts.length) tail.push('另在' + x.alts[0].key);
+      var one = x.name + '→' + x.building + (x.room ? x.room : '') +
+        (tail.length ? '（' + tail.join('，') + '）' : '');
+      out.push(one);
+      len += one.length + 1;
     }
     return out.join('；');
   }
@@ -1694,7 +2106,7 @@
   var MEMORY_MAX = 48;
 
   var MEM_CODE_LABEL = {
-    noname: '没写名字', oddname: '名字认得不准', nobld: '没写楼栋', histbld: '楼栋按历史补的',
+    noname: '没写名字', oddname: '名字认得不准', nobld: '没写楼栋', histbld: '楼栋按历史补的', bldguess: '楼栋可能是猜的',
     noitem: '没认出商品', zeroqty: '件数是 0', bigqty: '件数比平常多', noprice: '没定价',
     oddunit: '单价看着不对', short: '少给了', over: '多给了', pricelow: '比本店价少',
     dup: '同一个人下了好几单', aiadd: '别的问题',
@@ -1703,7 +2115,7 @@
 
   // 资料库分栏：认人 / 认货 / 价钱 / 装箱 / 其他——按老板找东西的习惯分，不按代码分
   var MEM_GROUP = {
-    noname: '人', oddname: '人', nobld: '人', histbld: '人', dup: '人',
+    noname: '人', oddname: '人', nobld: '人', histbld: '人', bldguess: '人', dup: '人',
     noitem: '货', zeroqty: '货', bigqty: '货',
     noprice: '钱', oddunit: '钱', short: '钱', over: '钱', pricelow: '钱',
     warmbld: '箱', aiadd: '其他'
@@ -2010,7 +2422,10 @@
       '    别当成某样商品的单价；「3r」「2.5r」的 r 就是「元」，同样按整单总价处理。\n' +
       '17. items.name 一律用【本店价目表】里的规范名，别保留原文简称，\n' +
       '    否则「白鸡蛋／白蛋／水煮蛋」会在金额页被当成三样不同商品分开装箱。\n' +
-      '18. 「一个香菇冬笋」「1土豆」这种漏了「包」字的，按【简称对照】补成规范名，不要整样丢掉。\n';
+      '18. 「一个香菇冬笋」「1土豆」这种漏了「包」字的，按【简称对照】补成规范名，不要整样丢掉。\n' +
+      '19. 【这群人的历史住处】名字后面括号里是「记过几次，最近哪天，另在哪栋待过」。同一个人有多栋时，\n' +
+      '    按最近那栋填，不要按次数最多的填（人可能搬过家）；拿不准就留空，别猜。\n' +
+      '20. 只填历史住处里确有其人的，别把别人的楼栋安到他头上；原文写了楼栋，哪怕和历史不一样，也以原文为准。\n';
   }
 
   function parseAiPayload(text, opts) {
@@ -2202,6 +2617,14 @@
         return {
           no: o.no, name: o.name, building: o.building, room: o.room,
           buildingFrom: o.buildingFrom || '',
+          // 楼栋是怎么来的、核对过没有：不存的话，重新打开又冒出一条「楼栋按记录补的」
+          bldConfirmed: o.bldConfirmed ? 1 : 0,
+          bldDismiss: o.bldDismiss ? 1 : 0,
+          bldHits: o.bldHits || 0,
+          bldAt: o.bldAt || '',
+          bldSaid: o.bldSaid ? 1 : 0,
+          bldGuess: o.bldGuess ? 1 : 0,
+          bldLookedUp: o.bldLookedUp ? 1 : 0,
           raw: trim(o.raw || '').slice(0, 90),
           items: o.items.map(function (i) { return { name: i.name, qty: i.qty, unit: i.unit, fromText: !!i.fromText, half: i.half == null ? null : !!i.half, priceFrom: i.priceFrom || '' }; }),
           total: o.total == null ? null : o.total,
@@ -2552,19 +2975,23 @@
         '</div>';
     }
 
-    var noBld = 0, inferred = 0;
+    var noBld = 0, inferred = 0, who = [];
     for (var z = 0; z < r.orders.length; z++) {
       if (!r.orders[z].building) noBld++;
-      if (r.orders[z].buildingFrom === 'history') inferred++;
+      if (r.orders[z].buildingFrom === 'history') {
+        inferred++;
+        who.push((r.orders[z].name || '无名') + '→' + r.orders[z].building);
+      }
     }
     if (inferred) {
       h += '<div class="jl-alert jl-alert-soft">' +
-        '<b>' + inferred + ' 条没写楼栋，已按名字补上</b>' +
-        '<span>取自他们最近几次接龙的住处，标着「按记录」的就是补的，点开能改</span></div>';
+        '<b>' + inferred + ' 条没写楼栋，已按记录补上</b>' +
+        '<span>' + esc(who.slice(0, 3).join('、') + (who.length > 3 ? ' 等' : '')) +
+        '。标着「按记录」的就是补的，觉得不对点开能改</span></div>';
     }
     if (noBld) {
       h += '<div class="jl-alert jl-alert-soft">' +
-        '<b>' + noBld + ' 条没写楼栋</b><span>已归到「未写楼栋」，点单条可以补</span></div>';
+        '<b>' + noBld + ' 条没写楼栋</b><span>已归到「未写楼栋」，去「问题」里能看它查到谁、一键补上</span></div>';
     }
 
     for (var i = 0; i < r.buildings.length; i++) {
@@ -2755,6 +3182,7 @@
     var orders = (record && record.orders) || [];
     var ref = (refPrice && typeof refPrice === 'object') ? refPrice : {};
     var skip = (record && record.issueSkip) || {};
+    var book = currentBook();   // 「这人住哪」整屏只查一次
     var raw = [];
     var shortSum = 0, overSum = 0;
     var names = {};
@@ -2787,10 +3215,21 @@
 
       /* 2. 楼栋 */
       if (!o.building) {
-        put(o, 'nobld', 'warn', '没写楼栋', '送货前先问清哪一栋，或者去历史记录里按名字找');
-      } else if (o.buildingFrom === 'history') {
-        put(o, 'histbld', 'info', '楼栋是按历史记录补的', '以前记的是 ' + o.building + '，顺口确认一下');
+        var bh = orderBldHint(o, book);
+        put(o, 'nobld', 'warn', '没写楼栋',
+          bh ? '按名字查到了他以前的住处，看看对不对' : '');
+      } else if (o.buildingFrom === 'history' && !o.bldConfirmed) {
+        var bt = [];
+        if (o.bldSaid) bt.push('你以前交代过');
+        else if (o.bldHits > 1) bt.push('记着 ' + o.bldHits + ' 次');
+        if (o.bldAt) bt.push('最近 ' + shortDay(o.bldAt));
+        put(o, 'histbld', 'info', '楼栋是按记录补的',
+          '记录里是 ' + o.building + (bt.length ? '（' + bt.join('，') + '）' : '') +
+          '，对的话点一下「就是这栋」，不对点开这条改');
       }
+
+      // 原文没写、档案里也没有，AI 却给了楼栋：标出来让人核对
+      if (o.bldGuess) put(o, 'bldguess', 'warn', '楼栋可能是猜的', '原文没写「' + o.building + '」，记录里也对不上，送之前核对一下');
 
       /* 3. 商品与数量 */
       if (!o.items.length) put(o, 'noitem', 'error', '没认出来买的是什么', '回原文补一下，不然没法配货');
@@ -3276,12 +3715,17 @@
           '</div>' +
           (it.detail ? '<p>' + esc(it.detail) + '</p>' : '') +
           (it.code === 'nobld' ? bldLookupHtml(it.no) : '') +
+          (it.code === 'histbld' ? okBldHtml(it.no) : '') +
           (it.memWhy ? '<p class="jl-mem-why">你的规矩：' + esc(it.memWhy) + '</p>' : '') +
           (it.aiWhy ? '<p class="jl-ai-why">AI：' + esc(it.aiWhy) + '</p>' : '') +
           '</div>';
       }
       h += '</div>';
 
+      var bookN = Object.keys(currentBook()).length;
+      if (bookN) {
+        h += '<p class="jl-booknote">住户档案记着 <b>' + bookN + '</b> 个人住哪栋——谁忘写楼栋，按名字就能补</p>';
+      }
       h += '<p class="jl-hint">点哪条就改哪一单；改完这条自己会消失。它看得不对的，点「教它」说一句，往后先照你的规矩来。</p>';
     }
 
@@ -3713,6 +4157,10 @@
       V.noteId = D.addNote(text, ['接龙']);
       V.record.id = V.noteId;
     }
+    /* 存一次就沉淀一次「谁住哪栋」。以后记录删了、翻不到旧接龙，
+     * 这个人再忘写楼栋也还认得出来。 */
+    rememberResidents(V.record);
+    bookCache = null;
     if (!silent) toast('已存到「接龙」分类');
   }
 
@@ -5216,6 +5664,30 @@
       lookupBld(parseInt(btn.getAttribute('data-no'), 10));
       return;
     }
+    if (act === 'fillbld') {
+      fillBld(parseInt(btn.getAttribute('data-no'), 10),
+        btn.getAttribute('data-b') || '', btn.getAttribute('data-r') || '');
+      return;
+    }
+    if (act === 'usecand') {
+      var candB = btn.getAttribute('data-b') || '';
+      fillBld(parseInt(btn.getAttribute('data-no'), 10), candB, btn.getAttribute('data-r') || '');
+      return;
+    }
+    if (act === 'nobldno') {
+      var nb = orderOf(parseInt(btn.getAttribute('data-no'), 10));
+      if (nb) {
+        nb.bldDismiss = 1;
+        persist(true);
+        paint();
+        toast('那先放着，问到了点开这条直接填栋');
+      }
+      return;
+    }
+    if (act === 'okbld') {
+      okBld(parseInt(btn.getAttribute('data-no'), 10));
+      return;
+    }
     if (act === 'unskipall') {
       if (V.record) {
         V.record.issueSkip = {};
@@ -5300,6 +5772,8 @@
   function mount(host, deps) {
     HOST = host;
     D = deps;
+    // 头一回用新版：先用现有接龙把住户档案垫起来，老记录里认得的人也能查
+    try { seedResidents(listRecords()); } catch (e) {}
     var st = readSettings();
     V.cap = st.cap || DEFAULT_CAP;
     V.boxMode = st.boxMode || 'auto';
