@@ -1971,6 +1971,7 @@
   .jl-audit-m{text-align:right;display:flex;flex-direction:column;gap:2px;}
   .jl-audit-m em{font-style:normal;font-size:11px;color:#bf4d3a;font-weight:600;
     font-variant-numeric:tabular-nums;}
+  .jl-audit-m em i{font-style:normal;font-size:9.5px;font-weight:400;color:var(--jl-faint);margin-left:3px;}
   .jl-issues{display:flex;flex-direction:column;gap:7px;margin-top:10px;}
   .jl-issue{padding:10px 12px;border-radius:12px;border:1px solid var(--jl-line);
     border-left:3px solid var(--jl-line);background:var(--jl-panel);cursor:pointer;}
@@ -2432,6 +2433,12 @@
   .jl-efield textarea{border:1px solid var(--jl-line,#ecdfcd);background:transparent;
     color:var(--jl-ink,#3a2a1c);border-radius:9px;padding:9px 10px;font-size:13px;font-family:inherit;
     width:100%;box-sizing:border-box;line-height:1.65;resize:none;}
+  .jl-note-fact{margin:-3px 0 10px;padding:8px 10px;border-radius:9px;background:rgba(201,114,47,.07);
+    border:1px dashed rgba(201,114,47,.28);font-size:11px;line-height:1.6;color:var(--jl-soft);}
+  .jl-note-fact b{color:var(--jl-ink);font-weight:600;font-variant-numeric:tabular-nums;}
+  .jl-note-ai{margin:-4px 0 9px;font-size:10px;line-height:1.5;color:var(--jl-faint);min-height:15px;}
+  .jl-note-ai:empty{display:none;margin:0;}
+  .jl-note-ai.ok{color:var(--jl-acc2);}
   .jl-note-sug{display:flex;flex-wrap:wrap;gap:6px;margin:-1px 0 12px;}
   .jl-note-sug button{border:1px solid var(--jl-line);background:transparent;border-radius:999px;
     padding:5px 10px;font-size:11px;color:var(--jl-soft);font-family:inherit;cursor:pointer;
@@ -3559,7 +3566,7 @@ window.onerror = function (msg, url, line) {
   'use strict';
 
   // 版本号统一在此维护；localStorage 键沿用 v11 不变，切勿改名以免丢失用户数据
-  var APP_VERSION = '16.1.0';
+  var APP_VERSION = '16.2.0';
   // 送货单拍照识别：视觉模型默认名、兼容别名与各项安全上限
   var DEFAULT_VISION_MODEL = 'deepseek-flash';
   var VISION_MODEL_FALLBACK = 'deepseek-v4-flash-vision-exp';

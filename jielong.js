@@ -4035,10 +4035,12 @@
             (brief.length > 1 ? '（' + brief.join('、') + '）' : '');
           if (diff >= 0.5) {
             shortSum = round2(shortSum + diff);
-            put(o, 'short', 'error', '少给了 ¥' + money(diff), why, diff);
+            put(o, 'short', 'error', '少给了 ¥' + money(diff),
+              why + '，这单你会少收 ¥' + money(diff), diff);
           } else if (diff <= -0.5) {
             overSum = round2(overSum - diff);
-            put(o, 'over', 'warn', '多给了 ¥' + money(-diff), why, diff);
+            put(o, 'over', 'warn', '多给了 ¥' + money(-diff),
+              why + '，这单买家多付了 ¥' + money(-diff) + '，记得退', diff);
           }
         }
       }
@@ -4126,7 +4128,8 @@
       var v = vd[key];
       var one = {
         no: it.no, code: it.code, level: it.level, title: it.title, detail: it.detail,
-        src: it.src, key: key, aiWhy: '', aiQuote: '', aiDrop: '', aiAdd: false, memWhy: it.memWhy || ''
+        src: it.src, key: key, diff: it.diff || 0,
+        aiWhy: '', aiQuote: '', aiDrop: '', aiAdd: false, memWhy: it.memWhy || ''
       };
       // 老板亲手教的比 AI 的话硬：他说这条要当真，AI 判成误报也留下
       if (v && v.v === 'drop' && !overrule[key] && !it.memWhy) {
@@ -4158,7 +4161,7 @@
         if (dup) continue;
         issues.push({
           no: ad.no, code: 'aiadd', level: ad.level || 'warn',
-          title: ad.title, detail: ad.detail || '', src: '', key: ad.no + '|aiadd',
+          title: ad.title, detail: ad.detail || '', src: '', key: ad.no + '|aiadd', diff: 0,
           aiWhy: '', aiDrop: '', aiAdd: true
         });
       }
@@ -4331,7 +4334,7 @@
   function buildAuditPrompt(record, cands) {
     var L = [];
     L.push('你是早餐接龙的核单助手。下面是一条微信群接龙的原文、程序拆出来的订单、以及程序按规则挑出来的「疑点」。');
-    L.push('请对着原文逐条判断：这条疑点是真的，还是程序看错了。只判断，不要改金额和件数。');
+    L.push('请对着原文逐单核：先算钱，再数件数，最后看名字楼栋。只判断，不要改金额和件数。');
     L.push('');
     L.push('【接龙原文】');
     L.push(auditSrcText(record));
@@ -4356,7 +4359,7 @@
     L.push('');
     L.push('【疑点】');
     if (!cands.raw.length) {
-      L.push('（本地没挑出疑点。你就只做一件事：对着原文把每一单的件数数一遍，跟【程序拆出来的】比。）');
+      L.push('（本地没挑出疑点。你要做两件事：把每一单的件数对着原文数一遍；每一单的钱按价目表算一遍。）');
     }
     for (var k = 0; k < cands.raw.length; k++) {
       var c = cands.raw[k];
@@ -4370,31 +4373,54 @@
       L.push(memTxt);
       L.push('');
     }
-    L.push('【先对着原文数一遍件数】');
+    L.push('【先算账 · 这一条最要紧，两边都要顾】');
+    L.push('- 每一单都按【本店价目表】算「该收多少」：每样的单价 × 数量，半笼按半价；再跟原文里买家写的钱比（行末那一笔，或每样后面标的价）。');
+    L.push('- 少 0.5 元及以上：买家少付，老板会亏；多 0.5 元及以上：买家多付，得退给人家。两边都必须报，不能因为「差得少」「大概抹零」就放过。');
+    L.push('- 认抹零要有字：原文写了「抹零」「不用找了」「老价」「算 X 元」，或【老板教过的规矩】里说过这人抹零，才算；没写就不算。');
+    L.push('- 程序挑出的 short / over / pricelow，你要判 drop，必须说清这笔差额为什么不算少给/多给（半笼按半价、原文写了抹零或说好价、单价看错了），并摘出对应原文。只说「这是总价」「差得少」不算理由——程序本来就是按总价跟价目表比的；说不清就 keep。');
+    L.push('- 【疑点】里一条钱的事都没有，你也要自己算一遍；算出来差 0.5 元以上，就用 add 报一条：title 写「少收 ¥X」或「多收 ¥X」，detail 写该收多少、原文写了多少。');
+    L.push('');
+    L.push('【再对着原文数一遍件数】');
     L.push('- 从上往下逐单看：这一单原文写了哪几样、每样前面或后面写的是几个（「一个」「两份」「2个」「×2」「两笼」）。');
     L.push('- 「一个牛肉堡」就是 1 个。原文没写数量的，按 1 个算，不要自己加。');
-    L.push('- 程序记的件数跟原文对不上（多一个、少一个、同一样被拆成两行各记一次），就用 fix 指出来，程序会照着改；这是核对里最要紧的一件事。');
+    L.push('- 程序记的件数跟原文对不上（多一个、少一个、同一样被拆成两行各记一次），就用 fix 指出来，程序会照着改。');
     L.push('');
     L.push('【怎么判断】');
-    L.push('- 数字要看语境：写在行末、前面一串商品的（「…一杯豆浆 15 块」），那是整单总价，逐样单价加起来对不上很正常（会抹零、按份算），差不到 1 块不算少给。');
+    L.push('- 数字要看语境：写在行末、前面一串商品的（「…一杯豆浆 15 块」），先当整单总价，按表逐样算完再比；拿不准就 keep，别硬说成单价。');
     L.push('- 「半笼」「一份」「两个」「x2」是数量，不是钱。');
     L.push('- 名字是昵称、emoji、字母加数字（y2、魚脆²⁵、😴、h、U）都正常，不像真名不代表是错的。');
     L.push('- 楼栋写成 A、G1、G2-、E栋-301、a栋 都算写了，不要判成「没写楼栋」。');
-    L.push('- 「半笼」是半价不是少给：小笼包 ¥3、灌汤小笼包 ¥3.5、玉米蒸饺 ¥3。「半笼玉米蒸饺 3 元」是对的；只写「蒸饺」「玉米饺」也多半是半笼，按 ¥3 算，别按整笼 ¥6 冤枉人。');
-    L.push('- 白鸡蛋／鸡蛋／白水蛋／白蛋都是同一个，本店 ¥1.5 一个，不是 ¥3.5；「白鸡蛋+豆浆 3.5 元」正好对得上，不算少给。');
-    L.push('- 价格先看【本店价目表】，表里没有的才看历史价。表里有的，按表算；差不到 1 块是抹零，不算少给。');
+    L.push('- 「半笼」是半价不是少给：小笼包 ¥3、灌汤小笼包 ¥3.5、玉米蒸饺 ¥3。「半笼玉米蒸饺 3 元」是对的；只写「蒸饺」「玉米饺」时看原文给的钱：给 3 元按半笼，给 6 元按整笼，别硬按整笼算成少给。');
+    L.push('- 白鸡蛋／鸡蛋／白水蛋／白蛋都是同一个，本店 ¥1.5 一个，不是 ¥3.5；「白鸡蛋+豆浆 3.5 元」正好对得上，报少给就是算错了。');
+    L.push('- 价格先看【本店价目表】，表里没有的才看历史价。表里有的，一律按表算；抹零只按上面【先算账】那几条认。');
     L.push('- 一单里被拆成两样的（「玉米蒸饺」拆成玉米+蒸饺）、件数明显跟「两个」对不上的，是真的问题。');
     L.push('');
     L.push('【输出】只输出一个 JSON 对象，不要 markdown 代码块，不要任何解释。');
-    L.push('{"verdict":[{"no":2,"code":"pricelow","v":"drop","quote":"李四 豆浆2杯 6元","why":"行末 6 元是总价"}],"fix":[{"no":3,"name":"牛肉堡","qty":1,"quote":"李四 牛肉堡1个","why":"原文只写了一个"}],"add":[]}');
-    L.push('- verdict 要把上面每一条疑点都判一遍，v 只能是 keep（确实有问题）或 drop（程序看错了）。没有疑点时给空数组。');
+    L.push('{"verdict":[{"no":2,"code":"pricelow","v":"drop","quote":"李四 半笼小笼包 3元","why":"半笼按半价 ¥3，正好"}],"fix":[{"no":3,"name":"牛肉堡","qty":1,"quote":"李四 牛肉堡1个","why":"原文只写了一个"}],"add":[]}');
+    L.push('- verdict 要把【疑点】里的每一条都判到，一条不漏；少判的按没核过算。v 只能是 keep（确实有问题）或 drop（程序看错了）。没有疑点时给空数组。');
     L.push('- 每条 verdict 和 fix 都必须带 quote：从【接龙原文】里原样复制一小段（5–20 个字），要能让人看出你判的是哪一句。');
     L.push('  改字、拼接、自己编的片段一律作废——程序会拿 quote 去原文里逐字找，找不到这条结论直接丢掉。');
-    L.push('- why 不超过 30 个字，写清依据；drop 时要指出程序错在哪。');
+    L.push('- why 不超过 30 个字，写清依据；drop 时要指出程序错在哪，钱的事还要写出算式。');
     L.push('- fix 最多 5 条，只改件数：no 是单号，name 必须跟【程序拆出来的】里一模一样，qty 是 1–99 的整数。只改这一单里已经有的商品，不要新增、不要改名、不要动金额。');
     L.push('- fix 只在原文明确写了数量、且你数清楚时才给；原文没写数量、或者你也不确定，就不要给这条 fix。');
-    L.push('- add 最多 3 条，只加原文里明确看得到的：漏了一整单、某样没算钱、件数跟原文不符（这种优先用 fix）。add 的 no 必须是上面出现过的单号，没看出来就给空数组。');
+    L.push('- add 最多 3 条，只加原文里明确看得到的：漏了一整单、某样没算钱、金额对不上（钱优先用 add 报清楚）。add 的 no 必须是上面出现过的单号，没看出来就给空数组。');
     return L.join('\n');
+  }
+
+  /* AI 想放过一条跟钱有关的疑点，光说「差不多」「这是总价」不算数——
+   * 程序本来就是按总价跟价目表比的。要说出这笔差额为什么不算少给/多给：
+   * 半笼按半价、原文写了抹零或说好价、单价看错了。说不清就先留着。 */
+  function moneyDropOk(why, quote) {
+    var w = String(why || '');
+    var q = String(quote || '');
+    if (!w) return false;
+    // 抹零、说好价、半笼：原文里得有对应的字，不能只在理由里说一句
+    if (/抹零|零头|不用找|算了/.test(w)) {
+      return /抹零|零头|不用找|算了/.test(q) || /规矩|教过|说过/.test(w);
+    }
+    if (/半笼|半价|半份/.test(w)) return /半|笼|份/.test(q);
+    if (/老价|说好|特价|活动|按.{0,6}元/.test(w)) return /老价|说好|特价|活动|按/.test(q);
+    return false;
   }
 
   /* AI 的话不能直接信：单号要真存在、键要对得上候选、条数要有上限。
@@ -4428,7 +4454,8 @@
     var known = {};
     for (var i = 0; i < cands.raw.length; i++) known[issueKey(cands.raw[i])] = 1;
 
-    var verdict = {}, kept = 0, drop = 0;
+    var verdict = {}, kept = 0, drop = 0, held = 0;
+    var moneyCodes = { short: 1, over: 1, pricelow: 1 };
     for (var j = 0; j < vs.length; j++) {
       var v = vs[j];
       if (!v || typeof v !== 'object') continue;
@@ -4440,6 +4467,8 @@
       if (!d) continue;
       var pv = proofOf(v.quote);
       if (!pv) { noProof++; continue; }
+      // 钱的事不许一句话抹过去：没把账说清，这条 drop 作废，疑点留着
+      if (d === 'drop' && moneyCodes[code] && !moneyDropOk(v.why, pv)) { held++; continue; }
       verdict[key] = { v: d, why: trim(v.why).slice(0, 40), quote: pv };
       if (d === 'keep') kept++; else drop++;
     }
@@ -4509,6 +4538,8 @@
       ok: true,
       kept: kept,
       drop: drop,
+      held: held,
+      judged: kept + drop + held,
       fix: fix,
       noProof: noProof,
       audit: { at: Date.now(), verdict: verdict, add: add, overrule: {}, noProof: noProof }
@@ -4658,6 +4689,8 @@
         model: (D && D.modelName) ? String(D.modelName() || '') : '',
         ms: ms,
         checked: cands.raw.length,
+        judged: r.judged,
+        held: r.held,
         at: new Date().toISOString()
       };
       var changed = (r.fix && r.fix.length) ? applyQtyFix(rec, r.fix) : 0;
@@ -4667,7 +4700,9 @@
         var one = r.fix[0];
         toast('对着原文改了 ' + changed + ' 处件数：' + one.name + ' ' + one.before + '→' + one.qty);
       } else if (manual) {
-        toast('核完了：确认 ' + r.kept + ' 条，判为误报 ' + r.drop + ' 条');
+        var tmsg = '核完了：确认 ' + r.kept + ' 条，判为误报 ' + r.drop + ' 条';
+        if (r.held) tmsg += '，' + r.held + ' 条金额没算清、先留着';
+        toast(tmsg);
       }
     }).catch(function (e) {
       V.auditBusy = false;
@@ -4696,9 +4731,11 @@
       if (fixN) {
         note = '照原文改了 ' + fixN + ' 处件数' + (a.issues.length ? ' · ' + a.issues.length + ' 条要核对' : '');
       } else if (a.issues.length) {
-        note = a.ai.kept
-          ? '确认 ' + a.ai.kept + ' 条' + (a.ai.drop ? '，判为误报 ' + a.ai.drop + ' 条' : '')
-          : '对着原文看过，没判为误报' + (a.ai.drop ? '，' + a.ai.drop + ' 条判为误报' : '');
+        var kp = a.ai.kept, dp = a.ai.drop;
+        if (kp && dp) note = '确认 ' + kp + ' 条，判为误报 ' + dp + ' 条';
+        else if (kp) note = '确认 ' + kp + ' 条';
+        else if (dp) note = '对照原文，' + dp + ' 条判为误报';
+        else note = '对着原文看过，没判为误报';
       } else {
         note = a.dropped.length ? a.dropped.length + ' 条疑点都判为误报了' : '没挑出疑点，也没看出漏的';
       }
@@ -4712,6 +4749,21 @@
       note = '还没核过，下面是本机规则挑的';
     }
     if (V.auditErr && !V.auditBusy) note = '上次没核成：' + V.auditErr;
+    if (a.ai && a.ai.meta && a.ai.meta.judged === 0 && a.ai.meta.checked > 0 && !fixN && !V.auditBusy) {
+      note = 'AI 没逐条判，下面还是本机规则';
+    }
+    if (a.ai && a.ai.meta && a.ai.meta.judged != null && a.ai.meta.checked != null &&
+      a.ai.meta.judged > 0 && a.ai.meta.judged < a.ai.meta.checked && !V.auditBusy) {
+      note = (note ? note + ' · ' : '') + '只判了 ' + a.ai.meta.judged + '/' + a.ai.meta.checked + ' 条';
+    }
+    if (a.ai && a.ai.meta && a.ai.meta.held && !V.auditBusy) {
+      var hd = a.ai.meta.held;
+      if (!a.ai.kept && !a.ai.drop) {
+        note = 'AI 想放过 ' + hd + ' 条金额，但没给出算账依据，先留着';
+      } else {
+        note = (note ? note + ' · ' : '') + '另有 ' + hd + ' 条金额没算清，先留着';
+      }
+    }
     if (a.memDrop && !V.auditBusy) {
       note = (note ? note + ' · ' : '') + '按你的规矩滤掉 ' + a.memDrop + ' 条';
     }
@@ -4790,11 +4842,11 @@
         '<div class="jl-audit-n"><b>' + a.issues.length + '</b><span>条要核对</span>' +
         (a.error ? '<i>' + a.error + ' 条对不上账</i>' : '') + '</div>' +
         '<div class="jl-audit-m">' +
-        (a.short > 0 ? '<em>少收 ¥' + money(a.short) + '</em>' : '') +
-        (a.over > 0 ? '<em>多收 ¥' + money(a.over) + '</em>' : '') +
+        (a.short > 0 ? '<em>少收 ¥' + money(a.short) + '<i>你亏</i></em>' : '') +
+        (a.over > 0 ? '<em>多收 ¥' + money(a.over) + '<i>要退</i></em>' : '') +
         '</div></div>';
 
-      h += '<p class="jl-hint jl-basis">价格对着本店价目表算的：白鸡蛋 ¥1.5、豆浆 ¥2、包子 ¥2～2.5；半笼按一半：小笼包 ¥3、灌汤小笼包 ¥3.5、玉米蒸饺 ¥3。</p>';
+      h += '<p class="jl-hint jl-basis">价格对着本店价目表算的：白鸡蛋 ¥1.5、豆浆 ¥2、包子 ¥2～2.5；半笼按一半：小笼包 ¥3、灌汤小笼包 ¥3.5、玉米蒸饺 ¥3。少收你亏、多收要退，两边都算。</p>';
 
       h += '<div class="jl-issues">';
       var noteNos = {};
@@ -5699,7 +5751,7 @@
    * legendRows > 0 时，照片和提醒之间多一块「接龙号 · 名字」名单（加长版）。
    */
   var LEG_HEAD = 84, LEG_ROW = 48, LEG_PAD = 16;
-  var NOTE_ROW = 46, NOTE_PAD = 26;
+  var NOTE_ROW = 46;
   function proofSize(n, legendRows, noteRows) {
     var PAD = 36, W = 1080;
     var HEAD = 128;      // 顶部日期
@@ -5711,7 +5763,7 @@
     var rows = Math.max(1, Math.ceil(n / cols));
     var body = rows * (cellH + LABEL) + (rows - 1) * PAD;
     var LEG = legendRows > 0 ? (LEG_HEAD + legendRows * LEG_ROW + LEG_PAD) : 0;
-    var NOTE = noteRows > 0 ? (noteRows * NOTE_ROW + NOTE_PAD * 2) : 0;
+    var NOTE = noteRows > 0 ? (noteRows * NOTE_ROW + 44) : 0;
     var H = HEAD + body + PAD + LEG + NOTE + FOOT;
     return { PAD: PAD, W: W, HEAD: HEAD, FOOT: FOOT, cols: cols, cellW: cellW, cellH: cellH, LABEL: LABEL, rows: rows, LEG: LEG, LEG_ROWS: legendRows || 0, NOTE: NOTE, NOTE_ROWS: noteRows || 0, H: H };
   }
@@ -5772,14 +5824,18 @@
     // 加长版：图下方补一块「接龙号 · 名字」，两列排，取餐的人照着号认人
     var names = (meta.names || []).filter(function (x) { return x && x.no != null; });
     var nameRows = names.length ? Math.ceil(names.length / 2) : 0;
-    // 老板写给买家的话：有问题没解决时才有，最多 3 行
+    // 老板写给买家的话：有问题没解决时才有。上面一行「提醒」当抬头，下面最多 6 行
     var noteRaw = (meta.note || []).slice(0, 3);
     var noteLines = [];
     for (var nl = 0; nl < noteRaw.length; nl++) {
-      noteLines = noteLines.concat(wrapCn(noteRaw[nl], 26, 3 - noteLines.length));
-      if (noteLines.length >= 3) break;
+      var room = 6 - noteLines.length;
+      if (room <= 0) break;
+      var seg = wrapCn(noteRaw[nl], 26, Math.min(2, room));
+      if (!seg.length) continue;
+      noteLines = noteLines.concat(seg);
     }
-    var s = proofSize(photos.length, nameRows, noteLines.length);
+    var noteRows = noteLines.length ? (noteLines.length + 1) : 0;
+    var s = proofSize(photos.length, nameRows, noteRows);
     var PAD = s.PAD, W = s.W, cols = s.cols, cellW = s.cellW, cellH = s.cellH, LABEL = s.LABEL, H = s.H;
     var HEAD = s.HEAD, FOOT = s.FOOT;
     var tip = meta.tip || proofTip(meta.rawDate || meta.date);
@@ -5888,7 +5944,8 @@
       }
 
       /* 有问题没解决：印老板自己写的那句话，不印内部标签。
-       * 「未写楼栋」这种字一上墙，买家会以为这单没做、没发货。 */
+       * 「未写楼栋」这种字一上墙，买家会以为这单没做、没发货。
+       * 抬头一枚「提醒」，让人一眼看出这是要他留意的事。 */
       if (noteLines.length) {
         var noteTop = H - FOOT - s.NOTE;
         var nX = PAD * 2, nW = W - PAD * 4, nH = s.NOTE - 12;
@@ -5897,11 +5954,25 @@
         ctx.fill();
         ctx.fillStyle = '#c9722f';
         ctx.fillRect(nX, noteTop + 14, 6, nH - 28);
-        ctx.fillStyle = '#7a4a1e';
-        ctx.font = '400 30px -apple-system,"PingFang SC","Microsoft YaHei",sans-serif';
+
+        var bx = nX + 24, by = noteTop + 7, bw = 96, bh = 36;
+        ctx.fillStyle = '#c9722f';
+        roundRect(ctx, bx, by, bw, bh, 18);
+        ctx.fill();
+        ctx.fillStyle = '#fff';
+        ctx.font = '600 24px -apple-system,"PingFang SC","Microsoft YaHei",sans-serif';
+        ctx.textAlign = 'center';
+        ctx.fillText('提醒', bx + bw / 2, by + 25);
+        ctx.textAlign = 'left';
+        ctx.fillStyle = '#b07a4a';
+        ctx.font = '400 22px -apple-system,"PingFang SC","Microsoft YaHei",sans-serif';
+        ctx.fillText('请留意', bx + bw + 14, by + 25);
+
+        ctx.fillStyle = '#7a3f12';
+        ctx.font = '500 31px -apple-system,"PingFang SC","Microsoft YaHei",sans-serif';
         ctx.textAlign = 'left';
         for (var ni = 0; ni < noteLines.length; ni++) {
-          ctx.fillText(noteLines[ni], nX + 28, noteTop + 48 + ni * NOTE_ROW);
+          ctx.fillText(noteLines[ni], nX + 28, noteTop + 46 + (ni + 1) * NOTE_ROW);
         }
       }
 
@@ -5981,14 +6052,207 @@
   /* ---------- 单条编辑 ---------- */
 
   /* 有问题确实解决不了，就写一句给买家看的话，印在凭证图下面。
-   * 绝不能把「未写楼栋」这种内部标签印上去——取餐的人会以为这单没做、没发货。 */
-  function noteSuggest(code) {
-    if (code === 'nobld' || code === 'histbld') return '这单的楼栋还没确认，餐照做，送到时电话联系';
-    if (code === 'namemiss') return '这单没留名字，取餐时报一下接龙号';
-    if (code === 'short' || code === 'pricelow' || code === 'over' || code === 'oddunit' || code === 'price') {
-      return '这单金额有点出入，取餐时跟老板核对一下';
+   * 绝不能把「未写楼栋」这种内部标签印上去——取餐的人会以为这单没做、没发货。
+   * 也不能写「金额有点出入，跟老板核对」——买家看完还是不知道自己要做什么。
+   * 这里把单号和钱算好，直接说「#9 少付了 ¥0.50，麻烦补一下」。 */
+  function reminderFor(issue, order) {
+    var no = issue && issue.no;
+    var tag = (no != null && no !== 0) ? '#' + no + ' ' : '';
+    var code = (issue && issue.code) || '';
+    var d = Math.abs(Number(issue && issue.diff) || 0);
+    var paid = (order && order.total != null) ? Number(order.total) : null;
+
+    if ((code === 'short' || code === 'over') && d > 0) {
+      var due = null;
+      if (paid != null) due = round2(code === 'short' ? paid + d : paid - d);
+      var tail = due == null ? '' : '（该付 ¥' + money(due) + '）';
+      return tag + (code === 'short' ? '少付了 ¥' : '多付了 ¥') + money(d) + tail +
+        (code === 'short' ? '，麻烦补一下' : '，多的退你');
     }
-    return '这单还有点没确认，餐照做，取餐时问一句就行';
+    if (code === 'pricelow' && d > 0) {
+      var mm = String((issue && issue.title) || '').match(/「(.+?)」/);
+      return tag + (mm ? mm[1] : '这单') + '少算 ¥' + money(d) + '，麻烦补一下';
+    }
+    if (code === 'nobld' || code === 'bldguess') return tag + '楼栋还没定，餐已装好，送到时电话联系';
+    if (code === 'histbld') return tag + '楼栋按记录填的，不对打电话说一声';
+    if (code === 'noname' || code === 'namemiss') return tag + '没留名字，取餐时报接龙号';
+    if (code === 'noitem') return tag + '有一样还在确认，餐先按接龙号取';
+    if (code === 'zeroqty' || code === 'qtydiff') return tag + '件数还在核对，餐已装好，取餐时报号';
+    if (code === 'oddname') return tag + '名字可能写错了，取餐时报接龙号';
+    if (code === 'dupsplit') return tag + '这样东西还在核对，先按接龙号取';
+    if (code === 'noprice' || code === 'oddunit') return tag + '金额还在核对，取餐时看一眼';
+    if (code === 'aiadd') {
+      var t = String((issue && issue.title) || '');
+      if (/少收|少给/.test(t)) return tag + t + '，麻烦补一下';
+      if (/多收|多给/.test(t)) return tag + t + '，多的退你';
+      return tag + '这单还有点要确认，取餐时问一句';
+    }
+    return tag + '这单还有点没确认，餐照做，取餐时问一句';
+  }
+
+  function noteSuggest(code) {
+    return reminderFor({ no: 0, code: code || '' }, null);
+  }
+
+  /* 一单可能同时有几处问题：写提醒时先说钱的事，再说楼栋、名字。
+   * 买家最需要知道的是「我该不该补钱」，不是「老板还在核对」。 */
+  function noteIssueFor(rec, no) {
+    var a = null;
+    try { a = auditIssues(rec, V.refPrice); } catch (e) { return null; }
+    var pri = {
+      short: 0, over: 1, pricelow: 2, aiadd: 3, noitem: 4, zeroqty: 5, qtydiff: 6,
+      nobld: 7, histbld: 8, bldguess: 9, oddname: 10, noname: 11, namemiss: 11
+    };
+    var best = 99, hit = null;
+    for (var i = 0; i < a.issues.length; i++) {
+      var it = a.issues[i];
+      if (it.no !== no) continue;
+      var p = pri[it.code];
+      if (p == null) p = 20;
+      if (p < best) { best = p; hit = it; }
+    }
+    return hit;
+  }
+
+  /* 给买家写的这句话，AI 可以润色，但不能改数：
+   * 单号、少付/多付的金额必须原样在，别的钱一分都不许冒出来。 */
+  function noteTextOk(t, no, issue, order) {
+    if (!t || t.length < 4 || t.length > 40) return false;
+    if (t.indexOf('#' + no) < 0) return false;
+    if (/未写楼栋|没写楼栋|未发货|没发货/.test(t)) return false;
+    if (/老板核对|跟老板说|找老板/.test(t)) return false;
+    var code = issue && issue.code;
+    var d = (code === 'short' || code === 'over' || code === 'pricelow')
+      ? Math.abs(Number(issue.diff) || 0) : 0;
+    var allow = {}, paid = (order && order.total != null) ? Number(order.total) : null;
+    if (d > 0) {
+      allow[money(d)] = 1;
+      allow[d.toFixed(2)] = 1;
+      allow[String(d)] = 1;
+      if (String(d).indexOf('.') < 0) allow[String(d) + '.00'] = 1;
+      if (t.indexOf(money(d)) < 0 && t.indexOf(d.toFixed(2)) < 0 &&
+        t.indexOf(String(d)) < 0) return false;
+      if (paid != null) {
+        var due = round2(code === 'short' ? paid + d : paid - d);
+        allow[money(due)] = 1;
+        allow[due.toFixed(2)] = 1;
+      }
+    }
+    var got = t.match(/[¥￥]\s*\d+(?:\.\d+)?/g) || [];
+    for (var i = 0; i < got.length; i++) {
+      var num = got[i].replace(/[¥￥\s]/g, '');
+      if (!allow[num]) return false;
+    }
+    if (!d && got.length) return false;   // 不是钱的事，就别在提醒里提钱
+    if (d > 0) {
+      // 不写 ¥ 的数字也要对得上：9（单号）、0.5、6 可以，6.5、8 不行
+      allow[String(no)] = 1;
+      var nums = t.match(/\d+(?:\.\d+)?/g) || [];
+      for (var k = 0; k < nums.length; k++) if (!allow[nums[k]]) return false;
+    }
+    return true;
+  }
+
+  function cleanNoteLine(s) {
+    var t = String(s == null ? '' : s).trim();
+    t = t.replace(/```[a-zA-Z]*/g, '').replace(/```/g, '').trim();
+    t = t.replace(/^(提醒|这句话|回复|文案)[：:]\s*/, '');
+    t = t.split(/\n/)[0].trim();
+    t = t.replace(/^["“'「『]+|["”'」』]+$/g, '').trim();
+    return t.slice(0, 60);
+  }
+
+  function buildNotePrompt(issue, order, no) {
+    var code = (issue && issue.code) || '';
+    var d = Math.abs(Number(issue && issue.diff) || 0);
+    var paid = (order && order.total != null) ? Number(order.total) : null;
+    var fact = '第' + no + '单还有一点没确认，餐照做，取餐时报接龙号。';
+    if (code === 'short') {
+      fact = '第' + no + '单的买家少付了 ¥' + money(d) +
+        (paid != null ? '：按本店价目表该付 ¥' + money(round2(paid + d)) + '，接龙里只写了 ¥' + money(paid) : '') + '。';
+    } else if (code === 'over') {
+      fact = '第' + no + '单的买家多付了 ¥' + money(d) +
+        (paid != null ? '：按本店价目表该付 ¥' + money(round2(paid - d)) + '，接龙里写了 ¥' + money(paid) : '') + '。';
+    } else if (code === 'pricelow') {
+      fact = '第' + no + '单有一样少算了 ¥' + money(d) + '（' + ((issue && issue.title) || '') + '），该补。';
+    } else if (code === 'nobld' || code === 'bldguess') {
+      fact = '第' + no + '单的楼栋还没最后确定，餐已经装好，买家到楼下要能联系上。';
+    } else if (code === 'histbld') {
+      fact = '第' + no + '单的楼栋是按以前的记录填的，如果不是这栋，买家要说一声。';
+    } else if (code === 'noname' || code === 'namemiss') {
+      fact = '第' + no + '单没留名字，取餐时报接龙号才认得出。';
+    } else if (code === 'noitem') {
+      fact = '第' + no + '单有一样东西还在确认，餐先按接龙号取。';
+    } else if (code === 'zeroqty' || code === 'qtydiff') {
+      fact = '第' + no + '单的件数还在核对，餐已经装好，取餐时报接龙号。';
+    }
+    return '你在微信群里卖早餐，现在要在送达凭证上给买家写一句提醒，读者是买家。\n' +
+      '事实：' + fact + '\n' +
+      '要求：\n' +
+      '- 一句话，30 个字以内，口语，客气，不指责，不像催债。\n' +
+      '- 必须带「#' + no + '」' + (d > 0
+        ? '和「' + money(d) + '」这两个字样，金额一个字都不能改'
+        : '，不要编造金额和数字') + '。\n' +
+      '- 不要写「跟老板核对」「找老板」这种让买家去找人的话。\n' +
+      '- 只输出这句话，不要引号、不要解释、不要换行。';
+  }
+
+  function polishNote(mask, no, issue, order) {
+    if (!auditAiReady()) return;
+    var box = mask.querySelector('#jlNoteTxt');
+    var st = mask.querySelector('#jlNoteAi');
+    if (!box) return;
+    var edited = false;
+    box.addEventListener('input', function () { edited = true; });
+    var dead = false;
+    var timer = setTimeout(function () {
+      dead = true;
+      if (st) { st.textContent = 'AI 没赶上，先用上面这句'; st.className = 'jl-note-ai'; }
+    }, 8000);
+    try {
+      D.askAI(buildNotePrompt(issue, order, no), { maxTokens: 160 }).then(function (out) {
+        clearTimeout(timer);
+        if (dead || edited || !mask.parentNode) return;
+        var t = cleanNoteLine(out);
+        if (!noteTextOk(t, no, issue, order)) {
+          if (st) { st.textContent = 'AI 写的那句数字对不上，没敢用'; st.className = 'jl-note-ai'; }
+          return;
+        }
+        if (t === box.value || !t) {
+          if (st) { st.textContent = 'AI 看过了，就按上面这句'; st.className = 'jl-note-ai ok'; }
+          return;
+        }
+        box.value = t;
+        if (st) { st.textContent = 'AI 写好了，你可以接着改'; st.className = 'jl-note-ai ok'; }
+      }).catch(function () {
+        clearTimeout(timer);
+        if (dead || !mask.parentNode) return;
+        if (st) { st.textContent = 'AI 没连上，先用上面这句'; st.className = 'jl-note-ai'; }
+      });
+    } catch (e) {
+      clearTimeout(timer);
+    }
+  }
+
+  function noteAlts(no, issue) {
+    var code = (issue && issue.code) || '';
+    var d = Math.abs(Number(issue && issue.diff) || 0);
+    if (code === 'short' && d > 0) {
+      return ['#' + no + ' 少付 ¥' + money(d) + '，方便时转我', '#' + no + ' 这单差 ¥' + money(d) + '，下次一起给'];
+    }
+    if (code === 'over' && d > 0) {
+      return ['#' + no + ' 多付 ¥' + money(d) + '，退给你', '#' + no + ' 这单多收了，下次少算'];
+    }
+    if (code === 'pricelow' && d > 0) {
+      return ['#' + no + ' 这单少算 ¥' + money(d) + '，方便补一下', '#' + no + ' 差 ¥' + money(d) + '，下次一起给'];
+    }
+    if (code === 'nobld' || code === 'bldguess' || code === 'histbld') {
+      return ['#' + no + ' 楼栋还在问，餐已装好', '#' + no + ' 到了打电话，我送下来'];
+    }
+    if (code === 'noname' || code === 'namemiss') {
+      return ['#' + no + ' 取餐时报一下接龙号', '#' + no + ' 这份没写名字，报号取'];
+    }
+    return ['#' + no + ' 餐照做，取餐时报接龙号', '#' + no + ' 这单稍后单独联系你'];
   }
 
   function proofNoteSheet(no) {
@@ -5996,30 +6260,33 @@
     var arr = V.record.proofNotes || (V.record.proofNotes = []);
     var cur = '';
     for (var i = 0; i < arr.length; i++) if (arr[i].no === no) cur = arr[i].text || '';
-    var code = '';
-    try {
-      var ai = auditIssues(V.record, V.refPrice);
-      for (var j = 0; j < ai.issues.length; j++) if (ai.issues[j].no === no) { code = ai.issues[j].code; break; }
-    } catch (e) { }
-
-    var sug;
-    if (code === 'nobld' || code === 'histbld') {
-      sug = ['楼栋稍后补，餐已经装好了', '这单地址还在问，先按接龙号取'];
-    } else {
-      sug = ['餐照做，取餐时报接龙号', '这单稍后单独联系你'];
+    var order = orderByNo(V.record, no);
+    var issue = noteIssueFor(V.record, no);
+    var draft = cur || reminderFor(issue || { no: no, code: '' }, order);
+    var moneyIssue = !!(issue && (issue.code === 'short' || issue.code === 'over' || issue.code === 'pricelow') && issue.diff);
+    var factLine = '';
+    if (moneyIssue && order && order.total != null) {
+      var d = Math.abs(Number(issue.diff) || 0);
+      var due = round2(issue.code === 'short' ? Number(order.total) + d : Number(order.total) - d);
+      factLine = '这一单按价目表该付 <b>¥' + money(due) + '</b>，原文写的是 <b>¥' +
+        money(order.total) + '</b>。';
     }
+    var sug = noteAlts(no, issue);
+    var autoAi = !cur && auditAiReady();   // 已经写过的，不悄悄改写老板的话
 
     var mask = document.createElement('div');
     mask.className = 'jl-mask';
     mask.innerHTML =
       '<div class="jl-sheet-edit">' +
-      '<div class="jl-ehead"><b>#' + no + ' 写一句给买家看的话</b>' +
+      '<div class="jl-ehead"><b>#' + no + ' 给买家的提醒</b>' +
       '<button type="button" data-x="close">×</button></div>' +
-      '<p class="jl-hint jl-mhint">这句话会印在送达凭证最下面，群里的人都看得到。' +
-      '别写「未写楼栋」这种内部说法，买家会以为没发货。' +
+      '<p class="jl-hint jl-mhint">这句会印在送达凭证的提醒条里，群里的人都看得到。' +
+      '单号和金额是按这一单算好的，改字可以，别把数字改错。' +
       '不写也行，那这张图就跟平时一样。</p>' +
+      (factLine ? '<p class="jl-note-fact">' + factLine + '</p>' : '') +
       '<label class="jl-efield jl-efield-top"><span>这句话</span>' +
-      '<textarea id="jlNoteTxt" rows="3" maxlength="60" placeholder="写一句群里看得懂的话">' + esc(cur || noteSuggest(code)) + '</textarea></label>' +
+      '<textarea id="jlNoteTxt" rows="3" maxlength="60" placeholder="写一句群里看得懂的话">' + esc(draft) + '</textarea></label>' +
+      '<p class="jl-note-ai" id="jlNoteAi">' + (autoAi ? 'AI 正在把这句话说得更顺口…' : '') + '</p>' +
       '<div class="jl-note-sug">' +
       sug.map(function (s) {
         return '<button type="button" data-x="sug" data-t="' + esc(s) + '">' + esc(s) + '</button>';
@@ -6030,6 +6297,7 @@
       '<button type="button" class="jl-primary" data-x="nsave">放进凭证</button>' +
       '</div></div>';
     document.body.appendChild(mask);
+    if (autoAi) polishNote(mask, no, issue, order);
 
     function close() { if (mask.parentNode) mask.parentNode.removeChild(mask); }
     function save(text) {
@@ -6049,7 +6317,7 @@
       persist(true);
       close();
       paint();
-      toast(s ? '写好了，合图时会印在下面' : '去掉了，这张图不留话');
+      toast(s ? '写好了，合图时会印在提醒条里' : '去掉了，这张图不留话');
     }
 
     mask.addEventListener('click', function (ev) {
@@ -6073,7 +6341,22 @@
   }
 
   /* 合成前最后一道：还有没解决的问题，先问一句要不要带话给买家。
-   * 不强迫——不写也能合，只是图上就干干净净，群里不知道要找谁。 */
+   * 不强迫——不写也能合，只是图上就干干净净，群里不知道要找谁。
+   * 预填的话按查出来的问题写清楚（#9 少付 ¥0.50），不是「金额有点出入」。 */
+  function pendingNoteText(rec) {
+    var a = null;
+    try { a = auditIssues(rec, V.refPrice); } catch (e) { return ''; }
+    var out = [];
+    for (var i = 0; i < a.issues.length && out.length < 2; i++) {
+      var it = a.issues[i];
+      var t = reminderFor(it, orderByNo(rec, it.no));
+      if (t) out.push(t);
+    }
+    var s = out.join('；');
+    if (s.length > 60) s = out[0] || '';
+    return s;
+  }
+
   function composeNoteGate(n) {
     var mask = document.createElement('div');
     mask.className = 'jl-mask';
@@ -6082,9 +6365,9 @@
       '<div class="jl-ehead"><b>还有 ' + n + ' 条没解决</b>' +
       '<button type="button" data-x="close">×</button></div>' +
       '<p class="jl-hint jl-mhint">图上不会印「未写楼栋」这种字——买家看见会以为餐没做。' +
-      '你写一句给群里看的话，印在图最下面。不写也能合。</p>' +
+      '下面这句是按查出来的问题写好的，印在图最下面，你看看要不要改。不写也能合。</p>' +
       '<label class="jl-efield jl-efield-top"><span>这句话</span>' +
-      '<textarea id="jlGateTxt" rows="3" maxlength="60">' + esc(noteSuggest('')) + '</textarea></label>' +
+      '<textarea id="jlGateTxt" rows="3" maxlength="60">' + esc(pendingNoteText(V.record) || noteSuggest('')) + '</textarea></label>' +
       '<div class="jl-eacts">' +
       '<button type="button" class="jl-ghost" data-x="skip">不写，直接合成</button>' +
       '<button type="button" class="jl-primary" data-x="ok">写好了，合成</button>' +
