@@ -145,10 +145,14 @@
     var s = trim(raw).replace(/\s+/g, '');
     if (!s) return '';
     s = s.replace(/[-－—.。]+$/, '');                 // G2-. → G2
-    if (/^[A-Za-z][0-9]{0,2}$/.test(s)) return s.toUpperCase() + '栋';
-    var n = cnToNum(s);
+    /* 「A栋 / G1栋 / 3栋 / 三栋」统一成 X栋，只补一次；
+     * 「3栋201」「门卫」「办公室」这种不是单纯一栋楼，原样留着——
+     * 以前会硬补一个「栋」，变成「门卫栋」「3栋201栋」。 */
+    var t = s.replace(/(栋|幢|号楼|座)$/, '');
+    if (/^[A-Za-z][0-9]{0,2}$/.test(t)) return t.toUpperCase() + '栋';
+    var n = cnToNum(t);
     if (!isNaN(n)) return n + '栋';
-    return s + '栋';
+    return s;
   }
   // 楼栋自然排序：数字栋按数字，字母栋按字母（G1 在 G2 前），未写楼栋排最后
   function buildingRank(key) {
@@ -396,6 +400,10 @@
 
     var nums = [];
     var reN = /[0-9]+(?:\.[0-9]+)?/g, mn;
+    // 最后一样商品从哪结束：它前面的裸数字是名字里的（「A栋 77 牛肉包1个 2.5」的 77），
+    // 不能当钱——以前整单金额会变成 ¥77。商品后面的才算价格。
+    var lastItemEnd = -1;
+    for (var q0 = 0; q0 < items.length; q0++) if (items[q0].end > lastItemEnd) lastItemEnd = items[q0].end;
     while ((mn = reN.exec(s)) !== null) {
       var inUse = false;
       for (var u = 0; u < used.length; u++) {
@@ -407,6 +415,8 @@
       // 以前当金额剥掉，名字只剩「天使用户」，同一个人下次就认不出了。
       // 注意别把 3.5 / 5.5 这种带小数点的价一起放过去。
       if (mn.index > 0 && /[\u4e00-\u9fa5]/.test(s.charAt(mn.index - 1)) && /^[0-9]{3,}$/.test(mn[0])) continue;
+      // 落在商品前面、又不贴商品的裸数字：那是名字的一部分
+      if (lastItemEnd > 0 && mn.index < lastItemEnd) continue;
       if (!inUse) nums.push({ val: parseFloat(mn[0]), at: mn.index, len: mn[0].length });
     }
 
@@ -442,6 +452,46 @@
       for (var s3 = s2 + 1; s3 < seq.length; s3++) {
         if (seq[s3].t === 'i' || seq[s3].t === 'm') { hasAfter = true; break; }
       }
+      /* 这一行有 2 样以上商品、这笔钱又是最后的一笔：它多半是整单总价。
+       * 「一杯豆浆 一个烧麦 3.5元」以前把 3.5 贴给烧麦当单价，账就成 2+3.5=5.5。
+       * 光看位置分不出来（「牛肉包 2.5元」也是这个形状），所以拿价目表算一遍：
+       *   跟表价合计一分不差 → 总价
+       *   跟表价单价一分不差 → 单价
+       *   前面几样已经超过这笔钱 → 不可能是总价
+       * 都不是 → 按总价（末尾那个数一般是总额，这是老板的写法习惯） */
+      var lastMoney = true;
+      for (var s3c = s2 + 1; s3c < seq.length; s3c++) {
+        if (seq[s3c].t === 'm') { lastMoney = false; break; }
+      }
+      if (items.length >= 2 && lastMoney) {
+        var menuSum = 0, sumOk = true;
+        for (var mi = 0; mi < items.length; mi++) {
+          var me = menuOf(items[mi].name);
+          if (!me || !(me.unit > 0)) { sumOk = false; break; }
+          menuSum += ((items[mi].half && me.half) ? round2(me.unit / 2) : me.unit) * (items[mi].qty || 1);
+        }
+        menuSum = round2(menuSum);
+        var isTotal;
+        if (sumOk && Math.abs(mv.val - menuSum) < 0.01) {
+          isTotal = true;
+        } else {
+          var lm = menuOf(items[lastItem].name);
+          var lu = (lm && lm.unit > 0) ? ((items[lastItem].half && lm.half) ? round2(lm.unit / 2) : lm.unit) : null;
+          if (lu != null && Math.abs(mv.val - lu) < 0.01) {
+            isTotal = false;
+          } else {
+            var prevSum = 0, prevOk = true;
+            for (var pj = 0; pj < items.length; pj++) {
+              if (pj === lastItem) continue;
+              var pe = menuOf(items[pj].name);
+              if (!pe || !(pe.unit > 0)) { prevOk = false; break; }
+              prevSum += ((items[pj].half && pe.half) ? round2(pe.unit / 2) : pe.unit) * (items[pj].qty || 1);
+            }
+            isTotal = !(prevOk && round2(prevSum) > mv.val + 0.01);
+          }
+        }
+        if (isTotal) { lastItem = -1; continue; }
+      }
       if (qy > 1 && !hasAfter) { lastItem = -1; continue; }
       units[lastItem] = mv.val;
       usedMoney[tk.idx] = 1;
@@ -465,7 +515,10 @@
 
     // 一样东西给一个数 → 这项的小计；几样东西只给一个数 → 这一单多少钱
     if (!out.units) {
-      if (amt != null && items.length && amtCount < items.length) out.totalLike = true;
+      /* 钱一样都没贴到商品上，那它就是这一单的钱。
+       * 以前按「金额笔数 < 商品数」判断，名字里带数字（「A栋 77 …」）会被算成
+       * 一笔金额，条数刚好打平，整单总价就丢了。 */
+      if (amt != null && items.length) out.totalLike = true;
       // 「一个红薯2 … 4元」：带元的那个是整单总价，裸数字才是商品价
       if (money.length && nums.length && items.length === 1) out.totalLike = true;
       // 单独一段只有钱，没有商品（「，15 块」）
@@ -822,11 +875,20 @@
       /* 2. 没写楼栋 */
       if (!o.building) {
         var hit = (o.name && residents) ? findResidentInBook(o.name, residents) : null;
-        var bo = [];
-        if (hit && hit.building) bo.push({ key: 'bld:' + hit.building, label: hit.building, sub: '按记录' });
-        for (var k = 0; k < bldList.length && bo.length < 6; k++) {
-          if (hit && hit.building === bldList[k]) continue;
-          bo.push({ key: 'bld:' + bldList[k], label: bldList[k], sub: '' });
+        var guess = guessBldFromName(o.name);
+        var bo = [], seenB = {};
+        var pushB = function (b, sub) {
+          if (!b || seenB[b]) return;
+          seenB[b] = 1;
+          bo.push({ key: 'bld:' + b, label: b, sub: sub || '' });
+        };
+        if (hit && hit.building) pushB(hit.building, '按记录');
+        if (guess) pushB(guess, '按名字');
+        // 当天别人写过的栋
+        for (var k = 0; k < bldList.length && bo.length < 6; k++) pushB(bldList[k], '');
+        // A–K 补齐：G 栋这种今天没人写、档案也没有的，也能直接点，不用打字
+        for (var c0 = 0; c0 < 11 && bo.length < 8; c0++) {
+          pushB(String.fromCharCode(65 + c0) + '栋', '');
         }
         bo.push({ key: 'bld:', label: '先空着', sub: '待会儿自己填' });
         asks.push({
@@ -836,7 +898,11 @@
           raw: o.raw,
           word: o.name || '',
           q: (o.name ? '「' + o.name + '」' : '这一单') + '没写楼栋',
-          hint: (hit && hit.building) ? '档案里他上次在 ' + hit.building + '。' : '点一个就行，点完记进档案。',
+          hint: (hit && hit.building)
+            ? '档案里他上次在 ' + hit.building + '，点一下就是它。'
+            : (guess ? '名字开头是 ' + guess.charAt(0) + '，多半在 ' + guess + '。不对就点别的，或者自己填。' : '点一个就行，点完记进档案。'),
+          custom: true,
+          inputHint: '自己填，比如 G栋',
           options: bo
         });
       }
@@ -946,7 +1012,14 @@
     }
 
     if (ask.kind === 'bld') {
-      var b = (key.indexOf('bld:') === 0) ? key.slice(4) : '';
+      var b = '';
+      if (key === 'input' || key === '__custom') {
+        /* 自由输入：G栋、门卫、3栋201 都照原样存。
+         * 不走 normBuilding——它会给人补一个「栋」，把「3栋201」变成「3栋201栋」。 */
+        b = trim(text || '').replace(/\s+/g, ' ').slice(0, 20);
+      } else if (key.indexOf('bld:') === 0) {
+        b = key.slice(4);
+      }
       o.building = b;
       o.buildingFrom = b ? 'check' : '';
       o.bldConfirmed = b ? 1 : 0;
@@ -1041,10 +1114,9 @@
         if (near && near.exact) hit = near;   // 「张三（3栋）」和「张三」算同一个人
       }
       if (!hit || !hit.building) continue;
-      /* 只填过一次、又是很久以前的，先别自作主张——留到问题里问一句。
-       * 老板亲口交代过的（hits 99）无条件信。 */
-      var fresh = daysAgoOf(hit.at) <= 45;
-      if (!(hit.hits >= 2 || hit.hits >= 99 || fresh)) continue;
+      /* 档案里有住处就直接填上——以前要求「至少两次、或 45 天内」，
+       * 结果每单都要人点一遍楼栋，比填错更烦。填错了在楼栋页点一下就改，
+       * 而且顶部会摆一行「按记录补了几条」，不是悄悄改。 */
       o.building = hit.building;
       if (!o.room && hit.room) o.room = hit.room;
       o.buildingFrom = 'history';
@@ -1054,6 +1126,17 @@
       n++;
     }
     return n;
+  }
+
+  /* 名字开头就是个 A–K 的字母（`a`、`a wěi`、`d在在在`），
+   * 多半这人就在那栋。只拿来把选项排到第一个，**绝不自动填**：
+   * 昵称叫「a」不等于住 A 栋，猜错了账就跟着错。 */
+  function guessBldFromName(name) {
+    var s = trim(name || '');
+    if (!s || s.length > 16) return '';
+    var m = s.match(/^([A-Ka-k])(?![A-Za-z])/);
+    if (!m) return '';
+    return m[1].toUpperCase() + '栋';
   }
 
   // 按名字在住户档案 + 过往接龙里找这个人的楼栋。查不到返回 null。
@@ -1727,7 +1810,8 @@
       for (var j = 0; j < os.length; j++) {
         var o = os[j];
         if (!(o.no > 0)) continue;
-        out.push({ no: o.no, name: o.name || '', bld: b.key });
+        // 图上不印「未写楼栋」——买家看见会以为这单没做。空着，说明写在下面那句里
+        out.push({ no: o.no, name: o.name || '', bld: (b.key === '未写楼栋' ? '' : b.key) });
       }
     }
     out.sort(function (x, y) { return x.no - y.no; });
@@ -3200,6 +3284,8 @@
       boxAi: record.boxAi || null,
       // 送达凭证上改过的名单（谁撤回了、几号改成谁）。只影响那张图，不动订单
       namesFix: (record.namesFix && record.namesFix.length) ? record.namesFix : null,
+      // 写给买家的那几句话：留到下次打开，别一刷新就没了
+      proofNotes: (record.proofNotes && record.proofNotes.length) ? record.proofNotes : null,
       issueSkip: (record.issueSkip && Object.keys(record.issueSkip).length) ? record.issueSkip : null,
       audit: record.audit || null,
       auditFix: (record.auditFix && record.auditFix.list && record.auditFix.list.length)
@@ -3322,7 +3408,8 @@
     auditBusy: false, // AI 正在逐条核问题
     auditErr: '',     // 上次核对失败的原因
     check: null,      // 核实页：{record, asks, picked}
-    lpAt: 0           // 长按发生的时刻，抬手那一下别当成选楼栋
+    lpAt: 0,          // 长按发生的时刻，抬手那一下别当成选楼栋
+    noteGateAt: null  // 已经问过「要不要带句话给买家」的那一份，别反复弹
   };
   var D = null;
   var HOST = null;
@@ -3560,7 +3647,7 @@
       h += '<div class="jl-ask-q">' + esc(a.q) + '</div>';
       if (done) {
         h += '<div class="jl-ask-picked"><b>' + esc(done.label) + '</b>' +
-          (done.text ? '<em>「' + esc(done.text) + '」</em>' : '') +
+          (done.text && done.text !== done.label ? '<em>「' + esc(done.text) + '」</em>' : '') +
           '<button type="button" class="jl-ask-redo" data-act="askredo" data-id="' + esc(a.id) + '">改</button></div>';
       } else {
         if (a.hint) h += '<div class="jl-ask-hint">' + esc(a.hint) + '</div>';
@@ -3572,9 +3659,9 @@
             (op.sub ? '<i>' + esc(op.sub) + '</i>' : '') + '</button>';
         }
         h += '</div>';
-        if (a.input) {
+        if (a.input || a.custom) {
           h += '<div class="jl-ask-in"><input type="text" class="jl-ask-input" data-askinput="' + esc(a.id) +
-            '" placeholder="' + esc(a.inputHint || '照原文填') + '" autocomplete="off">' +
+            '" placeholder="' + esc(a.inputHint || '照原文填') + '" autocomplete="off" autocorrect="off" autocapitalize="off">' +
             '<button type="button" class="jl-ask-save" data-act="asksave" data-id="' + esc(a.id) + '">就用这个</button></div>';
         }
       }
@@ -4710,6 +4797,9 @@
       h += '<p class="jl-hint jl-basis">价格对着本店价目表算的：白鸡蛋 ¥1.5、豆浆 ¥2、包子 ¥2～2.5；半笼按一半：小笼包 ¥3、灌汤小笼包 ¥3.5、玉米蒸饺 ¥3。</p>';
 
       h += '<div class="jl-issues">';
+      var noteNos = {};
+      var pn0 = r.proofNotes || [];
+      for (var pn1 = 0; pn1 < pn0.length; pn1++) noteNos[pn0[pn1].no] = 1;
       for (var i = 0; i < a.issues.length; i++) {
         var it = a.issues[i];
         var lv = it.level === 'error' ? ' e' : (it.level === 'warn' ? ' w' : '');
@@ -4729,6 +4819,13 @@
           (it.memWhy ? '<p class="jl-mem-why">你的规矩：' + esc(it.memWhy) + '</p>' : '') +
           (it.aiWhy ? '<p class="jl-ai-why">AI：' + esc(it.aiWhy) + '</p>' : '') +
           (it.aiQuote ? '<p class="jl-ai-quote">原文「' + esc(it.aiQuote) + '」</p>' : '') +
+          /* 这条确实解决不了，就写一句话放进凭证图里告诉买家——
+           * 不写「未写楼栋」这种内部标签，买家会以为没发货 */
+          '<div class="jl-issue-foot">' +
+          '<button type="button" class="jl-issue-note' + (noteNos[it.no] ? ' on' : '') +
+          '" data-act="issuenote" data-no="' + it.no + '">' +
+          (noteNos[it.no] ? '已写进凭证 · 改一句' : '写进凭证，告诉买家') + '</button>' +
+          '</div>' +
           '</div>';
       }
       h += '</div>';
@@ -5165,6 +5262,7 @@
       audit: V.record.audit,
       auditErr: V.record.auditErr || '',
       namesFix: V.record.namesFix,   // 改过的凭证名单，一编辑就丢的话下次拼图又对不上
+      proofNotes: V.record.proofNotes,   // 写给买家的那几句话，也得跟着记录走
       sourceText: V.record.sourceText
     }, opts);
     paint();
@@ -5391,6 +5489,7 @@
         auditFix: data.auditFix || null,
         auditErr: data.auditErr || '',
         namesFix: data.namesFix || null,   // 上次改过的凭证名单，重开还得是改过的那版
+        proofNotes: data.proofNotes || null,
         sourceText: data.srcText || ''
       }, opts);
     } else {
@@ -5600,7 +5699,8 @@
    * legendRows > 0 时，照片和提醒之间多一块「接龙号 · 名字」名单（加长版）。
    */
   var LEG_HEAD = 84, LEG_ROW = 48, LEG_PAD = 16;
-  function proofSize(n, legendRows) {
+  var NOTE_ROW = 46, NOTE_PAD = 26;
+  function proofSize(n, legendRows, noteRows) {
     var PAD = 36, W = 1080;
     var HEAD = 128;      // 顶部日期
     var FOOT = 148;      // 底部提醒
@@ -5611,8 +5711,9 @@
     var rows = Math.max(1, Math.ceil(n / cols));
     var body = rows * (cellH + LABEL) + (rows - 1) * PAD;
     var LEG = legendRows > 0 ? (LEG_HEAD + legendRows * LEG_ROW + LEG_PAD) : 0;
-    var H = HEAD + body + PAD + LEG + FOOT;
-    return { PAD: PAD, W: W, HEAD: HEAD, FOOT: FOOT, cols: cols, cellW: cellW, cellH: cellH, LABEL: LABEL, rows: rows, LEG: LEG, LEG_ROWS: legendRows || 0, H: H };
+    var NOTE = noteRows > 0 ? (noteRows * NOTE_ROW + NOTE_PAD * 2) : 0;
+    var H = HEAD + body + PAD + LEG + NOTE + FOOT;
+    return { PAD: PAD, W: W, HEAD: HEAD, FOOT: FOOT, cols: cols, cellW: cellW, cellH: cellH, LABEL: LABEL, rows: rows, LEG: LEG, LEG_ROWS: legendRows || 0, NOTE: NOTE, NOTE_ROWS: noteRows || 0, H: H };
   }
 
   var WEEK_CN = '日一二三四五六';
@@ -5634,12 +5735,51 @@
     };
   }
 
+  /* 给买家看的话。图上绝不印「未写楼栋」这种内部标签——取餐的人看到
+   * 会以为这单没做、没发货。要印就印老板自己写的那一句。 */
+  function proofNoteTexts(rec) {
+    var arr = (rec && rec.proofNotes) || [];
+    var seen = {}, out = [];
+    for (var i = 0; i < arr.length; i++) {
+      var s = trim((arr[i] && arr[i].text) || '');
+      if (!s || seen[s]) continue;
+      seen[s] = 1;
+      out.push(s);
+    }
+    return out;
+  }
+
+  /* 画布不会自动折行，按 26 个汉字粗切，尽量断在标点后面 */
+  function wrapCn(text, per, maxLines) {
+    var s = trim(text || '');
+    var out = [];
+    while (s && out.length < maxLines) {
+      if (s.length <= per) { out.push(s); s = ''; break; }
+      var cut = -1;
+      for (var i = per; i > per - 8 && i > 0; i--) {
+        if (/[，。、；！？,.;!?]/.test(s.charAt(i - 1))) { cut = i; break; }
+      }
+      if (cut < 0) cut = per;
+      out.push(s.slice(0, cut));
+      s = s.slice(cut).replace(/^[，。、；！？,.;!?\s]+/, '');
+    }
+    if (s && out.length) out[out.length - 1] = out[out.length - 1].replace(/[，。、；,.;]$/, '') + '…';
+    return out;
+  }
+
   function composeProof(photos, meta) {
     meta = meta || {};
     // 加长版：图下方补一块「接龙号 · 名字」，两列排，取餐的人照着号认人
     var names = (meta.names || []).filter(function (x) { return x && x.no != null; });
     var nameRows = names.length ? Math.ceil(names.length / 2) : 0;
-    var s = proofSize(photos.length, nameRows);
+    // 老板写给买家的话：有问题没解决时才有，最多 3 行
+    var noteRaw = (meta.note || []).slice(0, 3);
+    var noteLines = [];
+    for (var nl = 0; nl < noteRaw.length; nl++) {
+      noteLines = noteLines.concat(wrapCn(noteRaw[nl], 26, 3 - noteLines.length));
+      if (noteLines.length >= 3) break;
+    }
+    var s = proofSize(photos.length, nameRows, noteLines.length);
     var PAD = s.PAD, W = s.W, cols = s.cols, cellW = s.cellW, cellH = s.cellH, LABEL = s.LABEL, H = s.H;
     var HEAD = s.HEAD, FOOT = s.FOOT;
     var tip = meta.tip || proofTip(meta.rawDate || meta.date);
@@ -5700,7 +5840,7 @@
 
       /* 加长版：照片下面补一栏「接龙号 · 名字」，让人照着号认人 */
       if (nameRows) {
-        var legTop = H - FOOT - s.LEG;
+        var legTop = H - FOOT - s.NOTE - s.LEG;
         ctx.fillStyle = '#eadfce';
         ctx.fillRect(PAD * 2, legTop, W - PAD * 4, 2);
 
@@ -5724,7 +5864,7 @@
           ctx.fillText(noTxt, cx, cy);
           var nw = ctx.measureText(noTxt).width;
 
-          // 没写楼栋的标个「未写楼栋」，比空着更像话——空着容易被当成没渲染出来
+          // 楼栋只印真写了的；没写的空着（说明在下面那句里，不在名字后面挂标签）
           var bldTxt = names[k].bld || '';
           ctx.font = '400 22px -apple-system,"PingFang SC","Microsoft YaHei",sans-serif';
           var bw = bldTxt ? ctx.measureText(bldTxt).width + 12 : 0;
@@ -5739,12 +5879,30 @@
           if (bldTxt) {
             // 楼栋紧跟在名字后面，别右对齐——右对齐会贴到下一列的号上，看着像别人的
             var nmW = ctx.measureText(nm).width;
-            ctx.fillStyle = bldTxt === '未写楼栋' ? '#c0a892' : '#a08a72';
+            ctx.fillStyle = '#a08a72';
             ctx.font = '400 22px -apple-system,"PingFang SC","Microsoft YaHei",sans-serif';
             ctx.fillText(bldTxt, cx + nw + 14 + nmW + 10, cy - 2);
           }
         }
         ctx.textAlign = 'left';
+      }
+
+      /* 有问题没解决：印老板自己写的那句话，不印内部标签。
+       * 「未写楼栋」这种字一上墙，买家会以为这单没做、没发货。 */
+      if (noteLines.length) {
+        var noteTop = H - FOOT - s.NOTE;
+        var nX = PAD * 2, nW = W - PAD * 4, nH = s.NOTE - 12;
+        ctx.fillStyle = '#fbf0e2';
+        roundRect(ctx, nX, noteTop, nW, nH, 14);
+        ctx.fill();
+        ctx.fillStyle = '#c9722f';
+        ctx.fillRect(nX, noteTop + 14, 6, nH - 28);
+        ctx.fillStyle = '#7a4a1e';
+        ctx.font = '400 30px -apple-system,"PingFang SC","Microsoft YaHei",sans-serif';
+        ctx.textAlign = 'left';
+        for (var ni = 0; ni < noteLines.length; ni++) {
+          ctx.fillText(noteLines[ni], nX + 28, noteTop + 48 + ni * NOTE_ROW);
+        }
       }
 
       /* 底部：一句提醒，两行，中间一根细线隔开 */
@@ -5776,6 +5934,15 @@
     var un = 0;
     for (var i = 0; i < V.photos.length; i++) if (!V.photos[i].building) un++;
     if (un) { toast('还有 ' + un + ' 张没选楼栋，点照片选一下'); return; }
+    /* 还有没解决的问题、又一句话都没写：先让他写一句。
+     * 只问一次——点了「不写，直接合成」之后再点就不拦了。 */
+    var pend = 0;
+    try { pend = auditIssues(V.record, V.refPrice).issues.length; } catch (e) { pend = 0; }
+    if (pend && !proofNoteTexts(V.record).length && V.noteGateAt !== V.record) {
+      V.noteGateAt = V.record;
+      composeNoteGate(pend);
+      return;
+    }
     V.busy = true;
     V.err = '';
     paint();
@@ -5783,7 +5950,8 @@
       date: mdLabel(V.record.date),
       week: weekdayOf(V.record.date),
       tip: proofTip(V.record.date),
-      names: V.proofNames ? proofNameList(V.record) : null
+      names: V.proofNames ? proofNameList(V.record) : null,
+      note: proofNoteTexts(V.record)
     }).then(function (out) {
       V.busy = false;
       if (V.proofUrl) { try { URL.revokeObjectURL(V.proofUrl); } catch (e) {} }
@@ -5811,6 +5979,143 @@
   }
 
   /* ---------- 单条编辑 ---------- */
+
+  /* 有问题确实解决不了，就写一句给买家看的话，印在凭证图下面。
+   * 绝不能把「未写楼栋」这种内部标签印上去——取餐的人会以为这单没做、没发货。 */
+  function noteSuggest(code) {
+    if (code === 'nobld' || code === 'histbld') return '这单的楼栋还没确认，餐照做，送到时电话联系';
+    if (code === 'namemiss') return '这单没留名字，取餐时报一下接龙号';
+    if (code === 'short' || code === 'pricelow' || code === 'over' || code === 'oddunit' || code === 'price') {
+      return '这单金额有点出入，取餐时跟老板核对一下';
+    }
+    return '这单还有点没确认，餐照做，取餐时问一句就行';
+  }
+
+  function proofNoteSheet(no) {
+    if (!V.record) return;
+    var arr = V.record.proofNotes || (V.record.proofNotes = []);
+    var cur = '';
+    for (var i = 0; i < arr.length; i++) if (arr[i].no === no) cur = arr[i].text || '';
+    var code = '';
+    try {
+      var ai = auditIssues(V.record, V.refPrice);
+      for (var j = 0; j < ai.issues.length; j++) if (ai.issues[j].no === no) { code = ai.issues[j].code; break; }
+    } catch (e) { }
+
+    var sug;
+    if (code === 'nobld' || code === 'histbld') {
+      sug = ['楼栋稍后补，餐已经装好了', '这单地址还在问，先按接龙号取'];
+    } else {
+      sug = ['餐照做，取餐时报接龙号', '这单稍后单独联系你'];
+    }
+
+    var mask = document.createElement('div');
+    mask.className = 'jl-mask';
+    mask.innerHTML =
+      '<div class="jl-sheet-edit">' +
+      '<div class="jl-ehead"><b>#' + no + ' 写一句给买家看的话</b>' +
+      '<button type="button" data-x="close">×</button></div>' +
+      '<p class="jl-hint jl-mhint">这句话会印在送达凭证最下面，群里的人都看得到。' +
+      '别写「未写楼栋」这种内部说法，买家会以为没发货。' +
+      '不写也行，那这张图就跟平时一样。</p>' +
+      '<label class="jl-efield jl-efield-top"><span>这句话</span>' +
+      '<textarea id="jlNoteTxt" rows="3" maxlength="60" placeholder="写一句群里看得懂的话">' + esc(cur || noteSuggest(code)) + '</textarea></label>' +
+      '<div class="jl-note-sug">' +
+      sug.map(function (s) {
+        return '<button type="button" data-x="sug" data-t="' + esc(s) + '">' + esc(s) + '</button>';
+      }).join('') +
+      '</div>' +
+      '<div class="jl-eacts">' +
+      '<button type="button" class="jl-ghost" data-x="ndel">不写了</button>' +
+      '<button type="button" class="jl-primary" data-x="nsave">放进凭证</button>' +
+      '</div></div>';
+    document.body.appendChild(mask);
+
+    function close() { if (mask.parentNode) mask.parentNode.removeChild(mask); }
+    function save(text) {
+      var s = trim(text || '');
+      var idx = -1;
+      for (var k = 0; k < arr.length; k++) if (arr[k].no === no) { idx = k; break; }
+      if (!s) {
+        if (idx > -1) arr.splice(idx, 1);
+      } else if (idx > -1) {
+        arr[idx].text = s.slice(0, 60);
+      } else {
+        arr.push({ no: no, text: s.slice(0, 60) });
+      }
+      V.record.proofNotes = arr;
+      // 凭证图得重拼，不然图上还是旧的那句
+      if (V.proofUrl) { try { URL.revokeObjectURL(V.proofUrl); } catch (e) { } V.proofUrl = ''; V.proofBlob = null; }
+      persist(true);
+      close();
+      paint();
+      toast(s ? '写好了，合图时会印在下面' : '去掉了，这张图不留话');
+    }
+
+    mask.addEventListener('click', function (ev) {
+      var t = ev.target;
+      while (t && t !== mask && !t.getAttribute('data-x')) t = t.parentNode;
+      if (!t || t === mask) { if (ev.target === mask) close(); return; }
+      var x = t.getAttribute('data-x');
+      if (x === 'close') { close(); return; }
+      if (x === 'sug') {
+        var ta = mask.querySelector('#jlNoteTxt');
+        if (ta) { ta.value = t.getAttribute('data-t') || ''; ta.focus(); }
+        return;
+      }
+      if (x === 'ndel') { save(''); return; }
+      if (x === 'nsave') {
+        var el = mask.querySelector('#jlNoteTxt');
+        save(el ? el.value : '');
+        return;
+      }
+    });
+  }
+
+  /* 合成前最后一道：还有没解决的问题，先问一句要不要带话给买家。
+   * 不强迫——不写也能合，只是图上就干干净净，群里不知道要找谁。 */
+  function composeNoteGate(n) {
+    var mask = document.createElement('div');
+    mask.className = 'jl-mask';
+    mask.innerHTML =
+      '<div class="jl-sheet-edit">' +
+      '<div class="jl-ehead"><b>还有 ' + n + ' 条没解决</b>' +
+      '<button type="button" data-x="close">×</button></div>' +
+      '<p class="jl-hint jl-mhint">图上不会印「未写楼栋」这种字——买家看见会以为餐没做。' +
+      '你写一句给群里看的话，印在图最下面。不写也能合。</p>' +
+      '<label class="jl-efield jl-efield-top"><span>这句话</span>' +
+      '<textarea id="jlGateTxt" rows="3" maxlength="60">' + esc(noteSuggest('')) + '</textarea></label>' +
+      '<div class="jl-eacts">' +
+      '<button type="button" class="jl-ghost" data-x="skip">不写，直接合成</button>' +
+      '<button type="button" class="jl-primary" data-x="ok">写好了，合成</button>' +
+      '</div></div>';
+    document.body.appendChild(mask);
+
+    function close() { if (mask.parentNode) mask.parentNode.removeChild(mask); }
+    mask.addEventListener('click', function (ev) {
+      var t = ev.target;
+      if (t === mask) { close(); return; }
+      while (t && t !== mask && !t.getAttribute('data-x')) t = t.parentNode;
+      if (!t || t === mask) return;
+      var x = t.getAttribute('data-x');
+      if (x === 'close' || x === 'skip') { close(); doCompose(); return; }
+      if (x === 'ok') {
+        var el = mask.querySelector('#jlGateTxt');
+        var s = trim(el ? el.value : '');
+        if (s && V.record) {
+          var arr = V.record.proofNotes || (V.record.proofNotes = []);
+          var had = -1;
+          for (var q = 0; q < arr.length; q++) if (arr[q].no === 0) { had = q; break; }
+          if (had > -1) arr[had].text = s.slice(0, 60);
+          else arr.push({ no: 0, text: s.slice(0, 60) });
+          persist(true);
+        }
+        close();
+        doCompose();
+        return;
+      }
+    });
+  }
 
   /* 价目表编辑：名称 / 别名 / 单价 / 单位 / 半份。
    * 别名写进去才算同一样；不写就是两样东西——这就是「牛肉包 vs 麻辣牛肉包」的正解。 */
@@ -6833,6 +7138,7 @@
       }
       return;
     }
+    if (act === 'issuenote') { proofNoteSheet(parseInt(btn.getAttribute('data-no'), 10)); return; }
     if (act === 'teachissue') { teachIssue(btn.getAttribute('data-k') || ''); return; }
     if (act === 'skipissue') {
       var ik = btn.getAttribute('data-k') || '';
@@ -7023,6 +7329,10 @@
     residentBook: residentBook,
     residentsText: residentsText,
     fillMissingBuildings: fillMissingBuildings,
+    guessBldFromName: guessBldFromName,
+    normBuilding: normBuilding,
+    proofNoteTexts: proofNoteTexts,
+    wrapCn: wrapCn,
     lookupBuildingByName: lookupBuildingByName,
     lookupBld: lookupBld,
     getRecord: function () { return V.record; },
