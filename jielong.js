@@ -227,10 +227,13 @@
       better({ raw: m[0], token: m[1], room: m[2], start: m.index + cut3, end: m.index + m[0].length }, 1);
     }
 
-    // ④ 行首单字母 + 逗号：「a，😴，一杯…」
-    //    只认逗号，不认空格——「h 一个白水蛋」里的 h 是名字
-    var m3 = text.match(/^\s*([A-Ha-h])\s*[，,、]/);
-    if (m3) {
+    // ④ 行首单字母 + 逗号：「A，张三 一杯…」
+    //    只认逗号，不认空格——「h 一个白水蛋」里的 h 是名字。
+    //    逗号后面得像个名字（中文/字母/数字）；后面只有 emoji 的
+    //    （「a，😴，一杯…」），这个字母是昵称本身，不是楼栋——以前会把 a 认成 A 栋，
+    //    送错楼比丢个名字麻烦得多。
+    var m3 = text.match(/^\s*([A-Za-z])\s*[，,、]\s*([^，,、；;\s]{1,8})/);
+    if (m3 && /[\u4e00-\u9fa5A-Za-z0-9]/.test(m3[2])) {
       var st = m3.index + m3[0].indexOf(m3[1]);
       better({ raw: m3[0], token: m3[1], room: '', start: st, end: st + 1 }, 2);
     }
@@ -245,9 +248,10 @@
       better({ raw: m[0], token: m[1], room: '', start: at, end: at + 1 }, 2);
     }
 
-    // ⑥ 行首单个大写字母也是楼栋：「E huh 一个鲜肉」「D朱柳臻 一个白鸡蛋」
+    // ⑥ 行首单个大写字母也是楼栋：「E huh 一个鲜肉」「D朱柳臻 一个白鸡蛋」「K 杳 一杯豆浆」
     //    后面紧跟另一个字母就不算（Aurora 不是 A 栋）；④ 只认逗号，这两条都不认，以前整栋丢。
-    var m6 = text.match(/^\s*([A-H])(?![A-Za-z])/);
+    //    以前只认到 H，K 栋整栋丢掉、名字变成「K」——有些小区就是排到 K。
+    var m6 = text.match(/^\s*([A-Z])(?![A-Za-z])/);
     if (m6) {
       var st6 = m6[0].lastIndexOf(m6[1]);
       better({ raw: m6[1], token: m6[1], room: '', start: st6, end: st6 + 1 }, 2);
@@ -387,11 +391,20 @@
       }
       // 紧跟在字母后面的数字是昵称（y2 / A3），不是钱
       if (mn.index > 0 && /[A-Za-z]/.test(s.charAt(mn.index - 1))) continue;
+      // 紧跟在中文后面、3 位以上的纯整数也是昵称（「天使用户1017」），
+      // 以前当金额剥掉，名字只剩「天使用户」，同一个人下次就认不出了。
+      // 注意别把 3.5 / 5.5 这种带小数点的价一起放过去。
+      if (mn.index > 0 && /[\u4e00-\u9fa5]/.test(s.charAt(mn.index - 1)) && /^[0-9]{3,}$/.test(mn[0])) continue;
       if (!inUse) nums.push({ val: parseFloat(mn[0]), at: mn.index, len: mn[0].length });
     }
 
     var amtCount = money.length + nums.length;
     var amt = money.length ? money[0].val : (nums.length ? nums[0].val : null);
+    /* 「2+2.5+3=7.5」：等号右边才是这一单的合计。
+     * 以前一段里几个裸数字，取的是第一个，总价变成 3，一下少收 ¥4.5。 */
+    var eqm = s.match(/[=＝]\s*(?:[￥¥]\s*)?([0-9]+(?:\.[0-9]+)?)\s*(?:元|块钱|块|圆)?\s*$/);
+    var eqTotal = eqm ? parseFloat(eqm[1]) : null;
+    if (eqTotal != null && isFinite(eqTotal) && eqTotal > 0) amt = eqTotal;
 
     var out = { items: items, amt: amt, amtCount: amtCount, nums: nums, moneyCount: money.length, totalLike: false };
 
@@ -401,6 +414,8 @@
     if (money.length && nums.length && items.length === 1) out.totalLike = true;
     // 单独一段只有钱，没有商品（「，15 块」）
     if (amt != null && !items.length) out.totalLike = true;
+    // 写成等式的（「2+2.5+3=7.5」），右边就是整单总价
+    if (eqTotal != null && isFinite(eqTotal) && eqTotal > 0) out.totalLike = true;
 
     // 剥商品、数量、金额，剩下的才是名字；名字里的数字（y2、²⁵）要留住
     var rest = s;
@@ -464,10 +479,21 @@
       // 不截掉就会把名字认成「蔡徐坤一个」，整单商品也跟着一起被吞
       p = p.replace(/(?:半|[0-9]{1,2}|[一二两三四五六七八九十])\s*[杯份个瓶袋根只盒碗笼屉张块条颗串支片斤]$/, '');
       if (!p) continue;
+      // 纯数字昵称：「A栋 77 一个红糖馒头」——77 是名字，不是房号。
+      // 房号在楼栋那一步就剥掉了，这里剩的 1~2 位数字基本是昵称；3 位以上仍按房号残渣跳过。
+      if (/^[0-9]{1,2}$/.test(p)) return p;
       if (/^[0-9.]+$/.test(p)) continue;                       // 房号 / 金额残渣
       if (hasEmoji(p)) return p.slice(0, 8);
-      if (/^[A-Za-z0-9]+$/.test(p)) return p.slice(0, 12);      // h / U / y2
-      if (/[\u4e00-\u9fa5]/.test(p)) return p.slice(0, 8);
+      // 字母昵称：h / U / y2 / wěi（拼音带声调也算）。首字符必须是字母，301 这类房号不认。
+      if (/^[A-Za-zÀ-ÖØ-öø-ÿĀ-ſ][A-Za-zÀ-ÖØ-öø-ÿĀ-ſ0-9]*$/.test(p)) {
+        // 「a wěi」这种昵称被空格拆成两段，拼回去；最多两段，别把后面的英文单词都吞了
+        var nx = trim(parts[i + 1] || '');
+        if (nx && /^[A-Za-zÀ-ÖØ-öø-ÿĀ-ſ][A-Za-zÀ-ÖØ-öø-ÿĀ-ſ]*$/.test(nx)) return (p + ' ' + nx).slice(0, 12);
+        return p.slice(0, 12);
+      }
+      // 中文名截到 12 个字符：「天使用户1017」这种带数字的昵称，以前按 8 截成「天使用户」，
+      // 同一个人下次就对不上了
+      if (/[\u4e00-\u9fa5]/.test(p)) return p.slice(0, 12);
     }
     return '';
   }
@@ -546,6 +572,16 @@
 
     var restAll = restChunks.join(' ');
     var name = findName(restAll);
+    /* 「A栋 77 一个红糖馒头」：77 被当金额残渣剥了，名字就空了。
+     * 商品前面那一段再找一次——楼栋已经剥掉，那里只剩名字，77 能认出来。 */
+    if (!name) {
+      var headEnd = -1;
+      for (var hw = 0; hw < ITEM_SORTED.length; hw++) {
+        var hx = work.indexOf(ITEM_SORTED[hw]);
+        if (hx > -1 && (headEnd < 0 || hx < headEnd)) headEnd = hx;
+      }
+      if (headEnd > 0) name = findName(work.slice(0, headEnd));
+    }
 
     var issues = [];
     var conf = 0;
@@ -876,6 +912,24 @@
           if (o.items[0].unit == null) o.items[0].unit = d;
           o.items[0].amount = round2(o.total);
           if (d > 0 && d < 1000) o.items[0].derivedUnit = d;
+        } else if (o.items.length > 1) {
+          /* 几样里只有一样没价（「豆浆+鸡蛋+牛肉包 5.5」）：总价减掉已知的，
+           * 差额就是它的价。不补这一步，明明总价对得上，还一直挂「没定价：牛肉包」。 */
+          var known = 0, unk = [];
+          for (var k2 = 0; k2 < o.items.length; k2++) {
+            var it2 = o.items[k2];
+            if (it2.unit == null) unk.push(it2);
+            else known += it2.unit * it2.qty;
+          }
+          if (unk.length === 1 && unk[0].qty > 0) {
+            var diff = round2(o.total - known);
+            var du = round2(diff / unk[0].qty);
+            if (du > 0 && du < 1000) {
+              unk[0].unit = du;
+              unk[0].amount = round2(diff);
+              unk[0].derivedUnit = du;
+            }
+          }
         }
       } else {
         o.amount = unknown ? null : round2(amount);
