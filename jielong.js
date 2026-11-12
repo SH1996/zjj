@@ -912,24 +912,6 @@
           if (o.items[0].unit == null) o.items[0].unit = d;
           o.items[0].amount = round2(o.total);
           if (d > 0 && d < 1000) o.items[0].derivedUnit = d;
-        } else if (o.items.length > 1) {
-          /* 几样里只有一样没价（「豆浆+鸡蛋+牛肉包 5.5」）：总价减掉已知的，
-           * 差额就是它的价。不补这一步，明明总价对得上，还一直挂「没定价：牛肉包」。 */
-          var known = 0, unk = [];
-          for (var k2 = 0; k2 < o.items.length; k2++) {
-            var it2 = o.items[k2];
-            if (it2.unit == null) unk.push(it2);
-            else known += it2.unit * it2.qty;
-          }
-          if (unk.length === 1 && unk[0].qty > 0) {
-            var diff = round2(o.total - known);
-            var du = round2(diff / unk[0].qty);
-            if (du > 0 && du < 1000) {
-              unk[0].unit = du;
-              unk[0].amount = round2(diff);
-              unk[0].derivedUnit = du;
-            }
-          }
         }
       } else {
         o.amount = unknown ? null : round2(amount);
