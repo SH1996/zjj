@@ -2639,6 +2639,8 @@
       namesFix: (record.namesFix && record.namesFix.length) ? record.namesFix : null,
       issueSkip: (record.issueSkip && Object.keys(record.issueSkip).length) ? record.issueSkip : null,
       audit: record.audit || null,
+      auditFix: (record.auditFix && record.auditFix.list && record.auditFix.list.length)
+        ? record.auditFix : null,
       auditErr: trim(record.auditErr || '').slice(0, 160) || null,
       srcText: trim(record.sourceText || '').slice(0, 3000) || null
     };
@@ -2957,7 +2959,7 @@
       '</div>';
 
     h += '<div class="jl-foot-note">' +
-      'AI 负责认人认规格、分清总价还是单价、按名字补楼栋、排箱，也逐条对着原文核问题清单；' +
+      'AI 负责认人认规格、分清总价还是单价、按名字补楼栋、排箱，也对着原文逐条核问题、把数错的件数改回来；' +
       '件数和金额始终在这台设备上算，价格本也只存在本机。' +
       '</div>';
     return h;
@@ -3236,6 +3238,34 @@
       if (!c) put(o, 'zeroqty', 'error', '件数是 0', '数量没认出来，补一下');
       else if (c > 15) put(o, 'bigqty', 'warn', '这一单 ' + c + ' 件，比平常多', '核对下是不是数量认错了');
 
+      /* 3.1 对着原文再数一遍：AI 拆单最容易「一个变两个、两个变一个」。
+       * 原文写的是几，就以原文为准；本地数不出来（原文没写数量）就不吭声。 */
+      var qd = rawQtyCheck(o);
+      for (var q1 = 0; q1 < qd.length; q1++) {
+        var qq = qd[q1];
+        var extra = qq.qty - qq.rawQty;
+        var md = 0;
+        if (extra > 0 && o.total == null) {
+          for (var q2 = 0; q2 < o.items.length; q2++) {
+            if (trim(o.items[q2].name) === qq.name && o.items[q2].unit != null) { md = o.items[q2].unit; break; }
+          }
+          md = md ? -round2(extra * md) : 0;   // 多记几件 = 多收几件的钱
+          if (md < 0) overSum = round2(overSum - md);
+        }
+        put(o, 'qtydiff', extra > 0 ? 'error' : 'warn',
+          '「' + qq.name + '」原文是 ' + qq.rawQty + ' 个，这里记了 ' + qq.qty + ' 个',
+          '按原文「' + trim(o.raw).slice(0, 36) + '」数的；点开这条就能改',
+          md);
+      }
+
+      /* 3.2 同一样被拆成两样：「牛肉」+「牛肉堡」，两行各 1 个，看着都对，其实是同一样 */
+      var ds = dupSplitCheck(o);
+      for (var d1 = 0; d1 < ds.length; d1++) {
+        put(o, 'dupsplit', 'warn',
+          '「' + ds[d1].small + '」和「' + ds[d1].big + '」可能是同一样',
+          '原文没分两样写，先看是不是拆重了；确实是两样就点「不用管」');
+      }
+
       /* 4. 单价：没填的、离谱的 */
       var lack = [];
       for (var m = 0; m < o.items.length; m++) {
@@ -3420,6 +3450,123 @@
     };
   }
 
+  /* ---------- 对着原文数件数 ---------- */
+
+  /* 从一小段文字里读数量词：「2个」「两份」「×3」。只认带量词的，
+   * 裸数字（「牛肉堡2」）既可能是件数也可能是价钱，宁可当没说。 */
+  function qtyWord(s) {
+    var t = String(s == null ? '' : s);
+    var m = t.match(/^[^0-9]{0,2}([0-9]{1,2})\s*[个份杯笼袋瓶只盒碗根串片张条]/);
+    if (m) { var n = parseInt(m[1], 10); return (n > 0 && n < 100) ? n : null; }
+    m = t.match(/^[^0-9]{0,2}([一二两三四五六七八九十])\s*[个份杯笼袋瓶只盒碗根串片张条]/);
+    if (m) { var c = cnToNum(m[1]); return (c > 0 && c < 100) ? c : null; }
+    m = t.match(/^[^0-9]{0,2}[x×*]\s*([0-9]{1,2})/);
+    if (m) { var x = parseInt(m[1], 10); return (x > 0 && x < 100) ? x : null; }
+    return null;
+  }
+
+  /* 前面贴着商品的数量词：「一个牛肉堡」「两笼小笼包」。必须紧贴到末尾，
+   * 「豆浆2杯 张三 牛肉堡」里的 2 杯是豆浆的，不能算到牛肉堡头上。 */
+  function qtyWordEnd(s) {
+    var t = String(s == null ? '' : s);
+    var m = t.match(/([0-9]{1,2})\s*[个份杯笼袋瓶只盒碗根串片张条]\s*$/);
+    if (m) { var n = parseInt(m[1], 10); return (n > 0 && n < 100) ? n : null; }
+    m = t.match(/([一二两三四五六七八九十])\s*[个份杯笼袋瓶只盒碗根串片张条]\s*$/);
+    if (m) { var c = cnToNum(m[1]); return (c > 0 && c < 100) ? c : null; }
+    m = t.match(/[x×*]\s*([0-9]{1,2})\s*$/);
+    if (m) { var x = parseInt(m[1], 10); return (x > 0 && x < 100) ? x : null; }
+    return null;
+  }
+
+  /* 原文这一样写了几个。找不到数量词就返回 null——「原文没写」不等于「写了一个」，
+   * 不能拿它去改单，只能拿来提示。
+   * 前面写了就以前面为准（「一个牛肉堡」），前面没有再看后面（「牛肉堡2个」「×2」）。
+   * 中间的空格是证据：「酱肉包 一份小米粥」的「一份」是小米粥的，不是酱肉包的。 */
+  function rawQtyOf(o, name) {
+    var raw = String((o && o.raw) || '');
+    var nm = String(name == null ? '' : name);
+    if (!raw || !nm) return null;
+    var at = raw.indexOf(nm);
+    if (at < 0) return null;
+
+    // 前面：紧贴商品的数量词
+    var pre = raw.slice(Math.max(0, at - 16), at);
+    var prev = pre.match(/([^\s，,、；;+＋]{1,8})([0-9]{1,2}|[一二两三四五六七八九十])\s*[个份杯笼袋瓶只盒碗根串片张条]\s*$/);
+    var skipHead = false;
+    if (prev) {
+      /* 数量词紧跟在另一个名词后面，有两种情况：
+       * 「牛肉堡2个 玉米汁」——2 个是牛肉堡的（量词后有空格/后面还隔着一层）
+       * 「豆浆2杯玉米汁」——2 杯是豆浆的（前面那段就是本店商品）
+       * 「张三一个白鸡蛋」——一个还是白鸡蛋的（前面那段是人名，前置修饰不加空格） */
+      if (/\s$/.test(prev[0])) skipHead = true;
+      else {
+        for (var w3 = 0; w3 < ITEM_SORTED.length; w3++) {
+          var wd3 = ITEM_SORTED[w3];
+          if (wd3.length <= prev[1].length && prev[1].slice(prev[1].length - wd3.length) === wd3) { skipHead = true; break; }
+        }
+      }
+    }
+    if (!skipHead) {
+      var cq2 = qtyWordEnd(pre);
+      if (cq2 != null) return cq2;
+    }
+
+    // 后面：先截到下一个商品词
+    var tail = raw.slice(at + nm.length);
+    var stop = 12;
+    for (var w = 0; w < ITEM_SORTED.length; w++) {
+      var ix = tail.indexOf(ITEM_SORTED[w]);
+      if (ix > -1 && ix < stop) stop = ix;
+    }
+    var seg = tail.slice(0, stop);
+    var qa = qtyWord(seg);
+    if (qa == null) return null;
+    // 数量词前面是空格/标点，且后面紧跟着另一样东西 → 这个数量是下一样的
+    if (stop < tail.length) {
+      var lead = seg.slice(0, seg.search(/[0-9一二两三四五六七八九十x×*]/));
+      if (/[\s，,、；;+＋]/.test(lead)) return null;
+    }
+    return qa;
+  }
+
+  /* 同一单里同名的合计后再跟原文比：AI 常把「一个牛肉堡」拆成两行各 1 个，
+   * 逐行看都是 1，只有加起来才看出多了一个。 */
+  function rawQtyCheck(o) {
+    var agg = {}, names = [], out = [];
+    var its = (o && o.items) || [];
+    for (var i = 0; i < its.length; i++) {
+      var nm = trim(its[i].name || '');
+      if (!nm) continue;
+      if (!agg[nm]) { agg[nm] = 0; names.push(nm); }
+      agg[nm] += its[i].qty || 0;
+    }
+    for (var j = 0; j < names.length; j++) {
+      var rq = rawQtyOf(o, names[j]);
+      if (rq == null || !(rq > 0) || rq === agg[names[j]]) continue;
+      out.push({ name: names[j], rawQty: rq, qty: agg[names[j]] });
+    }
+    return out;
+  }
+
+  /* 同一样拆成两样：「牛肉」+「牛肉堡」。只报「不是本店商品词的那个」，
+   * 免得把「豆浆」和「红枣豆浆」这种真两样冤枉了。 */
+  function dupSplitCheck(o) {
+    var its = (o && o.items) || [];
+    var out = [];
+    for (var i = 0; i < its.length; i++) {
+      var a = trim(its[i].name || '');
+      if (!a || menuOf(a) || ITEM_WORDS.indexOf(a) > -1) continue;
+      for (var j = 0; j < its.length; j++) {
+        if (i === j) continue;
+        var b = trim(its[j].name || '');
+        if (b.length <= a.length || b.indexOf(a) < 0) continue;
+        out.push({ small: a, big: b });
+        break;
+      }
+    }
+    return out;
+  }
+
   /* ---------- 让 AI 逐条核对 ---------- */
 
   function auditAiReady() {
@@ -3462,6 +3609,9 @@
     L.push(menuText());
     L.push('');
     L.push('【疑点】');
+    if (!cands.raw.length) {
+      L.push('（本地没挑出疑点。你就只做一件事：对着原文把每一单的件数数一遍，跟【程序拆出来的】比。）');
+    }
     for (var k = 0; k < cands.raw.length; k++) {
       var c = cands.raw[k];
       L.push((k + 1) + ') #' + c.no + ' 类型' + c.code + ' 标题：' + c.title +
@@ -3474,6 +3624,11 @@
       L.push(memTxt);
       L.push('');
     }
+    L.push('【先对着原文数一遍件数】');
+    L.push('- 从上往下逐单看：这一单原文写了哪几样、每样前面或后面写的是几个（「一个」「两份」「2个」「×2」「两笼」）。');
+    L.push('- 「一个牛肉堡」就是 1 个。原文没写数量的，按 1 个算，不要自己加。');
+    L.push('- 程序记的件数跟原文对不上（多一个、少一个、同一样被拆成两行各记一次），就用 fix 指出来，程序会照着改；这是核对里最要紧的一件事。');
+    L.push('');
     L.push('【怎么判断】');
     L.push('- 数字要看语境：写在行末、前面一串商品的（「…一杯豆浆 15 块」），那是整单总价，逐样单价加起来对不上很正常（会抹零、按份算），差不到 1 块不算少给。');
     L.push('- 「半笼」「一份」「两个」「x2」是数量，不是钱。');
@@ -3485,10 +3640,12 @@
     L.push('- 一单里被拆成两样的（「玉米蒸饺」拆成玉米+蒸饺）、件数明显跟「两个」对不上的，是真的问题。');
     L.push('');
     L.push('【输出】只输出一个 JSON 对象，不要 markdown 代码块，不要任何解释。');
-    L.push('{"verdict":[{"no":2,"code":"pricelow","v":"drop","why":"行末 6 元是总价，2 元是单价，跟平时一样"}],"add":[]}');
-    L.push('- verdict 要把上面每一条疑点都判一遍，v 只能是 keep（确实有问题）或 drop（程序看错了）。');
+    L.push('{"verdict":[{"no":2,"code":"pricelow","v":"drop","why":"行末 6 元是总价，2 元是单价，跟平时一样"}],"fix":[{"no":3,"name":"牛肉堡","qty":1,"why":"原文只写了一个牛肉堡"}],"add":[]}');
+    L.push('- verdict 要把上面每一条疑点都判一遍，v 只能是 keep（确实有问题）或 drop（程序看错了）。没有疑点时给空数组。');
     L.push('- why 不超过 30 个字，写清依据；drop 时要指出程序错在哪。');
-    L.push('- add 最多 3 条，只加原文里明确看得到的：漏了一整单、某样没算钱、件数跟原文不符。add 的 no 必须是上面出现过的单号，没看出来就给空数组。');
+    L.push('- fix 最多 5 条，只改件数：no 是单号，name 必须跟【程序拆出来的】里一模一样，qty 是 1–99 的整数。只改这一单里已经有的商品，不要新增、不要改名、不要动金额。');
+    L.push('- fix 只在原文明确写了数量、且你数清楚时才给；原文没写数量、或者你也不确定，就不要给这条 fix。');
+    L.push('- add 最多 3 条，只加原文里明确看得到的：漏了一整单、某样没算钱、件数跟原文不符（这种优先用 fix）。add 的 no 必须是上面出现过的单号，没看出来就给空数组。');
     return L.join('\n');
   }
 
@@ -3504,14 +3661,16 @@
       var fixed = str.slice(a, b + 1).replace(/,\s*([}\]])/g, '$1').replace(/[“”]/g, '"');
       try { obj = JSON.parse(fixed); } catch (e2) { return { ok: false, error: 'JSON 解析失败' }; }
     }
-    if (!obj || !Array.isArray(obj.verdict)) return { ok: false, error: '没有 verdict' };
+    if (!obj) return { ok: false, error: '没有 verdict' };
+    var vs = Array.isArray(obj.verdict) ? obj.verdict : [];
+    var wantFix = Array.isArray(obj.fix) ? obj.fix.length : 0;
 
     var known = {};
     for (var i = 0; i < cands.raw.length; i++) known[issueKey(cands.raw[i])] = 1;
 
     var verdict = {}, kept = 0, drop = 0;
-    for (var j = 0; j < obj.verdict.length; j++) {
-      var v = obj.verdict[j];
+    for (var j = 0; j < vs.length; j++) {
+      var v = vs[j];
       if (!v || typeof v !== 'object') continue;
       var no = parseInt(v.no, 10);
       var code = trim(v.code);
@@ -3522,7 +3681,6 @@
       verdict[key] = { v: d, why: trim(v.why).slice(0, 40) };
       if (d === 'keep') kept++; else drop++;
     }
-    if (!kept && !drop) return { ok: false, error: 'AI 一条都没判对' };
 
     var add = [], usedNo = {};
     var nums = {};
@@ -3545,10 +3703,54 @@
         });
       }
     }
+
+    /* 件数纠正：AI 对着原文数出来的数，本地再核一遍才准改。
+     * 本地数得出就必须跟 AI 一致（两个人对着同一句原文都数成 1 个才动手）；
+     * 本地数不出（原文没写数量），要求 AI 的理由里带原文片段，且片段真在原文里。 */
+    var fix = [];
+    if (Array.isArray(obj.fix)) {
+      var byNo = {};
+      for (var f0 = 0; f0 < os.length; f0++) byNo[os[f0].no] = os[f0];
+      for (var f1 = 0; f1 < obj.fix.length && fix.length < 5; f1++) {
+        var fx = obj.fix[f1];
+        if (!fx || typeof fx !== 'object') continue;
+        var fo = byNo[parseInt(fx.no, 10)];
+        if (!fo || !fo.items) continue;
+        var fname = trim(fx.name);
+        var fq = parseInt(fx.qty, 10);
+        if (!fname || !(fq > 0 && fq < 100)) continue;
+        var hit = null, same = 0;
+        for (var f2 = 0; f2 < fo.items.length; f2++) {
+          if (trim(fo.items[f2].name) === fname) { same += fo.items[f2].qty || 0; if (!hit) hit = fo.items[f2]; }
+        }
+        if (!hit || same === fq) continue;
+        var localQ = rawQtyOf(fo, fname);
+        if (localQ != null) {
+          if (localQ !== fq) continue;       // 本地不认这个数，宁可不改
+        } else {
+          var whyTxt = trim(fx.why);
+          var frag = (whyTxt.match(/[「"“]([^」"”]{2,20})[」"”]/) || [])[1] || '';
+          if (!frag || String(fo.raw || '').indexOf(frag) < 0) continue;
+        }
+        var dupFix = false;
+        for (var f3 = 0; f3 < fix.length; f3++) if (fix[f3].no === fo.no && fix[f3].name === fname) { dupFix = true; break; }
+        if (dupFix) continue;
+        fix.push({ no: fo.no, name: fname, qty: fq, before: same, why: trim(fx.why).slice(0, 40) });
+      }
+    }
+
+    if (!kept && !drop && !fix.length) {
+      if (wantFix) return { ok: false, error: 'AI 想改件数，但跟原文对不上，没动' };
+      // 明确回了空数组，说明它看过原文、只是没挑出问题；什么都没回才算没核成
+      var answered = Array.isArray(obj.verdict) || Array.isArray(obj.fix);
+      if (!answered) return { ok: false, error: 'AI 一条都没判对' };
+    }
+
     return {
       ok: true,
       kept: kept,
       drop: drop,
+      fix: fix,
       audit: { at: Date.now(), verdict: verdict, add: add, overrule: {} }
     };
   }
@@ -3556,6 +3758,85 @@
   function applyAudit(rec, audit) {
     rec.audit = audit;
     persist(true);
+  }
+
+  /* AI 对着原文数出来的件数，落到订单上。
+   * 改之前把这一单整个存一份，随时能撤回——改错了不能让人没退路。 */
+  function applyQtyFix(rec, list) {
+    if (!rec || !rec.orders || !list || !list.length) return 0;
+    var byNo = {};
+    for (var i = 0; i < rec.orders.length; i++) byNo[rec.orders[i].no] = rec.orders[i];
+    /* 之前改过的快照接着用：同一单改过两次，撤回时要回到最早那次之前，
+     * 不能只回到第二次之前（那样第一次的改动就永远退不回去了）。 */
+    var snap = (rec.auditFix && rec.auditFix.snap) ? JSON.parse(JSON.stringify(rec.auditFix.snap)) : [];
+    var log = [], changed = 0;
+
+    for (var j = 0; j < list.length; j++) {
+      var f = list[j], o = byNo[f.no];
+      if (!o || !o.items || !o.items.length) continue;
+      var keep = null, total = 0;
+      for (var k = 0; k < o.items.length; k++) {
+        if (trim(o.items[k].name) !== f.name) continue;
+        total += o.items[k].qty || 0;
+        if (!keep) keep = o.items[k]; else o.items[k].qty = 0;
+      }
+      if (!keep) continue;
+      if (total === f.qty && keep.qty === f.qty) continue;
+      var has = false;
+      for (var s0 = 0; s0 < snap.length; s0++) if (snap[s0].no === o.no) { has = true; break; }
+      if (!has) snap.push({ no: o.no, order: JSON.parse(JSON.stringify(o)) });
+      keep.qty = f.qty;
+      o.items = o.items.filter(function (x) { return (x.qty || 0) > 0; });
+      log.push({ no: o.no, name: f.name, before: total, after: f.qty, why: f.why || '' });
+      changed++;
+    }
+    if (!changed) return 0;
+
+    // finalize 会把「楼栋按记录」这类标记清掉，改件数不该动楼栋，先记着再补回来
+    var marks = [];
+    for (var m = 0; m < rec.orders.length; m++) {
+      var mo = rec.orders[m];
+      marks.push({
+        no: mo.no, building: mo.building, buildingFrom: mo.buildingFrom,
+        bldConfirmed: mo.bldConfirmed, bldDismiss: mo.bldDismiss,
+        bldHits: mo.bldHits, bldAt: mo.bldAt, bldSaid: mo.bldSaid
+      });
+    }
+    finalize(rec, parseOpts());
+    for (var n = 0; n < marks.length; n++) {
+      var mk = marks[n], o2 = null;
+      for (var p = 0; p < rec.orders.length; p++) if (rec.orders[p].no === mk.no) { o2 = rec.orders[p]; break; }
+      if (!o2 || !o2.building || o2.building !== mk.building) continue;
+      if (mk.buildingFrom === 'history' && !o2.buildingFrom) o2.buildingFrom = 'history';
+      if (mk.bldConfirmed) o2.bldConfirmed = 1;
+      if (mk.bldDismiss) o2.bldDismiss = 1;
+      if (mk.bldSaid) o2.bldSaid = 1;
+      if (mk.bldHits) o2.bldHits = mk.bldHits;
+      if (mk.bldAt) o2.bldAt = mk.bldAt;
+    }
+
+    rec.auditFix = { at: Date.now(), list: log.slice(-10), snap: snap };
+    persist(true);
+    return changed;
+  }
+
+  function undoQtyFix() {
+    var rec = V.record;
+    var fx = rec && rec.auditFix;
+    if (!fx || !fx.snap || !fx.snap.length) return;
+    var back = {};
+    for (var i = 0; i < fx.snap.length; i++) back[fx.snap[i].no] = fx.snap[i].order;
+    for (var j = 0; j < rec.orders.length; j++) {
+      var b = back[rec.orders[j].no];
+      if (b) rec.orders[j] = JSON.parse(JSON.stringify(b));
+    }
+    rec.auditFix = null;
+    rec.audit = null;          // 那个结论是照着改后的单子下的，撤回了就不算数
+    rec.auditErr = '';
+    finalize(rec, parseOpts());
+    persist(true);
+    paint();
+    toast('已撤回，件数恢复成改之前');
   }
 
   // 只改 tab 上的角标，不整页重绘：用户可能正在金额页填单价，重绘会把输入框里的字弄丢
@@ -3585,8 +3866,9 @@
     }
     if (V.auditBusy) return;
     var cands = auditCandidates(rec, V.refPrice || effectivePrice(listRecords));
-    if (!cands.raw.length) {
-      // 本来就没疑点，也算核过了，页面不用一直挂着「还没核」
+    /* 本地没挑出疑点就不跑了——除非这一单是 AI 拆的。
+     * AI 拆的单最容易「一个变两个」而本地规则看不出来，所以还是一定要拿原文再数一遍。 */
+    if (!cands.raw.length && rec.source !== 'ai') {
       rec.audit = { at: Date.now(), verdict: {}, add: [], overrule: {} };
       persist(true);
       if (V.tab === 'issue') paint(); else refreshIssueBadge();
@@ -3609,9 +3891,15 @@
       }
       V.auditErr = '';
       rec.auditErr = '';
+      var changed = (r.fix && r.fix.length) ? applyQtyFix(rec, r.fix) : 0;
       applyAudit(rec, r.audit);
       if (V.tab === 'issue') paint(); else refreshIssueBadge();
-      if (manual) toast('核完了：确认 ' + r.kept + ' 条，判为误报 ' + r.drop + ' 条');
+      if (changed) {
+        var one = r.fix[0];
+        toast('对着原文改了 ' + changed + ' 处件数：' + one.name + ' ' + one.before + '→' + one.qty);
+      } else if (manual) {
+        toast('核完了：确认 ' + r.kept + ' 条，判为误报 ' + r.drop + ' 条');
+      }
     }).catch(function (e) {
       V.auditBusy = false;
       var msg = (e && e.message) ? String(e.message) : 'AI 没回应';
@@ -3630,14 +3918,21 @@
 
     /* ---------- 顶部：先说清这些结论是谁下的 ---------- */
     var state = 'todo', note = '';
+    var fixN = (r.auditFix && r.auditFix.list) ? r.auditFix.list.length : 0;
     if (V.auditBusy) {
       state = 'busy';
       note = '正在对着原文逐条看…';
     } else if (a.ai) {
       state = 'done';
-      note = a.issues.length
-        ? '确认 ' + a.ai.kept + ' 条' + (a.ai.drop ? '，判为误报 ' + a.ai.drop + ' 条' : '')
-        : (a.dropped.length ? a.dropped.length + ' 条疑点都判为误报了' : '没挑出疑点，也没看出漏的');
+      if (fixN) {
+        note = '照原文改了 ' + fixN + ' 处件数' + (a.issues.length ? ' · ' + a.issues.length + ' 条要核对' : '');
+      } else if (a.issues.length) {
+        note = a.ai.kept
+          ? '确认 ' + a.ai.kept + ' 条' + (a.ai.drop ? '，判为误报 ' + a.ai.drop + ' 条' : '')
+          : '对着原文看过，没判为误报' + (a.ai.drop ? '，' + a.ai.drop + ' 条判为误报' : '');
+      } else {
+        note = a.dropped.length ? a.dropped.length + ' 条疑点都判为误报了' : '没挑出疑点，也没看出漏的';
+      }
     } else if (!aiOn) {
       state = 'off';
       note = '这台设备没接 AI，下面是本机规则挑的';
@@ -3666,6 +3961,29 @@
       '</div>';
     if (V.auditErr && !V.auditBusy && aiOn) {
       h += '<p class="jl-ai-err-tip">AI 没连上不影响拆单。常见是 Key 过期、余额不足、接口地址填错：到右上角「设置 → 测一下能不能连上」能看到具体是哪一样。</p>';
+    }
+
+    /* ---------- AI 照原文改了件数：改了什么、怎么撤回 ---------- */
+    var fx = r.auditFix;
+    if (fx && fx.list && fx.list.length) {
+      var fparts = [];
+      for (var f = 0; f < fx.list.length; f++) {
+        fparts.push('#' + fx.list[f].no + ' ' + fx.list[f].name + ' ' + fx.list[f].before + '→' + fx.list[f].after);
+      }
+      h += '<div class="jl-fixbar">' +
+        '<div class="jl-fixbar-h"><b>改了哪一处</b>' +
+        '<button type="button" class="jl-fixbar-x" data-act="undofix">撤回</button></div>' +
+        '<p>' + esc(fparts.join(' · ')) + '</p>' +
+        '<span>AI 是拿你粘的那段原文数的；改完金额和箱数已经重算，觉得不对点「撤回」回到改之前。</span>' +
+        '</div>';
+    }
+
+    /* ---------- 原文：AI 到底对着哪段字核的，摆出来能对 ---------- */
+    var srcAll = trim(auditSrcText(r));
+    if (srcAll) {
+      var nline = srcAll.split('\n').length;
+      h += '<details class="jl-srcbox"><summary>这一单的原文 · ' + nline + ' 行 · 点开对一下</summary>' +
+        '<pre>' + esc(srcAll) + '</pre></details>';
     }
 
     /* ---------- 一条都没剩 ---------- */
@@ -4310,6 +4628,15 @@
           return {
             no: o.no, name: o.name, building: o.building, room: o.room,
             buildingFrom: o.buildingFrom || '',
+            // 楼栋是怎么来的、确认过没有：重开时得原样带回来，
+            // 否则每次打开都重新问一遍「楼栋是按记录补的」，确认等于白确认
+            bldConfirmed: o.bldConfirmed ? 1 : 0,
+            bldDismiss: o.bldDismiss ? 1 : 0,
+            bldHits: o.bldHits || 0,
+            bldAt: o.bldAt || '',
+            bldSaid: o.bldSaid ? 1 : 0,
+            bldGuess: o.bldGuess ? 1 : 0,
+            bldLookedUp: o.bldLookedUp ? 1 : 0,
             raw: o.raw || '',
             items: (o.items || []).map(function (i2) { return { name: i2.name, qty: i2.qty, unit: i2.unit, fromText: !!i2.fromText, half: i2.half == null ? null : !!i2.half, priceFrom: i2.priceFrom || '' }; }),
             total: o.total == null ? null : o.total,
@@ -4321,6 +4648,7 @@
         boxAi: data.boxAi || null,
         issueSkip: data.issueSkip || null,
         audit: data.audit || null,
+        auditFix: data.auditFix || null,
         auditErr: data.auditErr || '',
         namesFix: data.namesFix || null,   // 上次改过的凭证名单，重开还得是改过的那版
         sourceText: data.srcText || ''
@@ -4784,6 +5112,7 @@
     mask.innerHTML =
       '<div class="jl-sheet-edit">' +
       '<div class="jl-ehead"><b>改第 ' + no + ' 条</b><button type="button" data-x="close">×</button></div>' +
+      (o.raw ? '<div class="jl-esrc"><span>原文</span><p>' + esc(o.raw) + '</p></div>' : '') +
       '<label class="jl-efield"><span>名字</span><input id="jlEName" value="' + esc(o.name) + '"></label>' +
       '<label class="jl-efield"><span>楼栋</span><select id="jlEBld"><option value="">（不写）</option>' + opt +
       '<option value="__new">+ 新楼栋…</option></select></label>' +
@@ -4855,6 +5184,9 @@
         }
         o.items = items;
         o.manual = true;
+        /* 人亲手改过了，AI 那次「按原文改件数」的记录就作废：
+         * 再点撤回会把人刚改的东西一起抹掉。 */
+        if (V.record) V.record.auditFix = null;
         dropAuditFor(no);
         close();
         rebuild();
@@ -5636,6 +5968,7 @@
       }
       return;
     }
+    if (act === 'undofix') { undoQtyFix(); return; }
     if (act === 'restoreissue') {
       var rik = btn.getAttribute('data-k') || '';
       if (V.record && rik) {
@@ -5861,6 +6194,9 @@
     amtLabel: amtLabel,
     auditIssues: auditIssues,
     auditCandidates: auditCandidates,
+    rawQtyOf: rawQtyOf,
+    rawQtyCheck: rawQtyCheck,
+    applyQtyFix: applyQtyFix,
     buildAuditPrompt: buildAuditPrompt,
     parseAuditPayload: parseAuditPayload,
     kickAuditAI: kickAuditAI,

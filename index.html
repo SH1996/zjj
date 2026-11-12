@@ -2010,6 +2010,28 @@
   .jl-ai-dot.off{background:#c9a227;}
   .jl-ai-dot.err{background:#c14b3a;}
   .jl-ai-err-tip{margin:7px 2px 0;font-size:10.5px;line-height:1.6;color:#b95342;}
+
+  /* 照原文改了件数：一条能看清改了什么、一键撤回 */
+  .jl-fixbar{margin-top:9px;padding:9px 11px;border-radius:12px;
+    background:rgba(95,138,78,.08);border:1px solid rgba(95,138,78,.28);}
+  .jl-fixbar-h{display:flex;align-items:center;gap:8px;}
+  .jl-fixbar-h b{flex:1;min-width:0;font-size:12px;font-weight:600;color:#527a43;}
+  .jl-fixbar-x{flex:0 0 auto;border:1px solid rgba(95,138,78,.4);background:transparent;
+    border-radius:7px;font-size:10px;color:#527a43;padding:2.5px 8px;font-family:inherit;cursor:pointer;}
+  .jl-fixbar p{margin:4px 0 0;font-size:11px;line-height:1.6;color:var(--jl-ink);
+    font-variant-numeric:tabular-nums;word-break:break-word;}
+  .jl-fixbar span{display:block;margin-top:3px;font-size:10px;line-height:1.6;color:var(--jl-soft);}
+  .jl-srcbox{margin-top:8px;border:1px dashed var(--jl-line);border-radius:11px;padding:8px 11px;}
+  .jl-srcbox summary{font-size:10.5px;color:var(--jl-soft);cursor:pointer;list-style:none;padding-right:16px;}
+  .jl-srcbox summary::-webkit-details-marker{display:none;}
+  .jl-srcbox summary::after{content:'›';float:right;margin-right:-12px;font-size:15px;
+    color:var(--jl-faint);line-height:1.2;}
+  .jl-srcbox[open] summary::after{content:'⌄';}
+  .jl-srcbox pre{margin:7px 0 0;max-height:196px;overflow:auto;font-size:10.5px;line-height:1.65;
+    color:var(--jl-soft);white-space:pre-wrap;word-break:break-word;font-family:inherit;}
+  [data-theme="dark"] .jl-fixbar{background:rgba(95,138,78,.1);border-color:rgba(95,138,78,.36);}
+  [data-theme="dark"] .jl-fixbar-h b{color:#9cc188;}
+  [data-theme="dark"] .jl-fixbar-x{color:#9cc188;border-color:rgba(95,138,78,.5);}
   .jl-ai-dot.busy{background:var(--jl-acc);animation:jlPulse 1.1s ease-in-out infinite;}
   @keyframes jlPulse{0%,100%{opacity:.3;}50%{opacity:1;}}
   .jl-ai-btn{flex:0 0 auto;border:1px solid var(--jl-line);background:transparent;border-radius:8px;
@@ -2302,6 +2324,12 @@
   .jl-ehead b{font-size:15px;font-weight:600;}
   .jl-ehead button{border:none;background:transparent;font-size:22px;line-height:1;color:var(--jl-soft,#8a7259);
     cursor:pointer;padding:0 4px;}
+  /* 改单时把原文摆在最上面：改哪一条、原文怎么写的，眼睛不用来回找 */
+  .jl-esrc{margin:-6px 0 13px;padding:8px 10px;border-radius:9px;
+    background:var(--jl-wash,#f7ecdd);border:1px solid var(--jl-line,#ecdfcd);}
+  .jl-esrc span{display:block;font-size:9px;letter-spacing:.06em;color:var(--jl-soft,#8a7259);opacity:.8;margin-bottom:2px;}
+  .jl-esrc p{margin:0;font-size:11px;line-height:1.6;color:var(--jl-soft,#8a7259);
+    white-space:pre-wrap;word-break:break-word;}
   .jl-efield{display:grid;grid-template-columns:52px 1fr;align-items:center;gap:10px;margin-bottom:10px;
     font-size:12.5px;color:var(--jl-soft,#8a7259);}
   .jl-efield-top{align-items:start;}
@@ -3871,7 +3899,7 @@ window.onerror = function (msg, url, line) {
   'use strict';
 
   // 版本号统一在此维护；localStorage 键沿用 v11 不变，切勿改名以免丢失用户数据
-  var APP_VERSION = '15.23.0';
+  var APP_VERSION = '15.24.0';
   // 送货单拍照识别：视觉模型默认名、兼容别名与各项安全上限
   var DEFAULT_VISION_MODEL = 'deepseek-flash';
   var VISION_MODEL_FALLBACK = 'deepseek-v4-flash-vision-exp';
