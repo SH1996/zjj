@@ -6166,13 +6166,17 @@
     var code = (issue && issue.code) || '';
     var d = Math.abs(Number(issue && issue.diff) || 0);
     var paid = (order && order.total != null) ? Number(order.total) : null;
+    var due = null;
+    if (paid != null && (code === 'short' || code === 'over')) {
+      due = round2(code === 'short' ? paid + d : paid - d);
+    }
     var fact = '第' + no + '单还有一点没确认，餐照做，取餐时报接龙号。';
     if (code === 'short') {
       fact = '第' + no + '单的买家少付了 ¥' + money(d) +
-        (paid != null ? '：按本店价目表该付 ¥' + money(round2(paid + d)) + '，接龙里只写了 ¥' + money(paid) : '') + '。';
+        (due != null ? '：按本店价目表该付 ¥' + money(due) + '，接龙里只写了 ¥' + money(paid) : '') + '。';
     } else if (code === 'over') {
       fact = '第' + no + '单的买家多付了 ¥' + money(d) +
-        (paid != null ? '：按本店价目表该付 ¥' + money(round2(paid - d)) + '，接龙里写了 ¥' + money(paid) : '') + '。';
+        (due != null ? '：按本店价目表该付 ¥' + money(due) + '，接龙里写了 ¥' + money(paid) : '') + '。';
     } else if (code === 'pricelow') {
       fact = '第' + no + '单有一样少算了 ¥' + money(d) + '（' + ((issue && issue.title) || '') + '），该补。';
     } else if (code === 'nobld' || code === 'bldguess') {
@@ -6191,7 +6195,8 @@
       '要求：\n' +
       '- 一句话，30 个字以内，口语，客气，不指责，不像催债。\n' +
       '- 必须带「#' + no + '」' + (d > 0
-        ? '和「' + money(d) + '」这两个字样，金额一个字都不能改'
+        ? '和「' + money(d) + '」这两个字样，金额一个字都不能改' +
+          (due != null ? '；最好也带上该付多少（¥' + money(due) + '）' : '')
         : '，不要编造金额和数字') + '。\n' +
       '- 不要写「跟老板核对」「找老板」这种让买家去找人的话。\n' +
       '- 只输出这句话，不要引号、不要解释、不要换行。';
