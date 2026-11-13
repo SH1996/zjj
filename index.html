@@ -1765,6 +1765,13 @@
     border-radius:6px;padding:1px 6px;font-size:10px;margin-top:3px;}
   .jl-orow em{font-style:normal;font-variant-numeric:tabular-nums;color:var(--jl-ink);white-space:nowrap;}
   .jl-warn{color:var(--jl-warn) !important;font-style:normal;font-size:11.5px;}
+  /* 取消的单：划线留着，不算钱不算件，点开能恢复 */
+  .jl-orow-cx{opacity:.55;}
+  .jl-orow-cx .jl-name,.jl-orow-cx .jl-goods{text-decoration:line-through;}
+  .jl-cx-tag{font-size:10.5px;color:var(--jl-soft) !important;border:1px solid var(--jl-line);
+    border-radius:6px;padding:1px 6px;font-weight:400;}
+  .jl-noraw{display:block;font-size:9px;font-style:normal;color:var(--jl-faint);line-height:1.2;}
+  .jl-bld-cx{border-style:dashed;}
 
   .jl-set{display:flex;align-items:center;gap:12px;flex-wrap:wrap;margin-top:12px;}
   .jl-cap{display:flex;align-items:center;gap:7px;font-size:12.5px;color:var(--jl-soft);}
@@ -3566,7 +3573,7 @@ window.onerror = function (msg, url, line) {
   'use strict';
 
   // 版本号统一在此维护；localStorage 键沿用 v11 不变，切勿改名以免丢失用户数据
-  var APP_VERSION = '16.2.0';
+  var APP_VERSION = '16.3.0';
   // 送货单拍照识别：视觉模型默认名、兼容别名与各项安全上限
   var DEFAULT_VISION_MODEL = 'deepseek-flash';
   var VISION_MODEL_FALLBACK = 'deepseek-v4-flash-vision-exp';

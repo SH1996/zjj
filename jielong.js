@@ -104,9 +104,12 @@
    * 从尾字往左吞并，遇到数量词、标点、数字就停，取最长的那一段。
    * 这样不管同学写什么包子，只要带「包」就不会整行丢掉。 */
   var TAIL_CHARS = '包子馒饺饼粥浆脑条糕团卷饭面粉汤肠挞司堡';
-  var TAIL_STOP = '的个份杯瓶碗根只盒袋笼屉张块颗串支片斤半要和与跟给帮是加来我他她您你这那有请把从到吃';
+  var TAIL_STOP = '的个份杯瓶碗根只盒袋笼屉张块颗串支片斤半要和与跟给帮是加来我他她您你这那有请把从到吃换';
   var TAIL_BAD = ['面包', '打包', '红包', '书包', '背包', '钱包', '包裹', '包括', '包好', '包起来', '包子铺', '包邮',
-    '早饭', '早餐', '午饭', '午餐', '晚饭', '晚餐', '夜宵', '宵夜', '加餐', '送餐', '订餐', '点餐', '用餐', '吃饭', '做饭'];
+    '早饭', '早餐', '午饭', '午餐', '晚饭', '晚餐', '夜宵', '宵夜', '加餐', '送餐', '订餐', '点餐', '用餐', '吃饭', '做饭',
+    /* 地点词：以前「李四 5栋 公司」会在商品里多出一行「公司 ¥待定」，
+     * 因为「司」是三明治的后缀字，从尾字往前一吞就吞成了商品。 */
+    '公司', '单位', '学校', '门卫', '物业', '超市', '商店', '办公室', '食堂', '家里', '厂里', '店里'];
   var TAIL_MAX = 5;   // 最多向前吞 5 个字：「香菇青菜包」正好 5
 
   var DEFAULT_CAP = 16;      // 每个泡沫箱默认装多少件
@@ -115,7 +118,7 @@
   var SETTINGS_KEY = 'bamboo.v11.jielong.settings';
 
   var UNIT_CHARS = '杯份个瓶袋根只盒碗笼屉张块条颗串支片斤';
-  var CN_NUM = { '零': 0, '一': 1, '二': 2, '两': 2, '三': 3, '四': 4, '五': 5, '六': 6, '七': 7, '八': 8, '九': 9, '十': 10 };
+  var CN_NUM = { '零': 0, '一': 1, '二': 2, '两': 2, '俩': 2, '三': 3, '仨': 3, '四': 4, '五': 5, '六': 6, '七': 7, '八': 8, '九': 9, '十': 10 };
 
   /* ==================== 2. 小工具 ==================== */
 
@@ -177,6 +180,12 @@
   // 去掉微信接龙自带的装饰行
   function cleanLines(text) {
     var raw = String(text == null ? '' : text).replace(/\r\n?/g, '\n').replace(/\u00a0/g, ' ');
+    /* 全角先转半角。群里打「１．张三 ３栋 豆浆２杯 ４元」是常事，
+     * 以前整行拆不动：序号认不出、楼栋丢、数量全变 1、名字还带着「１．」。
+     * 只转数字和几个标点，汉字一律不动，所以对现有写法零影响。 */
+    raw = raw.replace(/[０-９Ａ-Ｚａ-ｚ．，；：（）＃－]/g, function (c) {
+      return String.fromCharCode(c.charCodeAt(0) - 0xFEE0);
+    });
     var lines = raw.split('\n');
     var out = [];
     for (var i = 0; i < lines.length; i++) {
@@ -186,8 +195,15 @@
       s = s.replace(/^\s*@?微信接龙.*$/, '');
       s = s.replace(/^\s*点击.*接龙.*$/, '');
       s = s.replace(/\u200b/g, '');
-      if (!trim(s)) continue;
-      out.push(s);
+      /* 一行里塞了两单：「…4元；2. 李四…」「…5元。3、王五…」
+       * 以前整行当一单，第二个人没饭、钱也只收一份。分号/句号后面跟着
+       * 「数字+序号符」就是下一单的开始，先断成两行再逐单解析。 */
+      s = s.replace(/([;。!！?？])\s*(?=[0-9]{1,3}\s*[.、)）:：])/g, '$1\n');
+      var pieces = s.split('\n');
+      for (var k = 0; k < pieces.length; k++) {
+        if (!trim(pieces[k])) continue;
+        out.push(pieces[k]);
+      }
     }
     return out;
   }
@@ -211,9 +227,14 @@
     }
 
     // ① 「A栋」「3 号楼」「G2栋」；房号可跟 - ， 、 或空格（E栋-301 / 6栋，402 / 5栋 302）
-    var re1 = /([0-9]{1,3}|[一二三四五六七八九十]{1,3}|[A-Za-z][0-9]{0,2})\s*(号楼|栋|幢|座|#)\s*(?:[-－—，,、]\s*)?(?:[0-9]\s*单元\s*)?([0-9]{3,4})?(?![0-9])/g;
+    //    「3栋2单元301」的单元号要跟着房号一起存，不然外卖小哥少跑一趟冤枉路
+    var re1 = /([0-9]{1,3}|[一二三四五六七八九十]{1,3}|[A-Za-z][0-9]{0,2})\s*(号楼|栋|幢|座|#)\s*(?:[-－—，,、]\s*)?(?:([0-9])\s*单元\s*)?([0-9]{3,4})?(?![0-9])/g;
     while ((m = re1.exec(text)) !== null) {
-      better({ raw: m[0], token: m[1], room: m[3] || '', start: m.index, end: m.index + m[0].length }, 0);
+      better({
+        raw: m[0], token: m[1],
+        room: (m[3] ? m[3] + '单元' : '') + (m[4] || ''),
+        start: m.index, end: m.index + m[0].length
+      }, 0);
     }
 
     // ② 「G1」「G-1」「g2-」，以及「A201」= A 栋 201
@@ -275,7 +296,7 @@
     var before = s.slice(0, start);
     // 末尾不许有多余空格：「小笼包 半笼 豆浆」里那个「半笼」是小笼包的，
     // 以前 \s*$ 放过去了，结果记成「豆浆半笼」，小笼包反倒按整笼收钱。
-    var reU = new RegExp('(半|[0-9]{1,2}|[一二两三四五六七八九十])\\s*([' + UNIT_CHARS + '])$');
+    var reU = new RegExp('(半|[0-9]{1,2}|[一二两三四五六七八九十俩仨])\\s*([' + UNIT_CHARS + '])$');
     var m = before.match(reU);
     if (m) {
       var q = m[1] === '半' ? 1 : (/^[0-9]+$/.test(m[1]) ? parseInt(m[1], 10) : (cnToNum(m[1]) || 1));
@@ -288,12 +309,18 @@
 
   function qtyAfter(s, end) {
     var after = s.slice(end);
-    var reU = new RegExp('^\\s*(?:[x×X*]\\s*([0-9]{1,2})|([0-9]{1,2})\\s*([' + UNIT_CHARS + '])|([一二两三四五六七八九十])\\s*([' + UNIT_CHARS + ']))');
+    /* 「小笼包半笼」——半笼写在商品后面是最高频的写法之一。
+     * 以前只认前面（「半笼小笼包」），后面这个先按整笼 6 元算，
+     * 6+2=8 跟客人写的 5 对不上，就把 5 贴成豆浆的单价，5 块的单记成 8 块。
+     * 「豆浆俩杯」「牛肉包仨」也在这儿认：俩=2、仨=3。 */
+    var reU = new RegExp('^\\s*(?:[x×X*]\\s*([0-9]{1,2})|([0-9]{1,2})\\s*([' + UNIT_CHARS + '])|([一二两三四五六七八九十])\\s*([' + UNIT_CHARS + '])|(半)\\s*([笼屉份])\\s*(?:([0-9]{1,2}|[一二两三四五六七八九十])\\s*[份个])?|(俩|仨))');
     var m = after.match(reU);
     if (m) {
       if (m[1]) return { qty: parseInt(m[1], 10), len: m[0].length };
       if (m[2]) return { qty: parseInt(m[2], 10), len: m[0].length };
       if (m[4]) return { qty: cnToNum(m[4]) || 1, len: m[0].length };
+      if (m[6]) return { qty: m[8] ? (cnToNum(m[8]) || 1) : 1, half: true, len: m[0].length };
+      if (m[9]) return { qty: m[9] === '俩' ? 2 : 3, len: m[0].length };
     }
     m = after.match(/^([0-9]{1,2})(?![0-9.])/);
     if (m) return { qty: parseInt(m[1], 10), len: m[0].length, bare: true };
@@ -355,18 +382,31 @@
 
   /* 把一段拆成「商品 + 数量 + 这一段的钱」
    * 钱的三种写法都收：3 元 / 3块 / ￥3；以及贴着商品的裸数字「红薯2」
+   * opt.eq：这一行是算式写法（2+2.5+3=7.5），贴着商品的裸数字是价不是份数
    */
-  function parseSeg(seg) {
+  function parseSeg(seg, opt) {
+    opt = opt || {};
     var money = [];
+    /* 「豆浆换牛肉包」：整串以前被当成一个商品名，价目表里没有，还得手点。
+     * 认出 A换B 就记 B，A 写进备注——老板要知道这人本来点的什么。
+     * 放在算钱之前做，不然位置会错。 */
+    var swapNote = '';
+    var s = String(seg).replace(/([\u4e00-\u9fa5]{1,6})换([\u4e00-\u9fa5]{1,6})/g, function (m, a, b) {
+      if (!/[\u4e00-\u9fa5]/.test(b)) return m;
+      swapNote = '原要' + a + '，换' + b;
+      return b;
+    });
+
     // 中文数字金额也要收：「七块」「十块」「两块五」的前半截。以前只认阿拉伯数字，
     // 「半笼酱肉小笼包＋土豆包＋豆浆 七块」整单金额就算不出来（合计直接少了这一单）。
     // 「两块五」「三块五」：块后面的中文数字是角（五 = 0.5），不是另一笔钱
-    var s = String(seg).replace(/(?:[￥¥]\s*)?([0-9]+(?:\.[0-9]+)?|[一二两三四五六七八九十]{1,3})\s*(元|块钱|块|圆)([一二两三四五六七八九])?(?![0-9])/g,
+    s = s.replace(/(?:[￥¥]\s*)?([0-9]+(?:\.[0-9]+)?|[一二两三四五六七八九十]{1,3})\s*(元|块钱|块|圆)([一二两三四五六七八九]|[0-9])?(?![0-9])/g,
       function (m, num, u, jiao, off) {
         var v = /^[0-9]/.test(num) ? parseFloat(num) : cnToNum(num);
         if (isNaN(v)) return m;                 // 认不出的中文数字原样留着，别吞
         if (jiao) {
-          var j = cnToNum(jiao);
+          /* 「六块五」= 6.5，「6块5」也是 6.5——阿拉伯数字的角也要认 */
+          var j = /^[0-9]$/.test(jiao) ? parseInt(jiao, 10) : cnToNum(jiao);
           if (!isNaN(j) && j < 10) v = round2(v + j / 10);
         }
         money.push({ val: v, at: off, len: m.length, yuan: true });
@@ -383,17 +423,42 @@
       for (var u = 0; u < used.length; u++) if (a < used[u][1] && b > used[u][0]) return true;
       return false;
     }
+    /* 算式写法：「豆浆2+牛肉包2.5+烧麦3=7.5」。
+     * 这种行里贴着商品的裸数字是那样东西的价，不是份数——
+     * 以前把 2 和 3 当份数，3 件变 6 件，装盒和送货都多。 */
+    var eqUnit = {};
+    if (opt.eq) {
+      for (var eh = 0; eh < hits.length; eh++) {
+        /* 后面紧跟量词的不算价：「豆浆2杯+牛肉包1个=6.5元」里的 2 杯、1 个是份数 */
+        var hm = s.slice(hits[eh].end).match(new RegExp('^\\s*([0-9]+(?:\\.[0-9]+)?)(?![0-9.' + UNIT_CHARS + '])'));
+        if (hm) eqUnit[eh] = { val: parseFloat(hm[1]), len: hm[0].length };
+      }
+    }
+
     for (var h = 0; h < hits.length; h++) {
       var it = hits[h];
+      /* 「豆浆2杯 不要豆浆」里的后一个豆浆是「不要」，不是又点了一杯。
+       * 以前当新的一样加进去，2 杯变 3 杯，还倒过来报少给 2 元。 */
+      if (/(不要|别要|不加|不吃|不想要|去掉|不加了)\s*$/.test(s.slice(Math.max(0, it.start - 4), it.start))) continue;
+      if (eqUnit[h]) {
+        used.push([it.end, it.end + eqUnit[h].len]);
+        items.push({ name: it.name, qty: 1, half: false, qtyRaw: false, eq: eqUnit[h].val, start: it.start, end: it.end });
+        continue;
+      }
       var qb = qtyBefore(s, it.start);
       if (qb && taken(it.start - qb.len, it.start)) qb = null;
       var qa = qtyAfter(s, it.end);
       if (qa && taken(it.end, it.end + qa.len)) qa = null;
       var qty = 1, half = false, qtyRaw = false;
       if (qb && !qb.bare) { qty = qb.qty; half = !!qb.half; qtyRaw = true; used.push([it.start - qb.len, it.start]); }
-      else if (qa && !qa.bare) { qty = qa.qty; qtyRaw = true; used.push([it.end, it.end + qa.len]); }
+      else if (qa && !qa.bare) { qty = qa.qty; half = !!qa.half; qtyRaw = true; used.push([it.end, it.end + qa.len]); }
       else if (qb && qb.bare) { qty = qb.qty; qtyRaw = true; used.push([it.start - qb.len, it.start]); }
       else if (qa && qa.bare) { qty = qa.qty; qtyRaw = true; used.push([it.end, it.end + qa.len]); }
+      /* 「小笼包2份半笼」：份数写在前、半笼写在后，两样都要认 */
+      if (!half) {
+        var qTail = s.slice(it.end + (qa ? qa.len : 0));
+        if (/^\s*半\s*[笼屉份]/.test(qTail) || /^\s*半\s*[笼屉份]/.test(s.slice(it.end))) half = true;
+      }
       if (!(qty > 0 && qty < 100)) { qty = 1; qtyRaw = false; }
       items.push({ name: it.name, qty: qty, half: half, qtyRaw: qtyRaw, start: it.start, end: it.end });
     }
@@ -423,9 +488,16 @@
     var amtCount = money.length + nums.length;
     var amt = money.length ? money[0].val : (nums.length ? nums[0].val : null);
     /* 「2+2.5+3=7.5」：等号右边才是这一单的合计。
-     * 以前一段里几个裸数字，取的是第一个，总价变成 3，一下少收 ¥4.5。 */
-    var eqm = s.match(/[=＝]\s*(?:[￥¥]\s*)?([0-9]+(?:\.[0-9]+)?)\s*(?:元|块钱|块|圆)?\s*$/);
-    var eqTotal = eqm ? parseFloat(eqm[1]) : null;
+     * 以前一段里几个裸数字，取的是第一个，总价变成 3，一下少收 ¥4.5。
+     * 带元的先看：钱那一段已经被抹成空格了，直接看它前面是不是等号。 */
+    var eqTotal = null;
+    for (var e1 = 0; e1 < money.length; e1++) {
+      if (/[=＝]\s*$/.test(s.slice(Math.max(0, money[e1].at - 3), money[e1].at))) eqTotal = money[e1].val;
+    }
+    if (eqTotal == null) {
+      var eqm = s.match(/[=＝]\s*(?:[￥¥]\s*)?([0-9]+(?:\.[0-9]+)?)\s*(?:元|块钱|块|圆)?\s*$/);
+      eqTotal = eqm ? parseFloat(eqm[1]) : null;
+    }
     if (eqTotal != null && isFinite(eqTotal) && eqTotal > 0) amt = eqTotal;
 
     var out = { items: items, amt: amt, amtCount: amtCount, nums: nums, moneyCount: money.length, totalLike: false };
@@ -445,6 +517,8 @@
       if (tk.t === 'i') { lastItem = tk.idx; continue; }
       var mv = money[tk.idx];
       if (!mv.yuan || lastItem < 0 || units[lastItem] != null) { lastItem = -1; continue; }
+      /* 等号右边那个数是整单总价，不能贴成最后一样的单价 */
+      if (eqTotal != null && isFinite(eqTotal) && Math.abs(mv.val - eqTotal) < 0.01) { lastItem = -1; continue; }
       var qy = items[lastItem].qty || 1;
       // 数量大于 1 时，后面还得有别的东西（商品或另一笔钱），才敢当「这一样的小计」；
       // 不然「牛肉包2个 5元」会被读成 5 元一个
@@ -463,6 +537,7 @@
       for (var s3c = s2 + 1; s3c < seq.length; s3c++) {
         if (seq[s3c].t === 'm') { lastMoney = false; break; }
       }
+      var asSub = false;
       if (items.length >= 2 && lastMoney) {
         var menuSum = 0, sumOk = true;
         for (var mi = 0; mi < items.length; mi++) {
@@ -479,6 +554,12 @@
           var lu = (lm && lm.unit > 0) ? ((items[lastItem].half && lm.half) ? round2(lm.unit / 2) : lm.unit) : null;
           if (lu != null && Math.abs(mv.val - lu) < 0.01) {
             isTotal = false;
+          } else if (lu != null && qy > 1 && Math.abs(mv.val - round2(lu * qy)) < 0.01) {
+            /* 「牛肉包2个 5元」：5 正好是表价 2.5 × 2，那是这一样的小计，
+             * 不是 5 块一个。以前没这一支，5 被当成整单总价，
+             * 一单 4 元豆浆 + 5 元牛肉包 只收 5 元。 */
+            isTotal = false;
+            asSub = true;
           } else {
             var prevSum = 0, prevOk = true;
             for (var pj = 0; pj < items.length; pj++) {
@@ -492,10 +573,24 @@
         }
         if (isTotal) { lastItem = -1; continue; }
       }
-      if (qy > 1 && !hasAfter) { lastItem = -1; continue; }
+      if (qy > 1 && !hasAfter && !asSub) { lastItem = -1; continue; }
+      /* 「牛肉包1个 共6.5元」：带着「共/合计/一共」的钱是整单总价，
+       * 不能贴成这一样的单价——以前一单分两段写，第二段的钱就被贴给最后一样，
+       * 2 杯豆浆 + 6.5 元的牛肉包，账上变成 ¥10.5。 */
+      if (/(一共|共|合计|总共|总计|总价)\s*$/.test(s.slice(Math.max(0, mv.at - 4), mv.at))) {
+        lastItem = -1;
+        continue;
+      }
       units[lastItem] = mv.val;
       usedMoney[tk.idx] = 1;
       lastItem = -1;
+    }
+
+    /* 算式写法里贴着商品的数就是价，配完再并进去 */
+    if (opt.eq) {
+      for (var ee = 0; ee < items.length; ee++) {
+        if (items[ee].eq != null) units[ee] = items[ee].eq;
+      }
     }
 
     var restMoney = [];
@@ -511,6 +606,13 @@
         out.amt = null;
         out.totalLike = false;
       }
+    }
+
+    /* 等号右边的数一定是这一单的合计，压过前面所有推断。
+     * 算式写法里每样已经配了价（units 有值），上面那段会把它清成 null。 */
+    if (eqTotal != null && isFinite(eqTotal) && eqTotal > 0) {
+      out.amt = eqTotal;
+      out.totalLike = true;
     }
 
     // 一样东西给一个数 → 这项的小计；几样东西只给一个数 → 这一单多少钱
@@ -534,6 +636,7 @@
     for (var r2 = 0; r2 < money.length; r2++) rest = replaceRange(rest, money[r2].at, money[r2].at + money[r2].len);
     for (var r3 = 0; r3 < nums.length; r3++) rest = replaceRange(rest, nums[r3].at, nums[r3].at + nums[r3].len);
     out.rest = rest;
+    out.swap = swapNote || '';
     return out;
   }
 
@@ -561,6 +664,15 @@
     return m ? trim(m[0]) : '';
   }
 
+  /* 括号里说「含 2 元跑腿」「1 元包装费」的，整段摘掉再算钱。
+   * 只有带费用字样的才摘——「豆浆2杯（2元）」那种括号里写的是价，得留着。 */
+  var FEE_NOTE = /(含|跑腿|配送|送费|包装|打包|小费|服务费|手续费|运费|费|多给|少给|抹零)/;
+  function stripFeeNote(s) {
+    return String(s == null ? '' : s).replace(/[（(]([^）)]{0,40})[）)]/g, function (m, inner) {
+      return FEE_NOTE.test(inner) ? ' ' : m;
+    });
+  }
+
   // 名字：把楼栋、商品、数量、金额都剥掉以后，剩下第一个像人名的片段
   // 允许单字（「g1姗」）、字母（「h」「U」）、带数字的昵称（「y2」）、emoji（「😴」）
   function hasEmoji(s) {
@@ -574,6 +686,9 @@
 
   function findName(text) {
     var s = String(text == null ? '' : text);
+    /* 「张三13912345678」：手机号粘在名字后面，以前名字被截成「张三1391234567」，
+     * 住户档案里就认不出是同一个人，楼栋也补不上。先整段摘掉。 */
+    s = s.replace(/1[3-9][0-9]{9}(?![0-9])/g, ' ');
     // 单独调用时（比如只给「豆浆 张三」）也要先剥商品词
     for (var w = 0; w < ITEM_SORTED.length; w++) {
       if (s.indexOf(ITEM_SORTED[w]) > -1) s = s.split(ITEM_SORTED[w]).join(' ');
@@ -612,10 +727,12 @@
     var raw = trim(line);
     var text = raw;
     var no = null;
+    var hasNo = false;
     // 序号必须带分隔符（1. / 1、/ 1) / 1：），否则「3栋301」的 3 会被误认成序号
     var mNo = raw.match(/^\s*([0-9]{1,3})\s*[.、．)）:：]\s*/);
     if (mNo && mNo[0].length < raw.length) {
       no = parseInt(mNo[1], 10);
+      hasNo = true;
       text = raw.slice(mNo[0].length);
     }
     if (!trim(text)) text = raw;
@@ -633,17 +750,33 @@
     }
 
     var note = findNote(work);
+    /* 括号里的「含 2 元跑腿」「1 元包装费」是备注，不是这一单的钱。
+     * 以前括号内容一起算钱，8.5 元的单被记成 2 元——还排在最后，被当成整单总价。 */
+    work = stripFeeNote(work);
+
+    /* 一单写了两个楼栋（「3栋 豆浆2杯 4元 5栋 牛肉包2个 5元」）：
+     * 以前货全算到第一栋，第二栋的人收不到。不自动拆，核实页里问一句送哪栋。 */
+    var bldExtra = '';
+    if (b) {
+      // 括号里写「放3栋门卫」是这单的备注，不是第二个收货楼栋，别拿它去问
+      var b2 = findBuilding(work.replace(/[（(][^）)]*[）)]/g, ' '));
+      /* 只认带「栋/座/号楼」的第二个楼栋。「A3」这种是昵称，
+       * 光凭「字母+数字」就当第二个楼栋会天天误问。 */
+      if (b2 && b2.key && b2.key !== b.key && /(栋|幢|号楼|座|#)/.test(b2.raw)) bldExtra = b2.key;
+    }
 
     var segs = [];
     var chunks = [];              // 每一段原文 + 拆出来的东西，核实页要原样展示
     var restChunks = [];          // 连纯名字段（「😴」）也要留，不然名字会丢
+    var isEq = /[=＝]\s*[0-9]/.test(work);   // 算式写法（2+2.5+3=7.5）
     var parts = work.split(SEG_SPLIT);
     for (var p = 0; p < parts.length; p++) {
       if (!trim(parts[p])) continue;
-      var sg = parseSeg(parts[p]);
+      var sg = parseSeg(parts[p], { eq: isEq });
       sg.raw = trim(parts[p]);
       chunks.push(sg);
       restChunks.push(sg.rest);
+      if (sg.swap) note = trim((note ? note + '；' : '') + sg.swap);
       if (!sg.items.length && sg.amt == null) continue;
       segs.push(sg);
     }
@@ -726,8 +859,17 @@
     if (!name) issues.push('没看出名字');
     if (!items.length) issues.push('没写商品');
 
+    /* 取消单：「豆浆2杯 4元 取消」「2元 不要了」「撤单」。
+     * 以前照样收钱、照样装盒、照样进送达名单——白做还要白送。
+     * 认出来只做标记，单子留着（划线），老板改主意还能一键恢复。 */
+    var cancel = /(取消|不订了|不要了|退单|撤单|作废|不要这份)/.test(raw);
+
     return {
       no: no == null ? idx + 1 : no,
+      hasNo: hasNo,
+      noRaw: 0,
+      cancel: cancel ? 1 : 0,
+      bldExtra: bldExtra,
       raw: raw,
       name: name,
       nameAsItem: nameAsItem,
@@ -757,8 +899,24 @@
     var lines = cleanLines(text);
     var orders = [];
     var skipped = [];
+    var usedNo = {}, maxNo = 0;
     for (var i = 0; i < lines.length; i++) {
       var line = lines[i];
+      /* 微信里换行续写：上一行只写了名字/楼栋，这一行没序号、也没写楼栋，
+       * 那是同一单的后半截，接上去。
+       * 以前前一行变成一张空单、后一行名字叫「共」，单号还重了。 */
+      var next = lines[i + 1];
+      if (next != null && !segHasItems(line) &&
+        (findBuilding(line) || (trim(line).length <= 12 &&
+          !/(接龙|早餐|午餐|晚餐|夜宵|早点|合计|今天|明天)/.test(line) &&
+          !/^\s*[0-9]{1,2}\s*[.\-\/月]/.test(line))) &&
+        !/^\s*[0-9]{1,3}\s*[.、．)）:：]/.test(next) &&
+        !findBuilding(next) && segHasItems(next)) {
+        lines[i] = line + ' ' + next;
+        lines.splice(i + 1, 1);
+        i--;
+        continue;
+      }
       // 日期行最容易装成订单：「11.10 早饭接龙」会被读成第 11 单、金额 10 元
       var looksDate = /^\s*[0-9]{1,2}\s*[.\-\/月]\s*[0-9]{1,2}\s*日?(?![0-9])/.test(line) &&
         !findBuilding(line) && !segHasItems(line);
@@ -766,9 +924,35 @@
       var looksTitle = !/^\s*[0-9]{1,3}\s*[.、．)）:：]/.test(line) &&
         !findBuilding(line) && !segHasItems(line);
       if (looksDate || looksTitle) { skipped.push(line); continue; }
+      /* 「今天全部送A栋」这种统一说明，不是一单——以前会变成一张没名字没商品的空单 */
+      if (!segHasItems(line) && !/^\s*[0-9]{1,3}\s*[.、．)）:：]/.test(line) &&
+        /(全部|统一|都送|都到|集体)/.test(line)) { skipped.push(line); continue; }
       var o = parseLine(line, orders.length);
-      // 完全没有有效信息的行不要
-      if (!o.building && !o.name && !o.items.length) { skipped.push(line); continue; }
+      /* 只写了楼栋、没有人也没有东西的说明行（「（A栋在小区北门）」）不当订单。
+       * 真要写「3栋 4元」这种，带着序号，还是会留下。 */
+      if (!o.items.length && !o.name && !o.hasNo) { skipped.push(line); continue; }
+      /* 「同上」：把上一单（或者他点名那人的单）的商品照抄过来 */
+      if (!o.items.length && orders.length && /(同上|一样|照旧)/.test(line)) {
+        var src = null;
+        var mSame = line.match(/跟\s*([\u4e00-\u9fa5A-Za-z0-9]{1,10}?)\s*(?:一样|的)/);
+        if (mSame) {
+          for (var s5 = orders.length - 1; s5 >= 0; s5--) {
+            if (orders[s5].name === mSame[1]) { src = orders[s5]; break; }
+          }
+        }
+        if (!src) src = orders[orders.length - 1];
+        if (src && src.items.length) {
+          o.items = src.items.map(function (x) {
+            return { name: x.name, qty: x.qty, half: !!x.half, unit: null, fromText: false };
+          });
+          o.note = trim((o.note ? o.note + '；' : '') + '同上' + (src.name ? '（' + src.name + '）' : ''));
+        }
+      }
+      /* 序号重号：两张单都叫 #1，凭证名单里就有两个 #1，改名单只能改到第一个。
+       * 保留第一个 #1，后面的顺延，原文的号记在 noRaw 上。 */
+      if (usedNo[o.no]) { o.noRaw = o.no; o.no = maxNo + 1; }
+      usedNo[o.no] = 1;
+      if (o.no > maxNo) maxNo = o.no;
       orders.push(o);
     }
     var conf = orders.length ? orders.reduce(function (a, o) { return a + o.conf; }, 0) / orders.length : 0;
@@ -852,6 +1036,7 @@
 
     for (var i = 0; i < orders.length; i++) {
       var o = orders[i];
+      if (o.cancel) continue;   // 取消的单不用再核
       // 「半笼」写在行里，先标上，不然会把半笼价跟整笼价比、白报一条差
       try { applyHalfFromRaw(o); } catch (e) { }
 
@@ -907,9 +1092,45 @@
         });
       }
 
-      /* 3. 没看出名字（撞了商品名的先问上一条，别重复问） */
-      if (!o.name && o.items.length && !o.nameAsItem) {
+      /* 2.1 一单里写了两个楼栋：货到底送哪栋？不问就全算到第一栋，第二栋的人收不到。 */
+      if (o.bldExtra) {
         asks.push({
+          id: 'splitbld|' + o.no,
+          kind: 'splitbld',
+          no: o.no,
+          raw: o.raw,
+          word: o.building,
+          q: '这单写了两个楼栋：' + o.building + ' 和 ' + o.bldExtra,
+          hint: '这一单的货一般只送一处。两栋各要各的，就先按一栋过，回头在楼栋页拆开。',
+          options: [
+            { key: 'first', label: '送 ' + o.building, sub: '按整单送第一栋' },
+            { key: 'second', label: '送 ' + o.bldExtra, sub: '改送第二栋' }
+          ]
+        });
+      }
+
+      /* 2.2 论笼卖的东西写了「个」：2 个小笼包到底是 2 个还是 2 笼？ */
+      for (var u0 = 0; u0 < o.items.length; u0++) {
+        if (!unitDoubt(o, o.items[u0])) continue;
+        var mo0 = menuOf(o.items[u0].name);
+        asks.push({
+          id: 'unitqty|' + o.no + '|' + o.items[u0].name,
+          kind: 'unitqty',
+          no: o.no,
+          raw: o.raw,
+          word: o.items[u0].name,
+          q: '「' + o.items[u0].name + ' ' + o.items[u0].qty + ' 个」是几个？',
+          hint: '这样货是按' + (mo0 ? mo0.by : '笼') + '卖的：按' + (mo0 ? mo0.by : '笼') +
+            '算 ¥' + money(round2((mo0 ? mo0.unit : 0) * o.items[u0].qty)) + '，按个算得另填单价。',
+          options: [
+            { key: 'cage', label: '算 ' + o.items[u0].qty + (mo0 ? mo0.by : '笼'), sub: '¥' + money(round2((mo0 ? mo0.unit : 0) * o.items[u0].qty)) },
+            { key: 'one', label: '算 ' + o.items[u0].qty + ' 个', sub: '单价去金额页填' }
+          ]
+        });
+      }
+
+      /* 3. 没看出名字（撞了商品名的先问上一条，别重复问） */
+      if (!o.name && o.items.length && !o.nameAsItem) {        asks.push({
           id: 'namemiss|' + o.no,
           kind: 'namemiss',
           no: o.no,
@@ -1024,6 +1245,30 @@
       o.buildingFrom = b ? 'check' : '';
       o.bldConfirmed = b ? 1 : 0;
       o.bldGuess = 0;
+      return true;
+    }
+
+    /* 一单写了两个楼栋：点哪个就送哪个 */
+    if (ask.kind === 'splitbld') {
+      if (key === 'second' && o.bldExtra) {
+        o.building = o.bldExtra;
+        o.buildingFrom = 'check';
+        o.bldConfirmed = 1;
+      }
+      o.bldExtra = '';
+      return true;
+    }
+
+    /* 论笼卖的东西写成「个」：选「笼」就按表价收，选「个」就挂待定价，别瞎算 */
+    if (ask.kind === 'unitqty') {
+      var ui = null;
+      for (var u1 = 0; u1 < o.items.length; u1++) if (o.items[u1].name === ask.word) { ui = o.items[u1]; break; }
+      if (key === 'one' && ui) {
+        o.total = null;
+        ui.unit = null;
+        ui.fromText = false;
+        ui.priceFrom = 'fixed';   // 待定价：别让整笼价乘个数
+      }
       return true;
     }
 
@@ -1333,6 +1578,13 @@
       var o = orders[i];
       var amount = 0;
       var unknown = false;
+      if (o.cancel) {
+        o.amount = 0;
+        o.missingPrice = false;
+        o.payMode = 'cancel';
+        for (var cj = 0; cj < o.items.length; cj++) o.items[cj].amount = 0;
+        continue;
+      }
       applyHalfFromRaw(o);   // 原文写了「半笼」就一定要认出来，AI 拆单常丢这个标记
       for (var j = 0; j < o.items.length; j++) {
         var it = o.items[j];
@@ -1346,7 +1598,9 @@
          * book  价目表/历史价带出来的——这种每次重算都要跟着价目表走，
          *       否则老板在金额页改了单价，这一单还咬着旧价不放。 */
         var unit, src;
-        if (it.unit != null && it.priceFrom !== 'book') { unit = it.unit; src = it.fromText ? 'text' : 'fixed'; }
+        /* 「按个算，单价另填」：核实页点过这个之后，别再拿整笼价乘个数 */
+        if (it.priceFrom === 'fixed' && it.unit == null) { unit = null; src = 'fixed'; }
+        else if (it.unit != null && it.priceFrom !== 'book') { unit = it.unit; src = it.fromText ? 'text' : 'fixed'; }
         else if (bookUnit != null) { unit = bookUnit; src = 'book'; }
         else { unit = it.unit; src = it.unit != null ? 'fixed' : ''; }
         /* 半笼：AI 常把整笼价（玉米蒸饺 ¥6）填进来、同时也标了 half，
@@ -1421,6 +1675,7 @@
   /* ==================== 4. 分组与合计 ==================== */
 
   function cupCount(order) {
+    if (order && order.cancel) return 0;   // 取消的不算件
     var n = 0;
     var its = (order && order.items) || [];
     for (var i = 0; i < its.length; i++) n += its[i].qty || 0;
@@ -1432,6 +1687,7 @@
     var list = [];
     for (var i = 0; i < orders.length; i++) {
       var o = orders[i];
+      if (o.cancel) continue;   // 取消的单不进楼栋分组，免得跟着装盒、跟着送
       var key = o.building || '未写楼栋';
       if (!map[key]) {
         map[key] = { key: key, orders: [], cups: 0, amount: 0, unknown: 0, rooms: [] };
@@ -1456,6 +1712,7 @@
     var cups = 0, amount = 0, unknown = 0, items = {};
     for (var i = 0; i < orders.length; i++) {
       var o = orders[i];
+      if (o.cancel) continue;   // 取消的不算钱、不算件
       cups += cupCount(o);
       if (o.amount == null) unknown += 1; else amount += o.amount;
       for (var j = 0; j < o.items.length; j++) {
@@ -1589,11 +1846,20 @@
     }
 
     var reason = [];
+    var ovfCups = overflow.reduce(function (a, x) { return a + x.cups; }, 0);
     if (total <= cap) reason.push('一箱就够（' + total + ' / ' + cap + ' 杯），另一箱空着不用带。');
-    else if (boxes.length === 2) reason.push('两箱刚好装下（' + total + ' 杯，每箱上限 ' + cap + ' 杯），第三箱不用带。');
-    else reason.push('三箱都带上：' + total + ' 杯，平均每箱 ' + Math.ceil(total / boxes.length) + ' 杯。');
+    else if (boxes.length === 2 && !ovfCups) reason.push('两箱刚好装下（' + total + ' 杯，每箱上限 ' + cap + ' 杯），第三箱不用带。');
+    else if (ovfCups) {
+      /* 装不下的时候不能写「平均每箱 40 杯」——每箱上限才 16，40 杯根本装不进去，
+       * 数字自己打自己。改成按上限说实话，多出来的让人另拿保温袋。 */
+      reason.push(boxes.length + ' 箱最多装 ' + (cap * boxes.length) + ' 杯（这一单 ' + total + ' 杯）。');
+    } else {
+      reason.push('三箱都带上：' + total + ' 杯，平均每箱 ' + Math.ceil(total / boxes.length) + ' 杯。');
+    }
     if (overflow.length) {
-      reason.push(overflow.map(function (x) { return x.key + ' 多出的 ' + x.cups + ' 杯'; }).join('、') + ' 装不进去，单独保温袋拎着。');
+      reason.push(overflow.length <= 4
+        ? overflow.map(function (x) { return x.key + ' 多出的 ' + x.cups + ' 杯'; }).join('、') + ' 装不进去，单独保温袋拎着。'
+        : '一共还有 ' + ovfCups + ' 杯（' + overflow.length + ' 栋）装不进去，得另装保温袋。');
     }
     if (boxes.some(function (x) { return x.fill >= 95; })) {
       reason.push('接近满的箱子别再往上叠，杯盖会压开。');
@@ -2755,6 +3021,8 @@
     noname: '没写名字', oddname: '名字认得不准', nobld: '没写楼栋', histbld: '楼栋按历史补的', bldguess: '楼栋可能是猜的',
     noitem: '没认出商品', zeroqty: '件数是 0', bigqty: '件数比平常多', noprice: '没定价',
     oddunit: '单价看着不对', short: '少给了', over: '多给了', pricelow: '比本店价少',
+    overunit: '比本店价多', wiped: '这单抹了零', feeadd: '含跑腿/包装费',
+    unitqty: '按个还是按笼', qtydiff: '件数跟原文不一致',
     dup: '同一个人下了好几单', aiadd: '别的问题',
     warmbld: '单独一箱保温'
   };
@@ -2762,8 +3030,9 @@
   // 资料库分栏：认人 / 认货 / 价钱 / 装箱 / 其他——按老板找东西的习惯分，不按代码分
   var MEM_GROUP = {
     noname: '人', oddname: '人', nobld: '人', histbld: '人', bldguess: '人', dup: '人',
-    noitem: '货', zeroqty: '货', bigqty: '货',
+    noitem: '货', zeroqty: '货', bigqty: '货', qtydiff: '货', unitqty: '货',
     noprice: '钱', oddunit: '钱', short: '钱', over: '钱', pricelow: '钱',
+    overunit: '钱', wiped: '钱', feeadd: '钱',
     warmbld: '箱', aiadd: '其他'
   };
   var MEM_GROUP_ORDER = ['人', '货', '钱', '箱', '其他'];
@@ -3263,6 +3532,10 @@
       orders: record.orders.map(function (o) {
         return {
           no: o.no, name: o.name, building: o.building, room: o.room,
+          // 取消的单：留着划线，不算钱不算件；重开还能一键恢复
+          cancel: o.cancel ? 1 : 0,
+          // 重号顺延过的，记着原文写的是几号——老板喊号看的是原文
+          noRaw: o.noRaw || 0,
           buildingFrom: o.buildingFrom || '',
           // 楼栋是怎么来的、核对过没有：不存的话，重新打开又冒出一条「楼栋按记录补的」
           bldConfirmed: o.bldConfirmed ? 1 : 0,
@@ -3359,7 +3632,8 @@
         }
         lines.push('  #' + o.no + ' ' + (o.name || '（无名字）') + (o.room ? ' ' + o.room : '') +
           '　' + (parts.length ? parts.join(' ') : '（没写商品）') +
-          (o.amount != null ? '　' + (o.payMode === 'total' ? '总价 ¥' : '¥') + money(o.amount) : '') +
+          (o.cancel ? '　（已取消）' : '') +
+          (o.amount != null && !o.cancel ? '　' + (o.payMode === 'total' ? '总价 ¥' : '¥') + money(o.amount) : '') +
           (o.buildingFrom === 'history' ? '　楼栋按记录补' : '') +
           (o.note ? '　注：' + o.note : ''));
       }
@@ -3552,8 +3826,11 @@
     var blds = {}, cups = 0, amount = 0, unknown = 0;
     if (!d) return { blds: [], cups: 0, amount: 0, unknown: 0, orders: 0 };
     var price = effectivePrice(listRecords);
+    var live = 0;
     for (var i = 0; i < d.orders.length; i++) {
       var o = d.orders[i];
+      if (o.cancel) continue;   // 历史卡片上的钱和件数不算取消的单
+      live++;
       blds[o.building || '未写楼栋'] = 1;
       var sum = 0, miss = false;
       for (var j = 0; j < o.items.length; j++) {
@@ -3564,7 +3841,7 @@
       }
       if (miss) unknown++; else amount += sum;
     }
-    return { blds: Object.keys(blds), cups: cups, amount: amount, unknown: unknown, orders: d.orders.length };
+    return { blds: Object.keys(blds), cups: cups, amount: amount, unknown: unknown, orders: live };
   }
 
   function historyCard(r, compact) {
@@ -3598,6 +3875,8 @@
   function askKindLabel(k) {
     if (k === 'nameitem') return '名字还是商品';
     if (k === 'bld') return '楼栋';
+    if (k === 'splitbld') return '两个楼栋';
+    if (k === 'unitqty') return '按个还是按笼';
     if (k === 'namemiss') return '名字';
     if (k === 'noitem') return '商品';
     if (k === 'item') return '生词';
@@ -3746,15 +4025,29 @@
         (open ? '<div class="jl-rows">' + b.orders.map(orderRow).join('') + '</div>' : '') +
         '</div>';
     }
+    /* 取消的单单独摆一块：不算钱、不算件、不装箱、不进送达名单，
+     * 但留在这儿划着，老板改主意点一下就能恢复。 */
+    var cx = [];
+    for (var z2 = 0; z2 < r.orders.length; z2++) if (r.orders[z2].cancel) cx.push(r.orders[z2]);
+    if (cx.length) {
+      h += '<div class="jl-bld jl-bld-cx open">' +
+        '<div class="jl-bld-h"><span class="jl-bld-k">已取消</span>' +
+        '<span class="jl-bld-m">' + cx.length + ' 单 · 不算钱也不算件</span>' +
+        '<em></em><i></i></div>' +
+        '<div class="jl-rows">' + cx.map(orderRow).join('') + '</div></div>';
+    }
+
     h += '<p class="jl-hint">点任何一条能改楼栋、房号、数量和商品；改完金额和装箱会自动重算。</p>';
     return h;
   }
 
   function orderRow(o) {
-    var amt = o.amount == null ? '<em class="jl-warn">待定价</em>'
-      : '<em>' + (o.payMode === 'total' ? '总价 ¥' : '¥') + money(o.amount) + '</em>';
-    return '<div class="jl-orow" data-act="edit" data-no="' + o.no + '">' +
-      '<i class="jl-no">#' + o.no + '</i>' +
+    var amt;
+    if (o.cancel) amt = '<em class="jl-cx-tag">已取消</em>';
+    else if (o.amount == null) amt = '<em class="jl-warn">待定价</em>';
+    else amt = '<em>' + (o.payMode === 'total' ? '总价 ¥' : '¥') + money(o.amount) + '</em>';
+    return '<div class="jl-orow' + (o.cancel ? ' jl-orow-cx' : '') + '" data-act="edit" data-no="' + o.no + '">' +
+      '<i class="jl-no">#' + o.no + (o.noRaw ? '<u class="jl-noraw">原文 ' + o.noRaw + '</u>' : '') + '</i>' +
       '<b class="jl-name">' + (o.name ? esc(o.name) : '<em class="jl-warn">无名</em>') + '</b>' +
       (o.room ? '<span class="jl-room">' + esc(o.room) + '</span>' : '<span class="jl-room jl-room-x">—</span>') +
       '<span class="jl-goods">' + itemText(o) + (o.note ? '<u>' + esc(o.note) + '</u>' : '') +
@@ -3914,6 +4207,25 @@
     return !!menuOf(name);
   }
 
+  /* 论笼卖的东西写成「个」：小笼包、灌汤小笼包、蒸饺。
+   * 「小笼包2个」可能是 2 个（约 2 块），也可能是 2 笼（12 块）——
+   * 没问清之前不许报「少给」，不然老板会拿着单子去要错钱。 */
+  function unitDoubt(o, it) {
+    if (!o || !it) return false;
+    var mo = menuOf(it.name);
+    if (!mo || mo.by !== '笼' || it.half) return false;
+    var raw = String(o.raw || '');
+    var nm = trim(it.name || '');
+    if (!raw || !nm) return false;
+    var at = raw.indexOf(nm);
+    if (at < 0) return false;
+    var tail = raw.slice(at + nm.length, at + nm.length + 5);
+    if (!/^\s*[0-9一二两三四五六七八九十]{0,2}\s*(个|只|份)/.test(tail)) return false;
+    // 原文写的钱正好是按笼算的数，那就是按笼写的，不用问
+    if (o.total != null && it.qty > 0 && Math.abs(round2(mo.unit * it.qty) - o.total) < 0.01) return false;
+    return true;
+  }
+
   /* 本地初筛：规则能挑出来的疑点，不是结论。
    * 每条都带上原文那一行——AI 核实时必须对着原文看，只看拆出来的结果会把好人冤枉。 */
   function auditCandidates(record, refPrice) {
@@ -3941,12 +4253,14 @@
     var seenName = {};
     for (var k = 0; k < orders.length; k++) {
       var o = orders[k];
+      if (o.cancel) continue;   // 取消的单不算钱、不算件，也不用核
       var c = cupCount(o);
       var name = trim(o.name || '');
 
       /* 1. 名字 */
       if (!name) put(o, 'noname', 'warn', '没写名字', '群里按 #' + o.no + ' 问一句是谁的');
-      else if (name.length > 8 || /[块杯个碗份笼瓶盘栋楼室]/.test(name) ||
+      else if (name.length > 8 || /[块杯个碗份笼瓶盘室]/.test(name) ||
+        (/[栋楼]/.test(name) && name.length > 4) ||   // 「王栋」「李楼」是正常人名，别怀疑
         findItems(name).items.length) {           // 名字里带着商品名，多半是把商品当人了
         put(o, 'oddname', 'info', '名字可能认得不准', '现在写的是「' + name + '」');
       }
@@ -4020,7 +4334,19 @@
        * 以前是拿「拆出来的单价」对总价，可单价本身就是从总价反推的，永远对得上——
        * 「两个酱肉包 4 元」这种少给一直查不出来。现在改成跟价目表比。 */
       var totalCase = (o.total != null && o.items.length > 0);
+      /* 论笼卖的东西写「个」，个数对不上笼价：先问清是几个，别急着报少给 */
+      var doubt = false;
       if (totalCase) {
+        for (var dq = 0; dq < o.items.length; dq++) if (unitDoubt(o, o.items[dq])) { doubt = true; break; }
+        if (doubt) {
+          put(o, 'unitqty', 'info', '按个还是按笼，得问一句',
+            '「' + o.raw.slice(0, 30) + '」——这样货按笼卖，按个算的话价钱不一样');
+        }
+      }
+      /* 原文自己说了「抹零/不用找」：差额就别再报少给，最多小字提一句抹了多少。
+       * README 写了这条规矩，但以前只在给 AI 的提示词里——没配 AI 就永远误报。 */
+      var wipe = /(抹零|抹个零|抹掉|零头|不用找|不用找了|找零不用|算了|算[0-9.]+\s*[元块]|就[0-9.]+\s*[元块])/.test(o.raw || '');
+      if (totalCase && !doubt) {
         var expSum = 0, expOk = true, brief = [];
         for (var t1 = 0; t1 < o.items.length; t1++) {
           var ti = o.items[t1];
@@ -4033,11 +4359,18 @@
           var diff = round2(expSum - o.total);
           var why = '原文写 ¥' + money(o.total) + '，按本店价算是 ¥' + money(expSum) +
             (brief.length > 1 ? '（' + brief.join('、') + '）' : '');
-          if (diff >= 0.5) {
+          if (diff >= 0.5 && wipe) {
+            put(o, 'wiped', 'info', '这单抹了 ¥' + money(diff),
+              why + '，原文说了抹零/不用找，就不再算少给了');
+          } else if (diff >= 0.5) {
             shortSum = round2(shortSum + diff);
             put(o, 'short', 'error', '少给了 ¥' + money(diff),
               why + '，这单你会少收 ¥' + money(diff), diff);
-          } else if (diff <= -0.5) {
+          } else if (diff <= -0.5 && /(跑腿|配送|送费|包装|打包|小费|服务费|运费|费)/.test(o.note || '')) {
+            /* 多出来的钱是跑腿费/包装费，不是客人多给了，别让人去退 */
+            put(o, 'feeadd', 'info', '这单含跑腿/包装费 ¥' + money(-diff),
+              why + '，差额和你写的费用对得上，不用管');
+          } else if (diff <= -0.5 && !/[=＝]/.test(o.raw || '')) {
             overSum = round2(overSum - diff);
             put(o, 'over', 'warn', '多给了 ¥' + money(-diff),
               why + '，这单买家多付了 ¥' + money(-diff) + '，记得退', diff);
@@ -4062,6 +4395,15 @@
               '这单记 ¥' + money(it2.unit) + '/' + (half2 ? '半笼' : '份') +
               '，' + (menuRef ? '本店价 ¥' + money(oldUnit) : '平时 ¥' + money(oldUnit)) +
               '/' + (half2 ? '半笼' : '份') + (it2.qty > 1 ? '，' + it2.qty + ' 份共少 ¥' + money(gap) : ''), gap);
+          } else if (-gap >= (menuRef ? 0.5 : 1) && o.items.length === 1 && it2.qty === 1) {
+            /* 反向：客人写贵了。以前只查「少收」，写贵了默默按贵的收，
+             * 客人事后发现会觉得老板多要钱。高出 5 毛就提一句，好退。 */
+            overSum = round2(overSum + (-gap));
+            put(o, 'overunit', 'warn',
+              '「' + it2.name + '」多收了 ¥' + money(-gap),
+              '这单记 ¥' + money(it2.unit) + '/' + (half2 ? '半笼' : '份') +
+              '，本店价 ¥' + money(oldUnit) + '/' + (half2 ? '半笼' : '份') +
+              '，记得退给客人');
           }
         }
       }
@@ -4238,6 +4580,12 @@
     var at = raw.indexOf(nm);
     if (at < 0) return null;
 
+    /* 同一样在一行里出现两次（「豆浆1杯 豆浆1杯」），拿第一处比就一定对不上，
+     * 会白报一条「原文是 1 个，这里记了 2 个」。这种不数，让人自己看。 */
+    var occ = 0, from0 = 0, ix0;
+    while ((ix0 = raw.indexOf(nm, from0)) > -1) { occ++; from0 = ix0 + nm.length; }
+    if (occ > 1) return null;
+
     // 前面：紧贴商品的数量词
     var pre = raw.slice(Math.max(0, at - 16), at);
     var prev = pre.match(/([^\s，,、；;+＋]{1,8})([0-9]{1,2}|[一二两三四五六七八九十])\s*[个份杯笼袋瓶只盒碗根串片张条]\s*$/);
@@ -4255,7 +4603,10 @@
         }
       }
     }
-    if (!skipHead) {
+    if (!skipHead && !/\s$/.test(pre)) {
+      /* 数量词和商品之间隔着空格（「豆浆 2 杯 牛肉包 1 个」），那个 2 是豆浆的。
+       * 以前不看空格，这条会报成「牛肉包原文是 2 个」，老板一点「照原文改」
+       * 就把 1 个改成 2 个——一次误报变成一次真错。 */
       var cq2 = qtyWordEnd(pre);
       if (cq2 != null) return cq2;
     }
@@ -4351,6 +4702,7 @@
       L.push('#' + o.no + ' ' + (o.name || '无名') + ' · ' + (o.building || '没楼栋') +
         (o.room ? ' ' + o.room : '') + ' | ' + (parts.length ? parts.join('，') : '没认出商品') +
         (o.total == null ? '' : ' | 原文总价 ¥' + money(o.total)) +
+        (o.cancel ? ' | 客人已取消，不算钱不算件' : '') +
         ' | 原句：' + (o.raw || '（无）'));
     }
     L.push('');
@@ -4388,6 +4740,7 @@
     L.push('【怎么判断】');
     L.push('- 数字要看语境：写在行末、前面一串商品的（「…一杯豆浆 15 块」），先当整单总价，按表逐样算完再比；拿不准就 keep，别硬说成单价。');
     L.push('- 「半笼」「一份」「两个」「x2」是数量，不是钱。');
+    L.push('- 标着「客人已取消」的那几单不算钱、不算件，不要报它的少给/多给/件数；原文里写了「取消／不要了／退单／撤单」的，都已经按取消处理了。');
     L.push('- 名字是昵称、emoji、字母加数字（y2、魚脆²⁵、😴、h、U）都正常，不像真名不代表是错的。');
     L.push('- 楼栋写成 A、G1、G2-、E栋-301、a栋 都算写了，不要判成「没写楼栋」。');
     L.push('- 「半笼」是半价不是少给：小笼包 ¥3、灌汤小笼包 ¥3.5、玉米蒸饺 ¥3。「半笼玉米蒸饺 3 元」是对的；只写「蒸饺」「玉米饺」时看原文给的钱：给 3 元按半笼，给 6 元按整笼，别硬按整笼算成少给。');
@@ -4565,6 +4918,7 @@
     for (var j = 0; j < list.length; j++) {
       var f = list[j], o = byNo[f.no];
       if (!o || !o.items || !o.items.length) continue;
+      if (o.cancel) continue;   // 取消的单不用改件数
       var keep = null, total = 0;
       for (var k = 0; k < o.items.length; k++) {
         if (trim(o.items[k].name) !== f.name) continue;
@@ -4928,8 +5282,11 @@
   function tabMoney(r) {
     var t = r.totals;
     var h = '';
+    var cxN = 0;
+    for (var cz = 0; cz < r.orders.length; cz++) if (r.orders[cz].cancel) cxN++;
     h += '<div class="jl-money-top"><span>合计</span><b>' + amtLabel(t.amount, t.unknownAmount) + '</b>' +
       (t.unknownAmount ? '<i>' + t.unknownAmount + ' 单还没定价，没算进来</i>' : '') +
+      (cxN ? '<i>' + cxN + ' 单客人取消了，没算钱</i>' : '') +
       (t.fromTotal ? '<i>' + t.fromTotal + ' 单按原文总价记，不用逐样填单价</i>' : '') + '</div>';
 
     h += '<table class="jl-tb"><thead><tr><th>商品</th><th>数量</th><th>单价</th><th>小计</th></tr></thead><tbody>';
@@ -5517,6 +5874,8 @@
         orders: data.orders.map(function (o) {
           return {
             no: o.no, name: o.name, building: o.building, room: o.room,
+            cancel: o.cancel ? 1 : 0,
+            noRaw: o.noRaw || 0,
             buildingFrom: o.buildingFrom || '',
             // 楼栋是怎么来的、确认过没有：重开时得原样带回来，
             // 否则每次打开都重新问一遍「楼栋是按记录补的」，确认等于白确认
@@ -6512,6 +6871,8 @@
       var k = V.record.buildings[b].key;
       if (k !== '未写楼栋') blds.push(k);
     }
+    // 取消的单不在楼栋分组里，它自己那栋也要能选
+    if (o.building && blds.indexOf(o.building) < 0) blds.push(o.building);
     var opt = blds.map(function (k2) {
       return '<option value="' + esc(k2) + '"' + (k2 === o.building ? ' selected' : '') + '>' + esc(k2) + '</option>';
     }).join('');
@@ -6538,6 +6899,9 @@
       '<label class="jl-efield"><span>备注</span><input id="jlENote" value="' + esc(o.note) + '"></label>' +
       '<div class="jl-eacts">' +
       '<button type="button" class="jl-danger" data-x="del">删掉这条</button>' +
+      (o.cancel
+        ? '<button type="button" class="jl-ghost" data-x="uncancel">恢复这单</button>'
+        : '<button type="button" class="jl-ghost" data-x="cancel">客人取消了</button>') +
       '<button type="button" class="jl-primary" data-x="ok">改好了</button>' +
       '</div></div>';
 
@@ -6569,6 +6933,16 @@
         rebuild();
         persist(true);
         toast('已删掉第 ' + no + ' 条');
+        return;
+      }
+      /* 客人临时取消 / 又改主意了：只做标记，钱和件数自动跟着变 */
+      if (x === 'cancel' || x === 'uncancel') {
+        o.cancel = x === 'cancel' ? 1 : 0;
+        dropAuditFor(no);
+        close();
+        rebuild();
+        persist(true);
+        toast(x === 'cancel' ? '第 ' + no + ' 条已划掉，不算钱' : '第 ' + no + ' 条恢复了');
         return;
       }
       if (x === 'ok') {
