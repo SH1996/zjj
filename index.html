@@ -400,6 +400,15 @@
 
   .shop-bills{flex:1;min-height:0;display:flex;flex-direction:column;border:1px solid var(--line);
     border-radius:20px;background:var(--card);overflow:hidden;box-shadow:var(--card-edge),var(--shadow-1);}
+  /* 格式坏掉的记录：明说「没算进账」，别让钱悄悄少掉 */
+  .shop-bad{flex:none;margin:0 0 10px;border:1px solid #eccfa5;border-radius:14px;
+    background:#fdf4e6;padding:8px 12px;font-size:12px;color:#8a5a25;line-height:1.7;}
+  .shop-bad summary{cursor:pointer;color:#a2652c;font-weight:500;outline:none;}
+  .shop-bad-row{display:flex;align-items:center;gap:10px;justify-content:space-between;
+    border-top:1px dashed #eccfa5;padding:6px 0 2px;margin-top:6px;}
+  .shop-bad-row span{flex:1;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;color:#7a6248;}
+  .shop-bad-row button{flex:none;border:1px solid #e0b98a;background:transparent;border-radius:8px;
+    padding:3px 10px;font-size:11.5px;color:#a2652c;cursor:pointer;}
   .shop-bills-head{flex:none;display:flex;align-items:center;justify-content:space-between;gap:8px;
     padding:10px 14px;border-bottom:1px solid var(--line-soft);}
   .shop-bills-head h3{margin:0;font-size:12.5px;font-weight:500;letter-spacing:.08em;color:var(--ink-soft);
@@ -448,6 +457,12 @@
   .modal .cash-amount.base-amount input[type="text"]{font-size:26px;}
   .cash-amount.base-amount input{font-size:26px;}
   .cash-entry{display:grid;grid-template-columns:1fr 1fr;gap:8px;margin:10px 0 4px;}
+  /* 收款日期：默认今天，补录昨天的钱就靠它 */
+  .cash-date{display:flex;align-items:center;gap:8px;margin:6px 0 0;}
+  .cash-date span{flex:none;font-size:10.5px;letter-spacing:.12em;color:var(--ink-faint);}
+  .cash-date input{flex:1;min-width:0;border:1px solid var(--line);border-radius:10px;
+    background:var(--card-hover);padding:7px 10px;font:inherit;font-size:13px;color:var(--ink);outline:none;}
+  .cash-date input:focus{border-color:var(--g400);}
   .cash-cell{display:flex;align-items:center;gap:5px;border:1px solid var(--line);border-radius:12px;
     background:var(--card-hover);padding:7px 10px;cursor:text;
     transition:border-color .2s ease,background .2s ease;}
@@ -466,6 +481,8 @@
   .cash-total-line>span{font-size:10.5px;letter-spacing:.12em;color:var(--ink-faint);}
   .cash-total-line b{font-size:21px;font-weight:700;color:var(--g800);letter-spacing:-.01em;
     font-variant-numeric:tabular-nums;}
+  .cash-total-line b.neg{color:var(--danger);}
+  .bill-amount.neg{color:var(--danger);}
   .cash-total-line small{margin-left:auto;font-size:10.5px;color:var(--ink-faint);}
   .cash-note{width:100%;margin-top:10px;border:1px solid var(--line);border-radius:11px;
     background:var(--card-hover);padding:10px 12px;font:inherit;font-size:13px;color:var(--ink);outline:none;}
@@ -1046,17 +1063,18 @@
   }
   .shop-fields input:focus{border-color:var(--g400);}
   .shop-table-head{
-    display:grid;grid-template-columns:1.2fr 1.2fr .9fr 1fr .8fr 26px;gap:6px;
+    display:grid;grid-template-columns:1.1fr 1fr .85fr .85fr 1.05fr 24px;gap:5px;
     padding:0 2px 6px;font-size:11px;letter-spacing:.06em;color:var(--ink-faint);
   }
   .shop-rows{display:flex;flex-direction:column;gap:8px;margin-bottom:12px;}
+  /* 小计列留够宽度：预填「160」时不会被 ✕ 挤掉 */
   .shop-tr{
-    display:grid;grid-template-columns:1.2fr 1.2fr .9fr 1fr .8fr 26px;gap:6px;align-items:center;
+    display:grid;grid-template-columns:1.1fr 1fr .85fr .85fr 1.05fr 24px;gap:5px;align-items:center;
   }
   .shop-tr input{
     box-sizing:border-box;min-width:0;width:100%;border:1px solid var(--line);border-radius:10px;
     background:var(--card-hover);color:var(--ink);font:inherit;font-size:12.5px;
-    padding:8px 9px;outline:none;-webkit-appearance:none;appearance:none;
+    padding:8px 7px;outline:none;-webkit-appearance:none;appearance:none;
     -webkit-tap-highlight-color:transparent;
   }
   .shop-tr input:focus{border-color:var(--g400);}
@@ -1066,6 +1084,7 @@
     -webkit-tap-highlight-color:transparent;
   }
   .si-del:active{color:var(--danger);background:var(--card-hover);}
+  .shop-tip{margin:-4px 0 10px;font-size:11px;line-height:1.6;color:var(--ink-faint);}
   .shop-add{
     width:100%;padding:10px;border:1px dashed var(--line);border-radius:12px;
     background:none;color:var(--ink-soft);font:inherit;font-size:12.5px;cursor:pointer;
@@ -3233,7 +3252,7 @@
   <section class="notes" id="notesList"></section>
 </div>
 
-<div class="shop-mask" id="shopMask">
+<div class="shop-mask" id="shopMask" role="dialog" aria-modal="true" aria-label="送货清单存档">
   <div class="shop-panel">
     <div class="shop-head">
       <h3>送货清单存档</h3>
@@ -3257,10 +3276,11 @@
       <label class="field"><span>送货商的联系方式</span><input type="text" id="shopPhone" placeholder="手机号 / 电话" autocomplete="off"></label>
     </div>
     <div class="shop-table-head">
-      <span>货品名称</span><span>规格</span><span>单价</span><span>交货数量</span><span>小计</span><span></span>
+      <span>货品名称</span><span>规格</span><span>单价</span><span>数量</span><span>小计</span><span></span>
     </div>
     <div class="shop-rows" id="shopRows"></div>
     <button class="shop-add" id="shopAdd" type="button">＋ 添加货品</button>
+    <p class="shop-tip">小计 = 单价 × 数量，会自动算；有抹零就改小计那格。</p>
     <div class="shop-total">总计金额：<b id="shopTotal">0</b><span class="shop-total-unit"> 元</span></div>
     <div class="shop-actions">
       <button class="m-btn" id="shopCancel" type="button">取消</button>
@@ -3368,6 +3388,7 @@
   <div class="modal cash-modal">
     <h3 id="cashTitle">收银</h3>
     <p class="cash-sub" id="cashSub">今天已收 <b id="cashTodayTotal">¥0.00</b>，几种方式可以一起填，合计记一笔。</p>
+    <label class="cash-date"><span>日期</span><input type="date" id="cashDate" aria-label="收款日期"></label>
     <div class="cash-entry" id="cashEntry" role="group" aria-label="按方式填收款金额">
       <label class="cash-cell"><span>微信</span><input type="text" inputmode="decimal" data-method="微信" placeholder="0.00" autocomplete="off" aria-label="微信收款金额"></label>
       <label class="cash-cell"><span>支付宝</span><input type="text" inputmode="decimal" data-method="支付宝" placeholder="0.00" autocomplete="off" aria-label="支付宝收款金额"></label>
@@ -3580,7 +3601,7 @@ window.onerror = function (msg, url, line) {
   'use strict';
 
   // 版本号统一在此维护；localStorage 键沿用 v11 不变，切勿改名以免丢失用户数据
-  var APP_VERSION = '16.4.1';
+  var APP_VERSION = '16.4.2';
   // 送货单拍照识别：视觉模型默认名、兼容别名与各项安全上限
   var DEFAULT_VISION_MODEL = 'deepseek-flash';
   var VISION_MODEL_FALLBACK = 'deepseek-v4-flash-vision-exp';
@@ -4399,14 +4420,13 @@ window.onerror = function (msg, url, line) {
     return '';
   }
 
+  /* 归集追加：同一天同一家再进一批货，一律当成新的一批追加成新行。
+   * 以前按「货品名 + 规格」去重，第二批同名货品会被直接跳过——
+   * 钱和数量一起丢，还提示「已追加」，是最危险的那种错。
+   * 同名货品出现两行是可以接受的：金额一定对，点「修改」还能自己删行。 */
   function mergeShopBills(base, add) {
     var rows = [];
-    var seen = {};
-    var key = function (r) { return String(r.name) + '\u0001' + String(r.spec); };
     var push = function (r) {
-      var k = key(r);
-      if (seen[k]) return;
-      seen[k] = true;
       rows.push({
         name: r.name, spec: r.spec, price: r.price, count: r.count,
         subtotal: (r.subtotal === '' || r.subtotal == null) ? calcRowSub(r) : fmtMoney(r.subtotal)
@@ -4429,7 +4449,18 @@ window.onerror = function (msg, url, line) {
     return rebuildShopBill(merged);
   }
 
+  /* 归集比较用的归一化：电话只留数字，商家名去掉所有空白。
+   * 「138 0000 0000」「138-0000-0000」「测试 供应商」都是同一家，
+   * 否则同一天同一家的两批货会被拆成两张单，对账要自己拼。 */
+  function normPhone(s) {
+    return String(s == null ? '' : s).replace(/[^0-9]/g, '');
+  }
+  function normCust(s) {
+    return String(s == null ? '' : s).replace(/[\s\u3000]+/g, '').toLowerCase();
+  }
+
   function findShopCell(notes, date, customer, phone) {
+    var wantCust = normCust(customer), wantPhone = normPhone(phone);
     for (var i = 0; i < notes.length; i++) {
       var n = notes[i];
       if (!n || n.status === VIEW.TRASH) continue;
@@ -4437,8 +4468,8 @@ window.onerror = function (msg, url, line) {
       var b = parseShopBillText(n.text);
       if (!b) continue;
       if (b.date !== date) continue;
-      if (String(b.customer || '') !== String(customer || '')) continue;
-      if (String(b.phone || '') !== String(phone || '')) continue;
+      if (normCust(b.customer) !== wantCust) continue;
+      if (normPhone(b.phone) !== wantPhone) continue;
       return i;
     }
     return -1;
@@ -4476,10 +4507,10 @@ window.onerror = function (msg, url, line) {
 
   function shopRowHTML(name, spec, price, count, sub) {
     return '<div class="shop-tr">' +
-      '<input type="text" class="si-name" placeholder="货品名称" value="' + escapeHTML(name || '') + '">' +
+      '<input type="text" class="si-name" placeholder="名称" value="' + escapeHTML(name || '') + '">' +
       '<input type="text" class="si-spec" placeholder="规格" value="' + escapeHTML(spec || '') + '">' +
-      '<input type="text" class="si-price" placeholder="100元/件" inputmode="decimal" value="' + escapeHTML(price || '') + '">' +
-      '<input type="text" class="si-count" placeholder="1件" inputmode="decimal" value="' + escapeHTML(count || '') + '">' +
+      '<input type="text" class="si-price" placeholder="单价" inputmode="decimal" value="' + escapeHTML(price || '') + '">' +
+      '<input type="text" class="si-count" placeholder="数量" inputmode="decimal" value="' + escapeHTML(count || '') + '">' +
       '<input type="text" class="si-sub" placeholder="小计" inputmode="decimal" value="' + escapeHTML(sub || '') + '">' +
       '<button type="button" class="si-del" aria-label="删除">✕</button>' +
       '</div>';
@@ -4520,21 +4551,59 @@ window.onerror = function (msg, url, line) {
     els.shopTotal.textContent = fmtMoney(total);
   }
 
-  function shopBillOpen() {
+  /* 新建或改一张已存档的送货单。
+   * 改单绝不再让用户在纯文本里动分隔符——那是「删一行说明，整张单从账上消失」的根源。
+   * 传 id 就用表格预填原数据，保存时回写同一条记录（不新建、不归集）。 */
+  var shopEditId = null;
+
+  function shopBillOpen(id) {
+    shopEditId = (typeof id === 'string' && id) ? id : null;
+    var b = null;
+    if (shopEditId) {
+      var n = findNote(shopEditId);
+      b = n ? parseShopBillText(n.text) : null;
+      if (!b) { shopEditId = null; toast('这张单读不出来，先按新建处理'); }
+    }
     clearShopPhotos();
-    els.shopDate.value = todayStr();
-    els.shopCust.value = '';
-    els.shopPhone.value = '';
+    els.shopDate.value = b && b.date ? b.date : todayStr();
+    els.shopCust.value = b ? (b.customer || '') : '';
+    els.shopPhone.value = b ? (b.phone || '') : '';
     els.shopRows.innerHTML = '';
-    addShopRow();
+    if (b) {
+      for (var i = 0; i < b.rows.length; i++) {
+        addShopRow(b.rows[i].name, b.rows[i].spec, b.rows[i].price, b.rows[i].count, b.rows[i].subtotal);
+      }
+    }
+    if (!els.shopRows.children.length) addShopRow();
     recalcShopTotal();
+
+    var h = document.querySelector('.shop-head h3');
+    if (h) h.textContent = shopEditId ? '修改送货单' : '送货清单存档';
+    if (els.shopSave) els.shopSave.textContent = shopEditId ? '保存修改' : '保存清单';
+    // 改单时不显示拍照识别：避免识别结果把原单盖掉
+    var scanBox = document.querySelector('.shop-scan');
+    if (scanBox) scanBox.style.display = shopEditId ? 'none' : '';
     els.shopMask.classList.add('open');
   }
 
-  function closeShopBill() {
+  function shopBillHasContent() {
+    if (!els.shopRows) return false;
+    if (els.shopCust.value.trim() || els.shopPhone.value.trim()) return true;
+    var rows = els.shopRows.querySelectorAll('.shop-tr');
+    for (var i = 0; i < rows.length; i++) {
+      if (rows[i].querySelector('.si-name').value.trim()) return true;
+    }
+    return false;
+  }
+
+  function closeShopBill(skipAsk) {
+    if (!skipAsk && shopBillHasContent()) {
+      if (!window.confirm('这张单还没保存，关掉就没了。确定关掉吗？')) return;
+    }
     state.shopScanSeq++;          // 让进行中的识别结果失效，避免回填到已关闭的弹窗
     setShopScanBusy(false);
     clearShopPhotos();
+    shopEditId = null;
     els.shopMask.classList.remove('open');
   }
 
@@ -4548,12 +4617,26 @@ window.onerror = function (msg, url, line) {
     for (var i = 0; i < rowEls.length; i++) {
       var name = rowEls[i].querySelector('.si-name').value.trim();
       if (!name) continue;
+      var priceEl = rowEls[i].querySelector('.si-price');
+      var countEl = rowEls[i].querySelector('.si-count');
+      var subEl = rowEls[i].querySelector('.si-sub');
+      var price = priceEl.value.trim(), count = countEl.value.trim(), sub = subEl.value.trim();
+      // 有单价有数量、小计还空着：当场替他算出来，免得存成一张 0 元的单
+      if (!sub && price && count) {
+        var calc = calcRowSub({ price: price, count: count });
+        if (calc) { sub = calc; subEl.value = calc; }
+      }
+      if (!sub && (price || count)) {
+        toast('第 ' + (rows.length + 1) + ' 行还没算小计：把数量或单价补齐，或直接填小计');
+        (price ? countEl : priceEl).focus();
+        return;
+      }
       rows.push({
         name: name,
         spec: rowEls[i].querySelector('.si-spec').value.trim(),
-        price: rowEls[i].querySelector('.si-price').value.trim(),
-        count: rowEls[i].querySelector('.si-count').value.trim(),
-        subtotal: rowEls[i].querySelector('.si-sub').value.trim()
+        price: price,
+        count: count,
+        subtotal: sub
       });
     }
     if (!rows.length) { toast('请至少填写一行货品'); return; }
@@ -4562,9 +4645,27 @@ window.onerror = function (msg, url, line) {
       var v = parseFloat(rows[j].subtotal);
       if (!isNaN(v)) total += v;
     }
+    total = Math.round(total * 100) / 100;
+    if (!(total > 0) && !window.confirm('这张单的总计是 0 元，确认要存吗？')) return;
+
+    // 改一张已存档的单：回写同一条记录，不新建、不归集
+    if (shopEditId) {
+      var n = findNote(shopEditId);
+      if (!n) { closeShopBill(true); toast('这张单已经不在了'); return; }
+      n.text = formatShopBill(date, customer, phone, rows, total);
+      n.updatedAt = new Date().toISOString();
+      addOps('edit', n.text);
+      saveLocal();
+      scheduleSync();
+      render();
+      closeShopBill(true);
+      toast('已保存修改');
+      return;
+    }
+
     var merged = saveShopBillMerged(date, customer, phone, rows, total);
-    closeShopBill();
-    toast(merged ? '已归集追加到当天该送货商的送货清单' : '送货清单已存档');
+    closeShopBill(true);
+    toast(merged ? '已追加到当天该送货商的清单（新的一批）' : '送货清单已存档');
   }
 
   /* =========================================================
@@ -5246,7 +5347,7 @@ window.onerror = function (msg, url, line) {
     var list = [], sum = 0, main = '其他';
     for (var i = 0; i < parts.length; i++) {
       var a = round2(parts[i].amount);
-      if (!(a > 0)) continue;
+      if (!a) continue;
       if (!list.length) main = parts[i].method;
       list.push(parts[i].method + '=' + a.toFixed(2));
       sum += a;
@@ -5282,20 +5383,21 @@ window.onerror = function (msg, url, line) {
         var mm = seg.match(/^(.+?)[=＝]\s*(-?[0-9.]+)$/);
         if (!mm) continue;
         var amt = round2(parseFloat(mm[2]));
-        if (!(amt > 0)) continue;
+        if (!amt) continue;                      // 负数要留着：那是退款
         out.parts.push({ method: mm[1].trim() || '其他', amount: amt });
       }
     }
     // 旧格式（只有「方式 + 金额」）兜底成单条明细
-    if (!out.parts.length && out.amount > 0) {
+    if (!out.parts.length && out.amount) {
       out.parts.push({ method: out.method, amount: round2(out.amount) });
     }
-    if (!(out.amount > 0)) {
+    // 明细在就以明细为准（正负相抵可能是 0，也算一笔有效记录）
+    if (out.parts.length) {
       var sum = 0;
       for (var k = 0; k < out.parts.length; k++) sum += out.parts[k].amount;
       out.amount = round2(sum);
     }
-    if (!out.date || !(out.amount > 0)) return null;
+    if (!out.date || !out.parts.length) return null;
     var labels = [];
     for (var q = 0; q < out.parts.length; q++) labels.push(out.parts[q].method);
     out.methodLabel = labels.join(' + ') || out.method;
@@ -5350,7 +5452,7 @@ window.onerror = function (msg, url, line) {
 
   // 汇总店铺财务：收入看收银记录，支出看送货单，起始资金单独存
   function shopFinance() {
-    var bills = [], cash = [], kb = [], base = getShopBase();
+    var bills = [], cash = [], kb = [], base = getShopBase(), bad = [];
     for (var i = 0; i < state.notes.length; i++) {
       var n = state.notes[i];
       if (!n || n.status === VIEW.TRASH) continue;
@@ -5358,6 +5460,7 @@ window.onerror = function (msg, url, line) {
       if (isCashNote(n)) {
         var c = parseCashText(n.text);
         if (c) { c.id = n.id; c.noteRef = n; cash.push(c); }
+        else bad.push({ id: n.id, text: n.text });
         continue;
       }
       if (isKbNote(n)) {
@@ -5368,6 +5471,7 @@ window.onerror = function (msg, url, line) {
       if (hasShopTag(n)) {
         var b = parseShopBillText(n.text);
         if (b) bills.push({ id: n.id, note: n, bill: b });
+        else bad.push({ id: n.id, text: n.text });
       }
     }
     var totalIn = 0, totalOut = 0, todayIn = 0, items = 0;
@@ -5394,6 +5498,8 @@ window.onerror = function (msg, url, line) {
       return new Date(y.note.createdAt).getTime() - new Date(x.note.createdAt).getTime();
     });
     cash.sort(function (x, y) {
+      // 先按收款日期，再按记账时间——补录的旧账不会顶在今天的上面
+      if (x.date !== y.date) return x.date < y.date ? 1 : -1;
       return new Date(y.noteRef.createdAt).getTime() - new Date(x.noteRef.createdAt).getTime();
     });
     kb.sort(function (x, y) {
@@ -5407,7 +5513,8 @@ window.onerror = function (msg, url, line) {
       bills: bills, cash: cash, kb: kb, base: base,
       totalIn: totalIn, totalOut: totalOut, gross: gross, margin: margin, net: net,
       balance: base + net, todayIn: todayIn, todayByMethod: todayByMethod,
-      billCount: bills.length, cashCount: cash.length, kbCount: kb.length, items: items
+      billCount: bills.length, cashCount: cash.length, kbCount: kb.length, items: items,
+      badCount: bad.length, badList: bad
     };
   }
 
@@ -5514,7 +5621,7 @@ window.onerror = function (msg, url, line) {
         '<button class="bill-head" type="button" data-act="cash-toggle" data-id="' + pid + '">' +
           '<span class="bill-date">' + escapeHTML(String(c.date || '').slice(5)) + '</span>' +
           '<span class="bill-name">' + mix.join(' · ') + '</span>' +
-          '<span class="bill-amount">' + money(c.amount) + '</span>' +
+          '<span class="bill-amount' + (c.amount < 0 ? ' neg' : '') + '">' + money(c.amount) + '</span>' +
           '<span class="bill-chevron">' + CHEV + '</span>' +
         '</button>' +
         '<div class="bill-body">' + detail +
@@ -5546,7 +5653,7 @@ window.onerror = function (msg, url, line) {
     var cashParts = [];
     for (var mi = 0; mi < CASH_METHODS.length; mi++) {
       var mv = f.todayByMethod[CASH_METHODS[mi]] || 0;
-      if (mv > 0) cashParts.push(CASH_METHODS[mi] + ' ' + fmtMoney(mv));
+      if (mv) cashParts.push(CASH_METHODS[mi] + ' ' + fmtMoney(mv));
     }
     var cashDetail = cashParts.length ? cashParts.join(' · ') : '今天还没有收款';
 
@@ -5620,13 +5727,27 @@ window.onerror = function (msg, url, line) {
         '</button>' +
         '<div class="bill-body">' +
           body +
-          '<div class="bill-foot"><span>共 ' + b.rows.length + ' 种 · ' + escapeHTML(b.date || '') + '</span>' + acts + '</div>' +
+          '<div class="bill-foot"><span>共 ' + b.rows.length + ' 行 · ' + escapeHTML(b.date || '') + '</span>' + acts + '</div>' +
         '</div>' +
       '</div>';
     }
     if (!rowsHTML) {
       rowsHTML = '<div class="bill-empty"><b>还没有送货单</b>点右上角「送货单」拍照或手填，会归档到这里</div>';
     }
+    }
+
+    /* 读不出来的记录（格式被改坏的历史数据）：不能让它悄悄消失，
+     * 在账本上方明说「没算进账」，并给个删除口，老板自己决定怎么处理。 */
+    var badHTML = '';
+    if (f.badList && f.badList.length) {
+      var badRows = '';
+      for (var bi = 0; bi < f.badList.length; bi++) {
+        var bt = String(f.badList[bi].text || '').replace(/\s+/g, ' ').slice(0, 46);
+        badRows += '<div class="shop-bad-row"><span>' + escapeHTML(bt) + '…</span>' +
+          '<button type="button" data-act="bad-del" data-id="' + escapeHTML(f.badList[bi].id) + '">删除</button></div>';
+      }
+      badHTML = '<details class="shop-bad"><summary>有 ' + f.badList.length +
+        ' 条店铺记录格式坏了，没算进账里 · 点开看</summary>' + badRows + '</details>';
     }
 
     var bills =
@@ -5646,7 +5767,7 @@ window.onerror = function (msg, url, line) {
         '<div class="shop-bill-list" id="shopBillList">' + rowsHTML + '</div>' +
       '</div>';
 
-    els.shopBoard.innerHTML = hero + bills;
+    els.shopBoard.innerHTML = hero + badHTML + bills;
     hydrateKbMedia();
   }
 
@@ -6123,6 +6244,7 @@ window.onerror = function (msg, url, line) {
   // ===== 收银弹窗（支持一次结算多种方式）=====
   var cashEditId = null;       // 非空表示在改一笔已有记录
   var cashEditDate = '';       // 修改时保留原日期
+  var cashExtraParts = [];     // 旧记录里不在四个框里的方式（如「银行卡」），原样保留不丢钱
 
   function hmOf(iso) {
     var d = new Date(iso);
@@ -6136,18 +6258,21 @@ window.onerror = function (msg, url, line) {
     return Array.prototype.slice.call(box.querySelectorAll('input[data-method]'));
   }
 
-  // 读四个输入框：只统计大于 0 的方式
+  // 读四个输入框：不为 0 的方式都算。允许负号——退款/退货时填 -30，
+  // 账上就是减 30，不会被当成「非数字」抹掉后再当成收入（那是双倍错）。
   function cashReadParts() {
     var ins = cashInputs(), parts = [], total = 0;
     for (var i = 0; i < ins.length; i++) {
       var cell = ins[i].parentNode;
-      var raw = String(ins[i].value || '').replace(/[^0-9.]/g, '');
+      var raw = String(ins[i].value || '');
+      var neg = /^\s*[-－]/.test(raw);
+      raw = raw.replace(/[^0-9.]/g, '');
       var v = parseFloat(raw);
       if (!(v > 0)) {
         if (cell && cell.classList) cell.classList.remove('filled');
         continue;
       }
-      v = round2(v);
+      v = round2(neg ? -v : v);
       parts.push({ method: ins[i].getAttribute('data-method'), amount: v });
       total += v;
       if (cell && cell.classList) cell.classList.add('filled');
@@ -6157,11 +6282,15 @@ window.onerror = function (msg, url, line) {
 
   function syncCashTotal() {
     var r = cashReadParts();
-    if (els.cashTotal) els.cashTotal.textContent = money(r.total);
+    if (els.cashTotal) {
+      els.cashTotal.textContent = money(r.total);
+      els.cashTotal.classList.toggle('neg', r.total < 0);
+    }
     var hint = $('cashTotalHint');
     if (hint) {
       hint.textContent = !r.parts.length ? '分方式填，留空即不计'
-        : (r.parts.length > 1 ? r.parts.length + ' 种方式合计' : '只记这一种方式');
+        : (r.total < 0 ? '这次是退款 / 支出，从今日收款里减'
+        : (r.parts.length > 1 ? r.parts.length + ' 种方式合计' : '只记这一种方式'));
     }
   }
 
@@ -6209,6 +6338,9 @@ window.onerror = function (msg, url, line) {
       if (ins[i].parentNode && ins[i].parentNode.classList) ins[i].parentNode.classList.remove('filled');
     }
     if (els.cashNote) els.cashNote.value = '';
+    cashExtraParts = [];
+    var dateEl = $('cashDate');
+    if (dateEl) dateEl.value = todayStr();
 
     var title = $('cashTitle'), ok = $('cashOk');
     if (cashEditId) {
@@ -6216,12 +6348,17 @@ window.onerror = function (msg, url, line) {
       var c = n ? parseCashText(n.text) : null;
       if (c) {
         cashEditDate = c.date;
+        if (dateEl) dateEl.value = c.date;
         for (var p = 0; p < c.parts.length; p++) {
+          var hit = false;
           for (var k = 0; k < ins.length; k++) {
             if (ins[k].getAttribute('data-method') === c.parts[p].method) {
               ins[k].value = fmtMoney(c.parts[p].amount);
+              hit = true;
             }
           }
+          // 旧记录用了「银行卡」这类框里没有的方式：先收着，保存时原样写回去
+          if (!hit) cashExtraParts.push({ method: c.parts[p].method, amount: c.parts[p].amount });
         }
         if (els.cashNote) els.cashNote.value = c.note || '';
       }
@@ -6234,8 +6371,16 @@ window.onerror = function (msg, url, line) {
     if (els.cashTodayList) els.cashTodayList.style.display = cashEditId ? 'none' : '';
     var sub = $('cashSub');
     if (sub) {
+      var extraTxt = '';
+      if (cashEditId && cashExtraParts.length) {
+        var ep = [];
+        for (var ei = 0; ei < cashExtraParts.length; ei++) {
+          ep.push(cashExtraParts[ei].method + ' ' + fmtMoney(cashExtraParts[ei].amount));
+        }
+        extraTxt = '<br>这笔里还有 ' + escapeHTML(ep.join('、')) + '，不在上面四个框里，保存会原样留着。';
+      }
       sub.innerHTML = cashEditId
-        ? '改 ' + escapeHTML(cashEditDate) + ' 这笔收银，保存后账本立刻更新。'
+        ? '改 ' + escapeHTML(cashEditDate) + ' 这笔收银，保存后账本立刻更新。' + extraTxt
         : '今天已收 <b id="cashTodayTotal">¥0.00</b>，几种方式可以一起填，合计记一笔。';
       els.cashTodayTotal = $('cashTodayTotal');
     }
@@ -6253,7 +6398,7 @@ window.onerror = function (msg, url, line) {
 
   function saveCash() {
     var r = cashReadParts();
-    if (!r.parts.length) {
+    if (!r.parts.length && !(cashEditId && cashExtraParts.length)) {
       toast('先填一个收款金额');
       var a = cashInputs();
       if (a[0]) a[0].focus();
@@ -6261,23 +6406,33 @@ window.onerror = function (msg, url, line) {
     }
     var note = String(els.cashNote ? els.cashNote.value : '').trim().slice(0, 40);
     var now = new Date().toISOString();
-    var label = r.parts.length > 1 ? r.parts.length + ' 种方式' : r.parts[0].method;
+    var parts = r.parts;
+    if (cashEditId && cashExtraParts.length) parts = r.parts.concat(cashExtraParts);
+    var total = 0;
+    for (var pi = 0; pi < parts.length; pi++) total += parts[pi].amount;
+    total = round2(total);
+    var label = parts.length > 1 ? parts.length + ' 种方式' : parts[0].method;
+    // 补录昨天的钱：日期以弹窗里那个为准，默认今天
+    var dateEl = $('cashDate');
+    var useDate = String(dateEl && dateEl.value ? dateEl.value : '').trim();
+    if (!/^\d{4}-\d{2}-\d{2}$/.test(useDate)) useDate = todayStr();
+    cashEditDate = useDate;
 
     if (cashEditId) {
       var n = findNote(cashEditId);
       if (!n) { closeCashModal(); return; }
-      n.text = cashText(cashEditDate, r.parts, note);
+      n.text = cashText(useDate, parts, note);
       n.updatedAt = now;
       addOps('edit', n.text);
       saveLocal();
       scheduleSync();
       render();
       closeCashModal();
-      toast('已改为 ' + money(r.total) + ' · ' + label);
+      toast('已改为 ' + money(total) + ' · ' + label);
       return;
     }
 
-    var text = cashText(todayStr(), r.parts, note);
+    var text = cashText(useDate, parts, note);
     state.notes.unshift({
       id: uid(), text: text, createdAt: now, updatedAt: now,
       status: VIEW.ACTIVE, remindAt: null, repeat: 'none', reminded: false,
@@ -6288,7 +6443,7 @@ window.onerror = function (msg, url, line) {
     scheduleSync();
     render();
     closeCashModal();
-    toast('已收 ' + money(r.total) + ' · ' + label);
+    toast('已收 ' + money(total) + ' · ' + label);
   }
 
   // ===== 起始资金 =====
@@ -6342,22 +6497,34 @@ window.onerror = function (msg, url, line) {
     if (act === 'kb-new') { openKbModal(); return; }
     if (act === 'kb-edit') { openKbModal(id); return; }
     if (act === 'kb-del') {
+      if (!window.confirm('删除这条知识库记录？删了会进「垃圾」，能恢复。')) return;
       delete openBills[id];
       setStatus(id, VIEW.TRASH);
       toast('已删除这条记录');
       return;
     }
+    if (act === 'bad-del') {
+      if (!window.confirm('这条记录读不出来，删掉？删了会进「垃圾」，能恢复。')) return;
+      setStatus(id, VIEW.TRASH);
+      renderShopBoard();
+      return;
+    }
     if (act === 'cash-edit') { openCashModal(id); return; }
     if (act === 'cash-del') {
+      if (!window.confirm('从账本里删掉这笔收银？删了会进「垃圾」，能恢复。')) return;
       delete openBills[id];
       setStatus(id, VIEW.TRASH);
       toast('已从账本删除');
       return;
     }
     if (!id) return;
-    if (act === 'bill-edit') openEditModal(id);
+    if (act === 'bill-edit') shopBillOpen(id);
     else if (act === 'bill-share') openShareModal(id);
-    else if (act === 'bill-del') { delete openBills[id]; setStatus(id, VIEW.TRASH); }
+    else if (act === 'bill-del') {
+      if (!window.confirm('删掉这张送货单？删了会进「垃圾」，能恢复。')) return;
+      delete openBills[id];
+      setStatus(id, VIEW.TRASH);
+    }
   }
 
   function noteHTML(n, kw) {
@@ -9331,7 +9498,7 @@ window.onerror = function (msg, url, line) {
         console.error('彩票模块初始化失败', e);
       }
     }
-    els.shopBillBtn.addEventListener('click', shopBillOpen);
+    els.shopBillBtn.addEventListener('click', function () { shopBillOpen(); });
     if (els.shopBoard) els.shopBoard.addEventListener('click', handleShopClick);
     if (els.kbBtn) els.kbBtn.addEventListener('click', function () { openKbFlow(); });
     if ($('kbAddImage')) $('kbAddImage').addEventListener('click', function () { if (els.kbImageFile) els.kbImageFile.click(); });
@@ -9393,8 +9560,8 @@ window.onerror = function (msg, url, line) {
     if ($('baseCancel')) $('baseCancel').addEventListener('click', closeBaseModal);
     if (els.baseMask) els.baseMask.addEventListener('click', function (e) { if (e.target === els.baseMask) closeBaseModal(); });
     if (els.baseAmount) els.baseAmount.addEventListener('keydown', function (e) { if (e.key === 'Enter') saveBase(); });
-    if ($('shopClose')) $('shopClose').addEventListener('click', closeShopBill);
-    if ($('shopCancel')) $('shopCancel').addEventListener('click', closeShopBill);
+    if ($('shopClose')) $('shopClose').addEventListener('click', function () { closeShopBill(); });
+    if ($('shopCancel')) $('shopCancel').addEventListener('click', function () { closeShopBill(); });
     els.shopAdd.addEventListener('click', function () { addShopRow(); recalcShopTotal(); });
     els.shopSave.addEventListener('click', shopBillSave);
 
@@ -9670,6 +9837,8 @@ window.onerror = function (msg, url, line) {
         else if (els.timeMask && els.timeMask.classList.contains('open')) els.timeMask.classList.remove('open');
         else if (els.loMask && els.loMask.classList.contains('open')) closeLaoyou();
         else if (els.pickerMask && els.pickerMask.classList.contains('open')) closeTimePicker();
+        else if (els.shopMask && els.shopMask.classList.contains('open')) closeShopBill();
+        else if (els.cashMask && els.cashMask.classList.contains('open')) closeCashModal();
         else if (els.remindMask.classList.contains('open')) closeRemindModal();
         else if (els.editMask.classList.contains('open')) closeEditModal();
         else if (els.shareMask.classList.contains('open')) closeShareModal();
