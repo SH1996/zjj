@@ -7247,7 +7247,24 @@
 
     // 把认出来的改动先摆出来给人看，点「就这么改」才动
     function offer(ops, say, fromAI) {
-      var txt = nameFixText(ops, proofNameList(V.record));
+      var cur = proofNameList(V.record);
+      /* 要改的号已经不在名单里（之前被 × 删掉了）：明说，别让人以为改成功了。
+       * set 落到不存在的号上本来就不会有任何效果。 */
+      var missing = [];
+      for (var si = 0; si < (ops.set || []).length; si++) {
+        var sno = ops.set[si] && ops.set[si].no;
+        if (!(sno > 0)) continue;
+        var has = false;
+        for (var ci = 0; ci < cur.length; ci++) if (cur[ci].no === sno) { has = true; break; }
+        if (!has && missing.indexOf(sno) < 0) missing.push(sno);
+      }
+      if (missing.length) {
+        hint('#' + missing[0] + ' 已经不在名单里了，先点「撤销上次」把它退回来再改', 'warn');
+        pending = null;
+        resetBtn();
+        return;
+      }
+      var txt = nameFixText(ops, cur);
       if (!txt) {
         hint('没听出要改哪个号。换个说法，比如「3号撤回了」', 'warn');
         pending = null;
