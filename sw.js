@@ -1,7 +1,7 @@
 /* 竹间记 · Service Worker
    策略：页面与脚本都网络优先（改完立刻生效），断网才回落缓存；
    只管同源 GET，GitHub / AI 等 API 请求一律直连，绝不缓存。 */
-var CACHE = 'bamboo-v16-3-0';
+var CACHE = 'bamboo-v16-4-0';
 var SHELL = [
   './',
   './index.html',

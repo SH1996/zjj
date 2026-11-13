@@ -2066,6 +2066,13 @@
     return out;
   }
 
+  /* 名单里这一号现在是谁。问题页那条「没写名字」要靠它显示补上了没有 */
+  function proofNameOf(record, no) {
+    var list = proofNameList(record);
+    for (var i = 0; i < list.length; i++) if (list[i].no === no) return list[i];
+    return null;
+  }
+
   /* 原始名单，没改过的：直接按接龙号排 */
   function proofNameBase(record) {
     var out = [];
@@ -5069,6 +5076,9 @@
     });
   }
 
+  /* 名字类的几条：知道是谁就能当场补到凭证名单上，不用绕去送达页 */
+  var NAME_ISSUES = { noname: 1, namemiss: 1, oddname: 1 };
+
   function tabIssues(r) {
     var a = auditIssues(r, V.refPrice);
     var aiOn = auditAiReady();
@@ -5232,6 +5242,23 @@
           '" data-act="issuenote" data-no="' + it.no + '">' +
           (noteNos[it.no] ? '已写进凭证 · 改一句' : '写进凭证，告诉买家') + '</button>' +
           '</div>' +
+          /* 名字这条：我知道是谁，就在这儿把名字补到凭证上。
+           * 和送达页那个「改名单」是同一层——只改图下面那一栏，订单、金额不动。 */
+          (NAME_ISSUES[it.code] ? (function () {
+            var pn = proofNameOf(r, it.no);
+            var pnName = pn ? trim(pn.name) : '';
+            /* 名单里没有这一号（比如号被改过）就退回订单自己的名字，
+             * 免得明明写了名字还显示「还没名字」 */
+            if (!pnName) {
+              var oo = orderOf(it.no);
+              if (oo) pnName = trim(oo.name || '');
+            }
+            return '<button type="button" class="jl-namesline jl-issue-names' + (pnName ? ' chg' : '') +
+              '" data-act="issuenames" data-no="' + it.no + '">' +
+              '<b>名单 #' + it.no + (pnName ? ' · ' + esc(pnName) : ' · 还没名字') + '</b>' +
+              '<span>' + (pnName ? '凭证上就印这个 · 点这里再改' : '知道是谁就填上 · 只改这张图') + '</span>' +
+              '<i>›</i></button>';
+          })() : '') +
           '</div>';
       }
       h += '</div>';
@@ -6105,15 +6132,16 @@
     ctx.closePath();
   }
 
-  /* 合成图的尺寸：顶部一行日期，中间照片 + 楼栋标注，底部一句提醒。
-   * 日期是为了让群里的人一眼知道这是哪天的；提醒是给取餐同学看的。
+  /* 合成图的尺寸：顶部「已送达」+ 日期两行，中间照片 + 楼栋标注，底部一句提醒。
+   * 「已送达」说清这张图是干什么的，日期让群里的人知道这是哪天的货；
+   * 提醒是给取餐同学看的。
    * legendRows > 0 时，照片和提醒之间多一块「接龙号 · 名字」名单（加长版）。
    */
   var LEG_HEAD = 84, LEG_ROW = 48, LEG_PAD = 16;
   var NOTE_ROW = 46;
   function proofSize(n, legendRows, noteRows) {
     var PAD = 36, W = 1080;
-    var HEAD = 128;      // 顶部日期
+    var HEAD = 176;      // 顶部两行：已送达 + 日期
     var FOOT = 148;      // 底部提醒
     var cols = n <= 1 ? 1 : (n <= 4 ? 2 : 3);
     var cellW = Math.floor((W - PAD * (cols + 1)) / cols);
@@ -6208,14 +6236,26 @@
       ctx.fillStyle = '#fdf8f0';
       ctx.fillRect(0, 0, W, H);
 
-      /* 顶部：接龙日期，让群里的人一眼知道这是哪天的 */
+      /* 顶部两行：先一枚「已送达」，再写日期。
+       * 这张图是发到群里说「货送到了」的，取餐的人先看到的是这四个字；
+       * 日期紧贴在下边，是为了让人知道这是哪一天的货。 */
       var headCx = W / 2;
+      ctx.textAlign = 'center';
+      var badgeTxt = '✓ 已送达';
+      ctx.font = '600 27px -apple-system,"PingFang SC","Microsoft YaHei",sans-serif';
+      var badgeW = ctx.measureText(badgeTxt).width + 44;
+      var badgeH = 42, badgeX = headCx - badgeW / 2, badgeY = 20;
+      ctx.fillStyle = '#f6e7d3';
+      roundRect(ctx, badgeX, badgeY, badgeW, badgeH, badgeH / 2);
+      ctx.fill();
+      ctx.fillStyle = '#b0642a';
+      ctx.fillText(badgeTxt, headCx, badgeY + 29);
+
       ctx.fillStyle = '#3a2a1c';
       ctx.font = '600 46px -apple-system,"PingFang SC","Microsoft YaHei",sans-serif';
-      ctx.textAlign = 'center';
       var headTxt = meta.date || '';
       if (meta.week) headTxt += ' · 周' + meta.week;
-      ctx.fillText(headTxt, headCx, 82);
+      ctx.fillText(headTxt, headCx, 132);
       ctx.textAlign = 'left';
 
       var lastRowN = imgs.length - (s.rows - 1) * cols;   // 末行几张，单张时居中放
@@ -7120,15 +7160,25 @@
   /* 这层只改那张图下面那一栏。订单还在，金额、件数、箱子一概不动——
    * 真要把那单也去掉，得回楼栋页删单，这里不替你做这个决定。
    * 两条路：点号后面的 × 直接去掉；或者把话写下来，让它翻成改动。 */
-  function nameSheet() {
+  function nameSheet(opts) {
     if (!V.record) return;
+    opts = opts || {};
+    /* 从问题页「名单 #12 还没名字」点进来时带着号：把号先填进输入框，
+     * 老板只要补个名字就行，不用自己写「12号是」。 */
+    var focusNo = opts.focusNo > 0 ? opts.focusNo : 0;
+    var focusHit = focusNo ? proofNameOf(V.record, focusNo) : null;
+    var focusName = focusHit ? trim(focusHit.name) : '';
+    var lead = focusNo
+      ? '给 <b>#' + focusNo + '</b> 补个名字：知道是谁，就在下面写一句「' + focusNo + '号是王五」，点「改」就印到这张图上。' +
+        '<b>只改这张凭证上那一栏，订单和金额不动。</b>'
+      : '群里有人撤回接龙，号就跟人对不上了。点号后面的 × 去掉，或者写一句让它自己改。' +
+        '<b>只改这张凭证上那一栏，订单和金额不动。</b>';
     var mask = document.createElement('div');
     mask.className = 'jl-mask';
     mask.innerHTML =
       '<div class="jl-sheet-edit jl-sheet-names">' +
       '<div class="jl-ehead"><b>改名单</b><button type="button" data-x="close" aria-label="关闭">×</button></div>' +
-      '<p class="jl-mem-lead">群里有人撤回接龙，号就跟人对不上了。点号后面的 × 去掉，或者写一句让它自己改。' +
-      '<b>只改这张凭证上那一栏，订单和金额不动。</b></p>' +
+      '<p class="jl-mem-lead">' + lead + '</p>' +
       '<div class="jl-namechips" id="jlNameChips"></div>' +
       '<div class="jl-nametools"><button type="button" class="jl-namelink" data-x="fill">号是断的？往前补一位</button></div>' +
       '<label class="jl-mem-note"><span>说一句</span>' +
@@ -7153,7 +7203,8 @@
       var list = proofNameList(V.record);
       if (!list.length) return '<span class="jl-nameempty">名单空了 · 点「撤销上次」能退回去</span>';
       return list.map(function (x) {
-        return '<span class="jl-namechip"><b>#' + x.no + '</b>' + esc(x.name || '（没名字）') +
+        return '<span class="jl-namechip' + (x.no === focusNo ? ' focus' : '') + '">' +
+          '<b>#' + x.no + '</b>' + esc(x.name || '（没名字）') +
           (x.bld ? '<em>' + esc(x.bld) + '</em>' : '') +
           '<button type="button" data-x="drop" data-k="' + x.no + '" aria-label="去掉这个号">×</button></span>';
       }).join('');
@@ -7265,8 +7316,22 @@
       if (x === 'apply' && pending) { commit(pending.ops, pending.say); return; }
     });
 
+    if (focusNo) {
+      ta.value = focusNo + '号' + (focusName ? '改成' + focusName : '是');
+      hint(focusName ? '名字不对就在后面改两个字，点「改」' : '在「是」后面写名字，点「改」', '');
+    }
     refresh();
-    setTimeout(function () { try { ta.focus(); } catch (e) {} }, 60);
+    setTimeout(function () {
+      try {
+        ta.focus();
+        if (focusNo) {
+          var v = ta.value;
+          ta.setSelectionRange(v.length, v.length);
+        }
+      } catch (e) {}
+      var fc = chipsEl.querySelector ? chipsEl.querySelector('.jl-namechip.focus') : null;
+      if (fc && fc.scrollIntoView) { try { fc.scrollIntoView({ block: 'nearest' }); } catch (e) {} }
+    }, 60);
   }
 
   /* ---------- 教它一句：把老板的判断收成规矩 ---------- */
@@ -7871,6 +7936,19 @@
     }
     if (act === 'compose') { doCompose(); return; }
     if (act === 'editnames') { nameSheet(); return; }
+    if (act === 'issuenames') {
+      /* 名字补了要印在图上，得先开着「加长版」；没开就替老板打开，
+       * 顺手说一声，不悄悄改设置。 */
+      if (!V.proofNames) {
+        V.proofNames = true;
+        var s5 = readSettings();
+        s5.proofNames = true;
+        writeSettings(s5);
+        toast('已打开加长版：图下面会印「接龙号 · 名字」');
+      }
+      nameSheet({ focusNo: parseInt(btn.getAttribute('data-no'), 10) });
+      return;
+    }
     if (act === 'proofnames') {
       V.proofNames = !V.proofNames;
       var s3 = readSettings();

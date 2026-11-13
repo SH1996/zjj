@@ -1857,6 +1857,13 @@
   .jl-namechip button{border:none;background:transparent;color:var(--jl-faint);font-size:14px;
     line-height:1;padding:0 2px;cursor:pointer;}
   .jl-namechip button:active{color:var(--jl-warn);}
+  /* 从「#12 没写名字」点进来时，把这一号挑出来，别让人在一堆号里找 */
+  .jl-namechip.focus{border-color:rgba(201,114,47,.5);background:rgba(201,114,47,.07);
+    box-shadow:0 0 0 2px rgba(201,114,47,.1);}
+  /* 问题卡里的「名单 #12」：和送达页那一行同一个样子 */
+  .jl-issue-names{margin-top:8px;padding:8px 11px;}
+  .jl-issue-names b{font-size:11.5px;}
+  .jl-issue-names span{font-size:10.5px;}
   .jl-nameempty{font-size:11.5px;line-height:1.7;color:var(--jl-faint);}
   .jl-nametools{display:flex;justify-content:flex-end;margin:-4px 0 10px;}
   .jl-namelink{border:none;background:transparent;padding:2px 0;font-family:inherit;
@@ -3573,7 +3580,7 @@ window.onerror = function (msg, url, line) {
   'use strict';
 
   // 版本号统一在此维护；localStorage 键沿用 v11 不变，切勿改名以免丢失用户数据
-  var APP_VERSION = '16.3.0';
+  var APP_VERSION = '16.4.0';
   // 送货单拍照识别：视觉模型默认名、兼容别名与各项安全上限
   var DEFAULT_VISION_MODEL = 'deepseek-flash';
   var VISION_MODEL_FALLBACK = 'deepseek-v4-flash-vision-exp';
