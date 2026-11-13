@@ -6241,21 +6241,24 @@
        * 日期紧贴在下边，是为了让人知道这是哪一天的货。 */
       var headCx = W / 2;
       ctx.textAlign = 'center';
+      /* 字号关系：「已送达」是全图最该被看见的三个字，比照片标签（30）、
+       * 名单（30）、提醒（36）都略大一号；日期跟着收一点（46→42），
+       * 免得两行抢眼。改字要连带改下面 pill 的高度和基线，别只改数字。 */
       var badgeTxt = '✓ 已送达';
-      ctx.font = '600 27px -apple-system,"PingFang SC","Microsoft YaHei",sans-serif';
-      var badgeW = ctx.measureText(badgeTxt).width + 44;
-      var badgeH = 42, badgeX = headCx - badgeW / 2, badgeY = 20;
+      ctx.font = '600 34px -apple-system,"PingFang SC","Microsoft YaHei",sans-serif';
+      var badgeW = ctx.measureText(badgeTxt).width + 50;
+      var badgeH = 52, badgeX = headCx - badgeW / 2, badgeY = 16;
       ctx.fillStyle = '#f6e7d3';
       roundRect(ctx, badgeX, badgeY, badgeW, badgeH, badgeH / 2);
       ctx.fill();
       ctx.fillStyle = '#b0642a';
-      ctx.fillText(badgeTxt, headCx, badgeY + 29);
+      ctx.fillText(badgeTxt, headCx, badgeY + 38);
 
       ctx.fillStyle = '#3a2a1c';
-      ctx.font = '600 46px -apple-system,"PingFang SC","Microsoft YaHei",sans-serif';
+      ctx.font = '600 42px -apple-system,"PingFang SC","Microsoft YaHei",sans-serif';
       var headTxt = meta.date || '';
       if (meta.week) headTxt += ' · 周' + meta.week;
-      ctx.fillText(headTxt, headCx, 132);
+      ctx.fillText(headTxt, headCx, 134);
       ctx.textAlign = 'left';
 
       var lastRowN = imgs.length - (s.rows - 1) * cols;   // 末行几张，单张时居中放
