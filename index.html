@@ -11105,7 +11105,7 @@ window.onerror = function (msg, url, line) {
   }
   function arcViewHTML(f) {
     if (!f) return '<div class="pdfbox">没有原件</div>';
-    if (f.kind === 'image') return '<img id="arcDtImg" alt="原件">';
+    if (f.kind === 'image') return '<img id="arcDtImg" alt="正在从云端取原件…">';
     return '<div class="pdfbox"><b>' + escapeHTML(f.name || 'PDF') + '</b>' +
       arcSizeLabel(f.size) + ' · 点下面「打开原件」在系统里看</div>';
   }
