@@ -3033,6 +3033,189 @@
     .scene-world{transition:none}.composer,.hn-item,.note,.icon-btn,.tool-btn{transition-duration:.01ms!important}
   }
 
+
+  /* ==================== v16.5 档案库 ==================== */
+  .tool-btn.arc-btn{background:linear-gradient(145deg,rgba(248,238,216,.92),rgba(253,247,234,.55));color:#8a6a2a}
+  [data-theme="dark"] .tool-btn.arc-btn{background:rgba(56,44,24,.55);color:#e2c894}
+
+  .arc-lab{position:fixed;inset:0;z-index:1380;display:none;flex-direction:column;
+    background:linear-gradient(172deg,var(--bg-top) 0%,var(--bg-bottom) 100%);color:var(--ink);overflow:hidden;}
+  .arc-lab.open{display:flex;animation:arcIn .24s ease-out;}
+  @keyframes arcIn{from{opacity:0;transform:translateY(9px)}to{opacity:1;transform:none}}
+
+  .arc-top{display:flex;align-items:center;gap:10px;padding:calc(14px + env(safe-area-inset-top)) 18px 0;flex:none}
+  .arc-back,.arc-add{width:36px;height:36px;border-radius:13px;border:1px solid var(--line);
+    background:var(--card);display:grid;place-items:center;color:var(--g800);font:inherit;
+    cursor:pointer;-webkit-tap-highlight-color:transparent;flex:none}
+  .arc-back:active,.arc-add:active{transform:scale(.94)}
+  .arc-add{margin-left:auto}
+  .arc-ttl{flex:1;min-width:0}
+  .arc-ttl h2{font-size:19px;font-weight:700;letter-spacing:.12em;color:var(--g900);line-height:1.2}
+  .arc-ttl p{font-size:10px;color:var(--ink-faint);margin-top:3px;letter-spacing:.03em}
+  .arc-ttl p.warn{color:var(--gold)}
+  .arc-ttl p.err{color:var(--danger)}
+
+  .arc-search{margin:12px 18px 0;display:flex;align-items:center;gap:8px;padding:0 13px;height:40px;
+    border-radius:13px;background:var(--card);border:1px solid var(--line);flex:none;
+    box-shadow:var(--card-edge);}
+  .arc-search input{flex:1;border:0;background:transparent;font:inherit;font-size:12.5px;
+    color:var(--ink);outline:none;min-width:0}
+  .arc-search input::placeholder{color:var(--ink-faint)}
+
+  .arc-cats{display:flex;gap:7px;overflow-x:auto;padding:11px 18px 0;flex:none;
+    scrollbar-width:none;-webkit-overflow-scrolling:touch}
+  .arc-cats::-webkit-scrollbar{display:none}
+  .arc-chip{flex:none;height:28px;padding:0 11px;border-radius:9px;border:1px solid var(--line);
+    background:var(--card);color:var(--ink-soft);font:inherit;font-size:11.5px;cursor:pointer;
+    display:inline-flex;align-items:center;gap:4px;white-space:nowrap;
+    -webkit-tap-highlight-color:transparent;transition:all .2s ease}
+  .arc-chip small{font-size:9.5px;opacity:.66}
+  .arc-chip.on{background:var(--g700);color:#eafaf0;border-color:var(--g700);font-weight:600}
+  .arc-chip.on small{opacity:.8}
+
+  .arc-banner{margin:11px 18px 0;padding:10px 12px;border-radius:13px;display:flex;gap:9px;
+    align-items:center;flex:none;background:linear-gradient(135deg,rgba(255,246,229,.95),rgba(253,240,214,.7));
+    border:1px solid rgba(167,128,56,.28);cursor:pointer}
+  .arc-banner[hidden]{display:none}
+  .arc-banner .bd{width:7px;height:7px;border-radius:50%;background:var(--gold);flex:none;
+    box-shadow:0 0 0 3px rgba(167,128,56,.16)}
+  .arc-banner p{font-size:11.5px;color:#7a5c22;line-height:1.5;flex:1}
+  .arc-banner p b{font-weight:700}
+  .arc-banner span{font-size:11px;color:#8a6a2a;white-space:nowrap}
+  [data-theme="dark"] .arc-banner p{color:#e0c48a}
+  [data-theme="dark"] .arc-banner span{color:#d8bb84}
+
+  .arc-list{flex:1;min-height:0;overflow-y:auto;padding:11px 18px 8px;display:flex;
+    flex-direction:column;gap:9px;-webkit-overflow-scrolling:touch}
+
+  .arc-card{display:flex;gap:11px;padding:11px;border-radius:17px;background:var(--card);
+    border:1px solid var(--line);box-shadow:var(--card-edge),var(--shadow-1);cursor:pointer;
+    position:relative;flex:none;transition:transform .18s ease}
+  .arc-card:active{transform:scale(.988)}
+  .arc-thumb{width:60px;height:60px;border-radius:12px;flex:none;overflow:hidden;
+    background:rgba(120,100,70,.07);display:grid;place-items:center;color:var(--g600);
+    border:1px solid var(--line-soft);font-size:9.5px;letter-spacing:.04em}
+  .arc-thumb img{width:100%;height:100%;object-fit:cover;display:block}
+  .arc-thumb-cat{font-size:10px;font-weight:600;color:var(--g600);letter-spacing:.04em}
+  .arc-body{flex:1;min-width:0;display:flex;flex-direction:column;gap:4px;padding-right:34px}
+  .arc-title{font-size:13.5px;font-weight:600;color:var(--g900);line-height:1.35;
+    display:flex;align-items:flex-start;gap:5px}
+  .arc-title-t{display:-webkit-box;-webkit-line-clamp:2;-webkit-box-orient:vertical;
+    overflow:hidden;word-break:break-word;flex:1;min-width:0}
+  .arc-due{color:var(--gold);font-weight:600}
+  .arc-due.hot{color:var(--danger)}
+  .arc-pill{font-size:9px;padding:1.5px 5px;border-radius:5px;background:var(--g100);
+    color:var(--g700);font-weight:600;flex:none;letter-spacing:.02em}
+  .arc-pill.warn{background:var(--gold-bg);color:var(--gold)}
+  .arc-pill.dim{background:rgba(120,120,120,.12);color:var(--ink-faint)}
+  .arc-desc{font-size:11px;color:var(--ink-soft);line-height:1.55;overflow:hidden;
+    display:-webkit-box;-webkit-line-clamp:2;-webkit-box-orient:vertical;word-break:break-word}
+  .arc-meta{font-size:9.5px;color:var(--ink-faint);display:flex;gap:7px;align-items:center;flex-wrap:wrap}
+  .arc-meta s{text-decoration:none;opacity:.5}
+  .arc-cloud{position:absolute;right:10px;top:10px;font-size:9px;padding:1.5px 5px;border-radius:5px;
+    color:var(--ink-faint);background:rgba(120,140,120,.1);letter-spacing:.02em}
+  .arc-cloud.ok{color:var(--g600);background:rgba(39,169,116,.1)}
+  .arc-cloud.err{color:var(--danger);background:var(--danger-bg)}
+  .arc-cloud.doing{color:var(--gold);background:var(--gold-bg)}
+
+  .arc-empty{margin:auto;text-align:center;padding:34px 26px 60px;color:var(--ink-faint)}
+  .arc-empty svg{width:46px;height:46px;color:var(--g400);margin-bottom:12px;opacity:.8}
+  .arc-empty b{display:block;font-size:14px;color:var(--ink-soft);margin-bottom:7px;letter-spacing:.04em}
+  .arc-empty p{font-size:11.5px;line-height:1.75}
+
+  .arc-tabs{margin:0 14px calc(12px + env(safe-area-inset-bottom));height:56px;border-radius:18px;
+    background:var(--card);border:1px solid var(--line);display:grid;
+    grid-template-columns:repeat(3,1fr);box-shadow:var(--card-edge),var(--shadow-1);flex:none}
+  .arc-tab{display:flex;flex-direction:column;align-items:center;justify-content:center;gap:2px;
+    font-size:9.5px;color:var(--ink-faint);background:none;border:0;font-family:inherit;
+    cursor:pointer;letter-spacing:.04em}
+  .arc-tab svg{width:17px;height:17px}
+  .arc-tab.on{color:var(--g700);font-weight:600}
+
+  /* 入库 / 详情弹窗 */
+  .arc-mask{position:fixed;inset:0;z-index:1520;background:var(--mask-bg);
+    backdrop-filter:blur(10px);-webkit-backdrop-filter:blur(10px);display:flex;
+    align-items:center;justify-content:center;padding:14px;opacity:0;pointer-events:none;
+    transition:opacity .3s ease}
+  .arc-mask.open{opacity:1;pointer-events:auto}
+  .arc-mask .modal{max-height:88vh;overflow-y:auto;transform:translateY(12px) scale(.98);
+    transition:transform .3s cubic-bezier(.2,.9,.3,1)}
+  .arc-mask.open .modal{transform:none}
+  .arc-mask .modal h3{font-size:16px;letter-spacing:.08em;color:var(--g900)}
+  .arc-hint{font-size:10.5px;color:var(--ink-faint);line-height:1.65;margin:7px 0 12px}
+
+  .arc-picks{display:grid;grid-template-columns:repeat(3,1fr);gap:8px;margin-bottom:11px}
+  .arc-pick{height:54px;border-radius:13px;border:1px dashed var(--line);background:var(--card-hover);
+    color:var(--g700);font:inherit;font-size:11px;display:flex;flex-direction:column;
+    align-items:center;justify-content:center;gap:4px;cursor:pointer;
+    -webkit-tap-highlight-color:transparent}
+  .arc-pick:active{transform:scale(.97)}
+  .arc-pick svg{width:17px;height:17px;stroke:currentColor;fill:none;stroke-width:1.7}
+  .arc-pick[disabled]{opacity:.45;pointer-events:none}
+
+  .arc-draft{display:flex;gap:8px;overflow-x:auto;padding:0 0 10px;scrollbar-width:none}
+  .arc-draft::-webkit-scrollbar{display:none}
+  .arc-draft .d{position:relative;width:62px;height:62px;flex:none;border-radius:11px;
+    overflow:hidden;border:1px solid var(--line);background:var(--card-hover)}
+  .arc-draft .d img{width:100%;height:100%;object-fit:cover;display:block}
+  .arc-draft .d .pdf{width:100%;height:100%;display:grid;place-items:center;font-size:9px;
+    color:var(--gold);font-weight:700;letter-spacing:.04em;background:rgba(167,128,56,.08)}
+  .arc-draft .d i{position:absolute;right:2px;top:2px;width:16px;height:16px;border-radius:50%;
+    background:rgba(10,30,22,.62);color:#fff;font-size:9px;display:grid;place-items:center;
+    cursor:pointer;font-style:normal;line-height:1}
+
+  .arc-field{margin-bottom:10px}
+  .arc-field > span{display:block;font-size:10px;color:var(--ink-faint);margin-bottom:5px;
+    letter-spacing:.09em}
+  .arc-in{width:100%;border:1px solid var(--line);border-radius:11px;background:var(--card-hover);
+    padding:9px 11px;font:inherit;font-size:12.5px;color:var(--ink);outline:none;
+    -webkit-appearance:none;appearance:none}
+  .arc-in:focus{border-color:var(--g400);box-shadow:var(--ring)}
+  textarea.arc-in{min-height:54px;resize:vertical;line-height:1.6}
+  .arc-catrow{display:flex;gap:6px;flex-wrap:wrap}
+  .arc-catrow .arc-chip{height:26px;font-size:11px;padding:0 9px}
+  .arc-date2{display:grid;grid-template-columns:1fr 1fr;gap:8px}
+
+  /* 详情页 */
+  .arc-detail{position:fixed;inset:0;z-index:1460;display:none;flex-direction:column;
+    background:linear-gradient(172deg,var(--bg-top),var(--bg-bottom))}
+  .arc-detail.open{display:flex;animation:arcIn .22s ease-out}
+  .arc-dt-body{flex:1;min-height:0;overflow-y:auto;padding:12px 18px 16px;-webkit-overflow-scrolling:touch}
+  .arc-dt-view{border-radius:16px;overflow:hidden;background:rgba(20,40,30,.06);
+    display:grid;place-items:center;min-height:120px;border:1px solid var(--line)}
+  .arc-dt-view img{width:100%;display:block;max-height:44vh;object-fit:contain;background:rgba(20,40,30,.04)}
+  .arc-dt-view .pdfbox{padding:26px;text-align:center;color:var(--ink-faint);font-size:11.5px;line-height:1.7}
+  .arc-dt-view .pdfbox b{display:block;font-size:13px;color:var(--ink-soft);margin-bottom:5px}
+  .arc-dt-files{display:flex;gap:8px;overflow-x:auto;padding:9px 0 2px;scrollbar-width:none}
+  .arc-dt-files::-webkit-scrollbar{display:none}
+  .arc-dt-files button{width:54px;height:54px;border-radius:10px;overflow:hidden;flex:none;
+    border:1px solid var(--line);background:var(--card-hover);padding:0;cursor:pointer;
+    display:grid;place-items:center;font-size:9px;color:var(--gold);font-weight:700}
+  .arc-dt-files button.on{border-color:var(--g500);box-shadow:0 0 0 2px rgba(39,169,116,.22)}
+  .arc-dt-files img{width:100%;height:100%;object-fit:cover;display:block}
+  .arc-dt-h{font-size:10px;letter-spacing:.12em;color:var(--ink-faint);margin:14px 0 6px}
+  .arc-dt-row{display:flex;gap:8px}
+  .arc-dt-acts{display:flex;gap:8px;padding:10px 16px calc(18px + env(safe-area-inset-bottom));flex:none;background:linear-gradient(180deg,rgba(255,255,255,0),rgba(255,255,255,.28))}
+  .arc-dt-acts .a{flex:1;height:46px;border-radius:14px;border:1px solid var(--line);
+    background:var(--card);color:var(--g800);font:inherit;font-size:12px;font-weight:600;
+    letter-spacing:.04em;display:flex;align-items:center;justify-content:center;gap:6px;cursor:pointer}
+  .arc-dt-acts .a.pri{background:linear-gradient(140deg,var(--g600),var(--g700));color:#eafaf0;
+    border-color:transparent;box-shadow:0 10px 24px -12px rgba(22,112,82,.7)}
+  .arc-dt-acts .a.danger{color:var(--danger);border-color:rgba(168,84,77,.3);background:var(--danger-bg)}
+  .arc-zoom{position:fixed;inset:0;z-index:1560;background:rgba(8,18,14,.94);display:none;
+    align-items:center;justify-content:center;padding:10px}
+  .arc-zoom.open{display:flex}
+  .arc-zoom img{max-width:100%;max-height:100%;object-fit:contain}
+  .arc-zoom .x{position:absolute;top:calc(14px + env(safe-area-inset-top));right:16px;
+    width:38px;height:38px;border-radius:50%;border:0;background:rgba(255,255,255,.16);
+    color:#fff;font-size:18px;cursor:pointer}
+
+  @media(max-width:420px){
+    .arc-list{padding:10px 14px 6px}
+    .arc-search,.arc-cats,.arc-banner{margin-left:14px;margin-right:14px;padding-left:14px;padding-right:14px}
+    .arc-cats{padding-left:14px;padding-right:14px}
+    .arc-top{padding-left:14px;padding-right:14px}
+  }
 </style>
 </head>
 <body>
@@ -3145,6 +3328,14 @@
             <path d="M12 8.8l.9 1.8 2 .3-1.45 1.4.35 2-1.8-.95-1.8.95.35-2L9.1 10.9l2-.3z"/>
           </svg>
           <span>彩票</span>
+        </button>
+
+        <!-- 档案库：重要文件、证件、体检报告的原件归档（本机 + 私有云端） -->
+        <button class="tool-btn arc-btn" id="arcBtn" type="button" aria-label="档案库">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round">
+            <path d="M4 4.5h16v15H4z"/><path d="M4 10h16M4 15.5h16"/><path d="M10 7.2h4M10 12.7h4M10 18.2h4"/>
+          </svg>
+          <span>档案</span>
         </button>
       </div>
     </div>
@@ -3344,6 +3535,10 @@
   <label class="field"><span>文件路径</span><input id="cfgPath" placeholder="notes.json" autocomplete="off"></label>
   <label class="field"><span>分支</span><input id="cfgBranch" placeholder="main" autocomplete="off"></label>
   <label class="field"><span>访问令牌</span><input id="cfgToken" type="password" placeholder="github_pat_..." autocomplete="off"></label>
+  <p style="margin:-6px 0 12px;font-size:10.5px;line-height:1.65;color:var(--ink-faint)">
+    档案库也用这里的账号和令牌，但原件存到单独的私有仓库 <code>zjj-archive</code>（第一次存档案时自动创建），
+    不占笔记仓库的空间，也不会拖慢笔记同步。
+  </p>
   
   <button class="primary-btn" id="saveConfig" type="button">保存配置</button>
   <button class="text-btn" id="clearConfig" type="button">断开配置</button>
@@ -3580,6 +3775,114 @@
 
 <div class="lottery-lab" id="lotteryLab" role="dialog" aria-modal="true" aria-labelledby="lotteryTitle" hidden></div>
 
+<!-- ==================== v16.5 档案库 ==================== -->
+<section class="arc-lab" id="arcLab" role="dialog" aria-modal="true" aria-label="档案库" hidden>
+  <div class="arc-top">
+    <button class="arc-back" id="arcBack" type="button" aria-label="返回">
+      <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M15 5l-7 7 7 7"/></svg>
+    </button>
+    <div class="arc-ttl"><h2>档案库</h2><p id="arcSub">还没有档案</p></div>
+    <button class="arc-add" id="arcAdd" type="button" aria-label="存一份档案">
+      <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"><path d="M12 5v14M5 12h14"/></svg>
+    </button>
+  </div>
+
+  <div class="arc-search">
+    <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" style="color:var(--ink-faint);flex:none"><circle cx="11" cy="11" r="7"/><path d="M20 20l-4.2-4.2"/></svg>
+    <input type="text" id="arcSearch" placeholder="搜标题、标签、备注" autocomplete="off" aria-label="搜索档案">
+  </div>
+
+  <div class="arc-cats" id="arcCats"></div>
+  <div class="arc-banner" id="arcBanner" hidden>
+    <div class="bd"></div><p id="arcBannerTxt"></p><span>去看看 ›</span>
+  </div>
+
+  <div class="arc-list" id="arcList"></div>
+
+  <nav class="arc-tabs" aria-label="档案库页签">
+    <button class="arc-tab on" type="button" data-arc-tab="all">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round"><path d="M4 6h16v14H4z"/><path d="M4 10h16M9 6V4M15 6V4"/></svg>
+      <span>全部</span>
+    </button>
+    <button class="arc-tab" type="button" data-arc-tab="due">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round"><circle cx="12" cy="12" r="8"/><path d="M12 8v4.6l3 1.8"/></svg>
+      <span>到期</span>
+    </button>
+    <button class="arc-tab" type="button" data-arc-tab="trash">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round"><path d="M5 7h14M10 7V4h4v3"/><path d="M7 7l1 13h8l1-13"/></svg>
+      <span>回收站</span>
+    </button>
+  </nav>
+</section>
+
+<!-- 存档案 -->
+<div class="arc-mask" id="arcAddMask" role="dialog" aria-modal="true" aria-label="存一份档案">
+  <div class="modal">
+    <h3>存一份档案</h3>
+    <p class="arc-hint">照片、扫描件、PDF 都能存。原件留在本机，同时上传到你自己的私有仓库，换手机也在。</p>
+
+    <div class="arc-picks">
+      <button class="arc-pick" type="button" data-arc-pick="camera">
+        <svg viewBox="0 0 24 24" stroke-linecap="round" stroke-linejoin="round"><path d="M4 8h3l1.6-2.4h6.8L17 8h3v11H4z"/><circle cx="12" cy="13" r="3.2"/></svg>
+        拍照
+      </button>
+      <button class="arc-pick" type="button" data-arc-pick="photo">
+        <svg viewBox="0 0 24 24" stroke-linecap="round" stroke-linejoin="round"><path d="M4 5h16v14H4z"/><circle cx="9" cy="10" r="1.6"/><path d="M4 17l5-5 4 4 3-2.6 4 3.6"/></svg>
+        相册
+      </button>
+      <button class="arc-pick" type="button" data-arc-pick="file">
+        <svg viewBox="0 0 24 24" stroke-linecap="round" stroke-linejoin="round"><path d="M6 3h8l4 4v14H6z"/><path d="M14 3v4h4"/><path d="M9 13h6M9 17h4"/></svg>
+        文件
+      </button>
+    </div>
+
+    <div class="arc-draft" id="arcDraft"></div>
+
+    <div class="arc-field">
+      <span>标题</span>
+      <input class="arc-in" id="arcTitle" type="text" placeholder="比如：2026 年度体检报告" autocomplete="off" maxlength="60">
+    </div>
+
+    <div class="arc-field">
+      <span>放进哪一类</span>
+      <div class="arc-catrow" id="arcCatPick"></div>
+    </div>
+
+    <div class="arc-field arc-date2">
+      <label><span>文件日期</span><input class="arc-in" id="arcDocDate" type="date"></label>
+      <label><span>有效期（可选）</span><input class="arc-in" id="arcExpire" type="date"></label>
+    </div>
+
+    <div class="arc-field">
+      <span>备注（可选）</span>
+      <textarea class="arc-in" id="arcNote" placeholder="哪里开的、给谁看的、要注意什么…" maxlength="200"></textarea>
+    </div>
+
+    <div class="modal-actions">
+      <button class="m-btn" id="arcCancel" type="button">取消</button>
+      <button class="m-btn solid" id="arcSave" type="button">存进档案库</button>
+    </div>
+  </div>
+</div>
+
+<!-- 档案详情 -->
+<section class="arc-detail" id="arcDetail" aria-label="档案详情" hidden>
+  <div class="arc-top">
+    <button class="arc-back" id="arcDtBack" type="button" aria-label="返回档案库">
+      <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M15 5l-7 7 7 7"/></svg>
+    </button>
+    <div class="arc-ttl"><h2 style="font-size:16px;letter-spacing:.06em">档案详情</h2><p id="arcDtSub"></p></div>
+  </div>
+  <div class="arc-dt-body" id="arcDtBody"></div>
+  <div class="arc-dt-acts" id="arcDtActs"></div>
+</section>
+
+<div class="arc-zoom" id="arcZoom"><button class="x" id="arcZoomX" type="button" aria-label="关闭">✕</button><img id="arcZoomImg" alt="查看原件"></div>
+
+<input type="file" id="arcCamera" accept="image/*" capture="environment" style="display:none">
+<input type="file" id="arcPhotos" accept="image/*" multiple style="display:none">
+<input type="file" id="arcFiles" accept="application/pdf,image/*" multiple style="display:none">
+
 <div class="toast" id="toast"></div>
 
 <script src="lottery-data.js"></script>
@@ -3601,7 +3904,7 @@ window.onerror = function (msg, url, line) {
   'use strict';
 
   // 版本号统一在此维护；localStorage 键沿用 v11 不变，切勿改名以免丢失用户数据
-  var APP_VERSION = '16.4.2';
+  var APP_VERSION = '16.5.0';
   // 送货单拍照识别：视觉模型默认名、兼容别名与各项安全上限
   var DEFAULT_VISION_MODEL = 'deepseek-flash';
   var VISION_MODEL_FALLBACK = 'deepseek-v4-flash-vision-exp';
@@ -9894,6 +10197,1166 @@ window.onerror = function (msg, url, line) {
   } else {
     init();
   }
+  /* =========================================
+     v16.5 档案库（第 1 批）
+     索引 → localStorage + 云端 archive/index.json
+     原件 → IndexedDB + 云端 archive/files/<id>.<ext>（一文件一提交，不重传整包）
+     刻意独立于笔记同步：记笔记不会碰档案，档案多了也不会拖慢笔记
+  ========================================= */
+  var LS_ARC = 'bamboo.v16.archive';
+  var ARC_DB_NAME = 'bamboo.archive.files';
+  var ARC_STORE = 'files';
+  var ARC_REPO = 'zjj-archive';              // 独立私有仓库，不放在笔记库里
+  var ARC_BRANCH = 'main';
+  var ARC_MAX_FILES = 12;                    // 一次入库最多几个文件
+  var ARC_IMG_EDGE = 1600;                   // 主图长边
+  var ARC_IMG_BYTES = 600 * 1024;            // 主图上限
+  var ARC_THUMB_EDGE = 320;                  // 缩略图长边
+  var ARC_FILE_BYTES = 8 * 1024 * 1024;      // 单个 PDF 上限
+  var ARC_TRASH_DAYS = 30;
+
+  var ARC_CATS = [
+    { k: 'health',   n: '健康' },
+    { k: 'id',       n: '证件' },
+    { k: 'contract', n: '合同' },
+    { k: 'bill',     n: '票据' },
+    { k: 'asset',    n: '房产车' },
+    { k: 'study',    n: '证书' },
+    { k: 'shop',     n: '店铺' },
+    { k: 'family',   n: '家人' },
+    { k: 'other',    n: '其他' }
+  ];
+
+  var arcItems = [];
+  var arcDraft = [];
+  var arcUi = { tab: 'all', cat: 'all', q: '', draftCat: 'other', detailId: null };
+  var arcQueue = Promise.resolve();
+  var arcRepoReady = false;
+  var arcRepoPromise = null;
+  var arcUrls = {};
+
+  function arcCatName(k) {
+    for (var i = 0; i < ARC_CATS.length; i++) if (ARC_CATS[i].k === k) return ARC_CATS[i].n;
+    return '其他';
+  }
+  function arcFind(id) {
+    for (var i = 0; i < arcItems.length; i++) if (arcItems[i].id === id) return arcItems[i];
+    return null;
+  }
+
+  /* ---------- 索引存取 ---------- */
+  function arcLoad() {
+    try {
+      var raw = localStorage.getItem(LS_ARC);
+      if (raw) {
+        var d = JSON.parse(raw);
+        if (d && Array.isArray(d.items)) arcItems = d.items;
+      }
+    } catch (e) {
+      arcItems = [];
+      try { localStorage.setItem('bamboo.v16.archive.corrupt.' + Date.now(), String(localStorage.getItem(LS_ARC) || '')); } catch (e2) {}
+    }
+    // 清掉超过 30 天的回收站
+    var now = Date.now(), changed = false;
+    for (var i = arcItems.length - 1; i >= 0; i--) {
+      var it = arcItems[i];
+      if (it.status === 'trash' && it.trashedAt && (now - new Date(it.trashedAt).getTime()) > ARC_TRASH_DAYS * 86400000) {
+        arcPurgeFiles(it);
+        arcItems.splice(i, 1);
+        changed = true;
+      }
+    }
+    if (changed) arcSave();
+  }
+  function arcSave() {
+    try {
+      localStorage.setItem(LS_ARC, JSON.stringify({ v: 1, items: arcItems }));
+    } catch (e) {
+      toast('本机空间不够，档案索引没存下，请先清理一些');
+    }
+  }
+
+  /* ---------- 原件存储（IndexedDB） ---------- */
+  var arcDBP = null;
+  function arcDB() {
+    if (arcDBP) return arcDBP;
+    arcDBP = new Promise(function (resolve, reject) {
+      if (!window.indexedDB) { reject(new Error('这个浏览器不支持本地文件存储')); return; }
+      var req;
+      try { req = indexedDB.open(ARC_DB_NAME, 1); } catch (e) { reject(e); return; }
+      req.onupgradeneeded = function () {
+        var db = req.result;
+        if (!db.objectStoreNames.contains(ARC_STORE)) db.createObjectStore(ARC_STORE);
+      };
+      req.onsuccess = function () { resolve(req.result); };
+      req.onerror = function () { reject(req.error || new Error('档案库打不开')); };
+    });
+    return arcDBP;
+  }
+  function arcReq(mode, fn) {
+    return arcDB().then(function (db) {
+      return new Promise(function (resolve, reject) {
+        var tx;
+        try { tx = db.transaction(ARC_STORE, mode); } catch (e) { reject(e); return; }
+        var r;
+        try { r = fn(tx.objectStore(ARC_STORE)); } catch (e2) { reject(e2); return; }
+        tx.oncomplete = function () { resolve(r ? r.result : undefined); };
+        tx.onerror = function () { reject(tx.error || new Error('本机存储出错')); };
+      });
+    });
+  }
+  function arcPut(key, blob) { return arcReq('readwrite', function (st) { return st.put(blob, key); }); }
+  function arcGet(key) { return arcReq('readonly', function (st) { return st.get(key); }); }
+  function arcDel(key) { return arcReq('readwrite', function (st) { return st.delete(key); }).catch(function () {}); }
+  function arcPurgeFiles(item) {
+    for (var i = 0; i < (item.files || []).length; i++) {
+      arcDel(item.files[i].id);
+      arcDel('thumb_' + item.files[i].id);
+    }
+  }
+
+  /* ---------- 文件处理 ---------- */
+  function arcKindOf(file) {
+    var t = String(file.type || '');
+    if (/^image\//.test(t)) return 'image';
+    if (/pdf/i.test(t) || /\.pdf$/i.test(String(file.name || ''))) return 'pdf';
+    return 'file';
+  }
+  function arcCanvasBlob(cv, q) {
+    return new Promise(function (resolve) {
+      if (cv.toBlob) cv.toBlob(function (b) { resolve(b); }, 'image/jpeg', q);
+      else {
+        try {
+          var d = cv.toDataURL('image/jpeg', q);
+          var bin = atob(d.slice(d.indexOf(',') + 1));
+          var u8 = new Uint8Array(bin.length);
+          for (var i = 0; i < bin.length; i++) u8[i] = bin.charCodeAt(i);
+          resolve(new Blob([u8], { type: 'image/jpeg' }));
+        } catch (e) { resolve(null); }
+      }
+    });
+  }
+  function arcDraw(img, tw, th) {
+    var cv = document.createElement('canvas');
+    cv.width = tw; cv.height = th;
+    var ctx = cv.getContext('2d');
+    if (!ctx) return null;
+    ctx.fillStyle = '#ffffff';
+    ctx.fillRect(0, 0, tw, th);
+    ctx.drawImage(img, 0, 0, tw, th);
+    return cv;
+  }
+  // 主图压到 ≤600KB（逐步降质），另出一张 320px 缩略图给列表用
+  function arcCompressImage(file) {
+    return new Promise(function (resolve, reject) {
+      var url = URL.createObjectURL(file);
+      var img = new Image();
+      img.onerror = function () {
+        URL.revokeObjectURL(url);
+        reject(new Error('这张图打不开（可能是 HEIC），先转成 JPG 再存'));
+      };
+      img.onload = function () {
+        var w = img.naturalWidth || img.width, h = img.naturalHeight || img.height;
+        if (!w || !h) { URL.revokeObjectURL(url); reject(new Error('图片尺寸无效')); return; }
+        var sc = Math.min(1, ARC_IMG_EDGE / Math.max(w, h));
+        var tw = Math.max(1, Math.round(w * sc)), th = Math.max(1, Math.round(h * sc));
+        var main = arcDraw(img, tw, th);
+        if (!main) { URL.revokeObjectURL(url); reject(new Error('浏览器不支持图片处理')); return; }
+        var tsc = Math.min(1, ARC_THUMB_EDGE / Math.max(w, h));
+        var thumbCv = arcDraw(img, Math.max(1, Math.round(w * tsc)), Math.max(1, Math.round(h * tsc)));
+        URL.revokeObjectURL(url);
+
+        var q = 0.82, tries = 0;
+        function shot() {
+          arcCanvasBlob(main, q).then(function (blob) {
+            if (!blob) { reject(new Error('图片压缩失败')); return; }
+            if (blob.size > ARC_IMG_BYTES && q > 0.46 && tries < 6) {
+              q -= 0.08; tries++; shot(); return;
+            }
+            arcCanvasBlob(thumbCv, 0.8).then(function (thumb) {
+              resolve({ blob: blob, thumb: thumb || blob, w: tw, h: th });
+            });
+          });
+        }
+        shot();
+      };
+      img.src = url;
+    });
+  }
+  function arcPrepare(file) {
+    var kind = arcKindOf(file);
+    var name = String(file.name || '原件').slice(0, 60);
+    if (kind === 'image') {
+      return arcCompressImage(file).then(function (r) {
+        return {
+          name: name, kind: 'image', mime: 'image/jpeg', size: r.blob.size,
+          blob: r.blob, thumb: r.thumb, thumbUrl: URL.createObjectURL(r.thumb)
+        };
+      });
+    }
+    if (file.size > ARC_FILE_BYTES) {
+      return Promise.reject(new Error('这个文件超过 8MB（' + (file.size / 1048576).toFixed(1) + 'MB），先压一下再存'));
+    }
+    return Promise.resolve({
+      name: name, kind: kind, mime: file.type || 'application/octet-stream',
+      size: file.size, blob: file, thumb: null, thumbUrl: ''
+    });
+  }
+
+  /* ---------- 云端（GitHub 私有仓库，一文件一提交） ---------- */
+  function arcCloudReady() {
+    var c = state.config;
+    return !!(c && c.owner && c.token && !unsafeSyncTargetArchive());
+  }
+  // 档案库仓库是独立的私有库；这里只防一种低级错误：有人把仓库名改成当前托管库
+  function unsafeSyncTargetArchive() {
+    var c = state.config;
+    if (!c || !c.owner) return false;
+    var m = location.pathname.match(/^\/([^/]+)\//);
+    if (!m) return false;
+    return m[1].toLowerCase() === String(ARC_REPO).toLowerCase() &&
+           String(c.owner).toLowerCase() === location.hostname.split('.')[0].toLowerCase();
+  }
+  function arcApiFetch(path, opt) {
+    var cfg = state.config;
+    var url = 'https://api.github.com/repos/' + encodeURIComponent(cfg.owner) + '/' +
+      encodeURIComponent(ARC_REPO) + path;
+    opt = opt || {};
+    opt.headers = {
+      'Authorization': 'token ' + cfg.token,
+      'Accept': 'application/vnd.github+json',
+      'Content-Type': 'application/json',
+      'User-Agent': 'zjj-archive'
+    };
+    return fetch(url, opt);
+  }
+  function arcEnsureRepo() {
+    if (arcRepoReady) return Promise.resolve();
+    if (arcRepoPromise) return arcRepoPromise;
+    arcRepoPromise = arcApiFetch('').then(function (r) {
+      if (r.ok) { arcRepoReady = true; return; }
+      if (r.status === 404) {
+        return fetch('https://api.github.com/user', {
+          headers: { 'Authorization': 'token ' + state.config.token, 'User-Agent': 'zjj-archive' }
+        }).then(function (u) {
+          return u.json().then(function (me) {
+            if (!me || !me.login) throw new Error('令牌读不到账号');
+            if (String(me.login).toLowerCase() !== String(state.config.owner).toLowerCase()) {
+              throw new Error('找不到仓库 ' + state.config.owner + '/' + ARC_REPO + '，先去 GitHub 建一个同名私有库');
+            }
+            return fetch('https://api.github.com/user/repos', {
+              method: 'POST',
+              headers: {
+                'Authorization': 'token ' + state.config.token,
+                'Accept': 'application/vnd.github+json',
+                'Content-Type': 'application/json',
+                'User-Agent': 'zjj-archive'
+              },
+              body: JSON.stringify({ name: ARC_REPO, private: true, description: '竹间记 档案库原件（私有）', auto_init: true })
+            }).then(function (c) {
+              if (!c.ok) return c.text().then(function () { throw new Error('建仓库失败 (' + c.status + ')'); });
+              arcRepoReady = true;
+            });
+          });
+        });
+      }
+      if (r.status === 401 || r.status === 403) throw new Error('令牌没有这个仓库的权限');
+      throw new Error('仓库检查失败 (' + r.status + ')');
+    }).then(function () {
+      arcRepoPromise = null;
+    }).catch(function (e) {
+      arcRepoPromise = null;
+      throw e;
+    });
+    return arcRepoPromise;
+  }
+  function arcGetSha(rel) {
+    return arcApiFetch('/contents/' + rel.split('/').map(encodeURIComponent).join('/') + '?ref=' + ARC_BRANCH + '&t=' + Date.now())
+      .then(function (r) {
+        if (!r.ok) return null;
+        return r.json().then(function (d) { return d && d.sha ? d.sha : null; });
+      }).catch(function () { return null; });
+  }
+  function arcPutContent(rel, b64, message, skipSha) {
+    var path = '/contents/' + rel.split('/').map(encodeURIComponent).join('/');
+    function put(sha) {
+      var body = { message: message, content: b64, branch: ARC_BRANCH };
+      if (sha) body.sha = sha;
+      return arcApiFetch(path, { method: 'PUT', body: JSON.stringify(body) });
+    }
+    var first = skipSha ? put(null) : arcGetSha(rel).then(function (sha) { return put(sha); });
+    return first.then(function (r) {
+        if (r.ok) return r.json().catch(function () { return {}; });
+        if (r.status === 409 || r.status === 422) {
+          return arcGetSha(rel).then(function (s2) {
+            if (!s2) return r.text().then(function () { throw new Error('上传被拒绝 (' + r.status + ')'); });
+            return put(s2).then(function (r2) {
+              if (r2.ok) return r2.json().catch(function () { return {}; });
+              return r2.text().then(function () { throw new Error('上传失败 (' + r2.status + ')'); });
+            });
+          });
+        }
+        return r.text().then(function () {
+          var msg = '上传失败 (' + r.status + ')';
+          if (r.status === 401) msg = '令牌失效了，去设置里换一个';
+          if (r.status === 403) msg = '令牌权限不够（需要能写这个私有库）';
+          if (r.status === 404) msg = '云端仓库不存在';
+          throw new Error(msg);
+        });
+    });
+  }
+  function arcBlobToB64(blob) {
+    return new Promise(function (resolve, reject) {
+      var r = new FileReader();
+      r.onerror = function () { reject(new Error('原件读不出来')); };
+      r.onload = function () {
+        var s = String(r.result || '');
+        resolve(s.indexOf(',') >= 0 ? s.slice(s.indexOf(',') + 1) : '');
+      };
+      r.readAsDataURL(blob);
+    });
+  }
+  function arcIndexPayload() {
+    var items = [];
+    for (var i = 0; i < arcItems.length; i++) {
+      var it = arcItems[i];
+      items.push({
+        id: it.id, title: it.title, cat: it.cat, tags: it.tags || [], docDate: it.docDate,
+        expireAt: it.expireAt || '', note: it.note || '', summary: it.summary || '',
+        fields: it.fields || {}, files: it.files || [],
+        createdAt: it.createdAt, updatedAt: it.updatedAt, status: it.status,
+        trashedAt: it.trashedAt || ''
+      });
+    }
+    return { v: 1, at: new Date().toISOString(), items: items };
+  }
+  function arcUploadIndex() {
+    var b64 = b64encode(JSON.stringify(arcIndexPayload()));
+    return arcPutContent('index.json', b64, '档案索引 · ' + arcItems.length + ' 份 · ' + new Date().toLocaleString('zh-CN'));
+  }
+  function arcUploadItem(item) {
+    return arcEnsureRepo().then(function () {
+      var jobs = [];
+      for (var i = 0; i < item.files.length; i++) {
+        (function (f) {
+          jobs.push(arcGet(f.id).then(function (blob) {
+            if (!blob) throw new Error('本机找不到这个原件');
+            return arcBlobToB64(blob).then(function (b64) {
+              return arcPutContent('files/' + f.path, b64, '档案原件 · ' + item.title, true).then(function (res) {
+                // 记住云端版本号：换手机时靠它把原件取回来
+                if (res && res.content && res.content.sha) f.sha = res.content.sha;
+                return true;
+              });
+            });
+          }));
+        })(item.files[i]);
+      }
+      return Promise.all(jobs);
+    }).then(function () {
+      return arcUploadIndex();
+    });
+  }
+  // 串行队列：连拍十张也不会同时提交打架；失败只影响这一份
+  function arcEnqueue(item) {
+    if (!arcCloudReady()) { item.sync = 'local'; arcSave(); arcRender(); return; }
+    item.sync = 'doing'; arcSave(); arcRender();
+    arcQueue = arcQueue.then(function () {
+      return arcUploadItem(item);
+    }).then(function () {
+      item.sync = 'ok'; arcSave(); arcRender();
+    }).catch(function (e) {
+      item.sync = 'err'; arcSave(); arcRender();
+      var msg = e && e.message ? e.message : '上传失败';
+      toast('「' + item.title + '」没传上去：' + msg);
+    });
+    return arcQueue;
+  }
+  // 把云端索引并回本机：换手机、清缓存、重装后靠这一步把档案找回来
+  function arcPullIndex() {
+    if (!arcCloudReady()) return Promise.resolve(false);
+    return arcApiFetch('/contents/index.json?ref=' + ARC_BRANCH + '&t=' + Date.now())
+      .then(function (r) {
+        if (r.status === 404) return null;
+        if (!r.ok) return null;
+        return r.json();
+      })
+      .then(function (d) {
+        if (!d || !d.content) return false;
+        var parsed = null;
+        try { parsed = JSON.parse(b64decode(d.content)); } catch (e) { return false; }
+        if (!parsed || !Array.isArray(parsed.items)) return false;
+        var byId = {};
+        for (var i = 0; i < arcItems.length; i++) byId[arcItems[i].id] = arcItems[i];
+        var added = 0, updated = 0;
+        for (var j = 0; j < parsed.items.length; j++) {
+          var r2 = parsed.items[j];
+          if (!r2 || !r2.id) continue;
+          var mine = byId[r2.id];
+          if (!mine) {
+            r2.sync = 'ok';
+            r2.files = r2.files || [];
+            arcItems.push(r2);
+            added++;
+          } else if (!mine.sync || mine.sync === 'ok') {
+            // 本地没改动过，才让云端覆盖；本地待上传的不动，避免把刚改的冲掉
+            if (String(r2.updatedAt || '') > String(mine.updatedAt || '')) {
+              for (var k in r2) if (Object.prototype.hasOwnProperty.call(r2, k)) mine[k] = r2[k];
+              mine.sync = 'ok';
+              updated++;
+            }
+          }
+        }
+        if (added || updated) {
+          arcSave();
+          arcRender();
+        }
+        return added + updated > 0;
+      })
+      .catch(function () { return false; });
+  }
+  // 本机没有就现去云端取（只取这一份，不整包下载）
+  function arcDownloadFile(f) {
+    return arcGet(f.id).then(function (b) {
+      if (b) return b;
+      if (!arcCloudReady()) throw new Error('本机没有，云端也没连上');
+      var cfg = state.config;
+      var p;
+      if (f.sha) {
+        p = fetch('https://api.github.com/repos/' + encodeURIComponent(cfg.owner) + '/' +
+          encodeURIComponent(ARC_REPO) + '/git/blobs/' + f.sha, {
+          headers: { 'Authorization': 'token ' + cfg.token, 'Accept': 'application/vnd.github+json', 'User-Agent': 'zjj-archive' }
+        }).then(function (r) {
+          if (!r.ok) throw new Error('云端取不到这个原件');
+          return r.json();
+        }).then(function (d) { return d.content; });
+      } else {
+        p = arcApiFetch('/contents/files/' + encodeURIComponent(f.path) + '?ref=' + ARC_BRANCH)
+          .then(function (r) {
+            if (!r.ok) throw new Error('云端取不到这个原件');
+            return r.json();
+          }).then(function (d) { return d.content; });
+      }
+      return p.then(function (b64) {
+        var bin = atob(String(b64 || '').replace(/\s/g, ''));
+        var u8 = new Uint8Array(bin.length);
+        for (var i = 0; i < bin.length; i++) u8[i] = bin.charCodeAt(i);
+        var blob = new Blob([u8], { type: f.mime || 'application/octet-stream' });
+        return arcPut(f.id, blob).then(function () { return blob; });
+      });
+    });
+  }
+
+  function arcRetryAll() {
+    var n = 0;
+    for (var i = 0; i < arcItems.length; i++) {
+      if (arcItems[i].status === 'active' && arcItems[i].sync !== 'ok') { arcEnqueue(arcItems[i]); n++; }
+    }
+    if (!n) toast('没有要重传的');
+    else toast('正在重传 ' + n + ' 份…');
+  }
+
+  /* ---------- 时间与尺寸 ---------- */
+  function arcDateLabel(s) {
+    if (!s) return '';
+    var m = String(s).match(/^(\d{4})-(\d{2})-(\d{2})/);
+    if (!m) return String(s);
+    var y = Number(m[1]), mo = Number(m[2]), d = Number(m[3]);
+    var thisY = new Date().getFullYear();
+    return (y === thisY ? '' : y + ' 年 ') + mo + ' 月 ' + d + ' 日';
+  }
+  function arcDaysLeft(it) {
+    if (!it || !it.expireAt) return null;
+    var m = String(it.expireAt).match(/^(\d{4})-(\d{2})-(\d{2})/);
+    if (!m) return null;
+    var t = new Date(Number(m[1]), Number(m[2]) - 1, Number(m[3])).getTime();
+    var now = new Date(); now.setHours(0, 0, 0, 0);
+    return Math.round((t - now.getTime()) / 86400000);
+  }
+  function arcSizeLabel(n) {
+    if (!n) return '';
+    if (n < 1024) return n + ' B';
+    if (n < 1048576) return Math.round(n / 1024) + ' KB';
+    return (n / 1048576).toFixed(1) + ' MB';
+  }
+
+
+
+  /* ---------- 渲染 ---------- */
+  function arcActiveItems() {
+    var out = [];
+    for (var i = 0; i < arcItems.length; i++) if (arcItems[i].status === 'active') out.push(arcItems[i]);
+    return out;
+  }
+  function arcHay(it) {
+    var parts = [it.title || '', arcCatName(it.cat), it.note || '', it.summary || ''];
+    var tags = it.tags || [];
+    for (var i = 0; i < tags.length; i++) parts.push(tags[i]);
+    var fs = it.files || [];
+    for (var j = 0; j < fs.length; j++) parts.push(fs[j].name || '');
+    return parts.join(' ').toLowerCase();
+  }
+  function arcDueSoon() {
+    var out = [];
+    var act = arcActiveItems();
+    for (var i = 0; i < act.length; i++) {
+      var d = arcDaysLeft(act[i]);
+      if (d !== null && d <= 30) out.push({ it: act[i], d: d });
+    }
+    out.sort(function (a, b) { return a.d - b.d; });
+    return out;
+  }
+  function arcDueText(it) {
+    var d = arcDaysLeft(it);
+    if (d === null) return '';
+    var txt = d < 0 ? ('已过期 ' + (-d) + ' 天') : (d === 0 ? '今天到期' : (d <= 30 ? d + ' 天后到期' : ''));
+    if (!txt) return '';
+    return ' <s>·</s> <span class="arc-due' + (d <= 7 ? ' hot' : '') + '">' + txt + '</span>';
+  }
+  function arcCloudTag(it) {
+    if (it.sync === 'ok') return '<span class="arc-cloud ok">已上云</span>';
+    if (it.sync === 'doing') return '<span class="arc-cloud doing">上传中</span>';
+    if (it.sync === 'err') return '<span class="arc-cloud err">待重传</span>';
+    return '<span class="arc-cloud">仅本机</span>';
+  }
+  function arcRenderCats() {
+    var box = $('arcCats');
+    if (!box) return;
+    var sl = box.scrollLeft;
+    var act = arcActiveItems();
+    var count = {};
+    for (var i = 0; i < act.length; i++) count[act[i].cat] = (count[act[i].cat] || 0) + 1;
+    var h = '<button class="arc-chip' + (arcUi.cat === 'all' ? ' on' : '') + '" type="button" data-arc-cat="all">全部 <small>' + act.length + '</small></button>';
+    for (var c = 0; c < ARC_CATS.length; c++) {
+      var k = ARC_CATS[c].k;
+      if (!count[k]) continue;
+      h += '<button class="arc-chip' + (arcUi.cat === k ? ' on' : '') + '" type="button" data-arc-cat="' + k + '">' +
+        ARC_CATS[c].n + ' <small>' + count[k] + '</small></button>';
+    }
+    box.innerHTML = h;
+    box.scrollLeft = sl;
+  }
+  function arcRenderBanner() {
+    var el = $('arcBanner');
+    if (!el) return;
+    var due = arcDueSoon();
+    if (arcUi.tab !== 'all' || !due.length) { el.hidden = true; return; }
+    var overdue = 0, names = [];
+    for (var i = 0; i < due.length; i++) if (due[i].d < 0) overdue++;
+    for (var j = 0; j < due.length && j < 3; j++) {
+      names.push(due[j].it.title);
+    }
+    var head = overdue
+      ? (overdue + ' 份已过期' + (due.length > overdue ? '，' + (due.length - overdue) + ' 份快到期' : ''))
+      : (due.length + ' 份 30 天内到期');
+    $('arcBannerTxt').innerHTML = '<b>' + head + '</b> · ' + escapeHTML(names.join('、'));
+    el.hidden = false;
+  }
+  function arcRenderList() {
+    var box = $('arcList');
+    if (!box) return;
+    var list = arcActiveItems();
+    if (arcUi.tab === 'trash') {
+      list = [];
+      for (var i = 0; i < arcItems.length; i++) if (arcItems[i].status === 'trash') list.push(arcItems[i]);
+    } else if (arcUi.tab === 'due') {
+      var due = arcDueSoon();
+      list = [];
+      for (var j = 0; j < due.length; j++) list.push(due[j].it);
+    }
+    if (arcUi.cat !== 'all') {
+      var f = [];
+      for (var k = 0; k < list.length; k++) if (list[k].cat === arcUi.cat) f.push(list[k]);
+      list = f;
+    }
+    var q = String(arcUi.q || '').trim().toLowerCase();
+    if (q) {
+      var f2 = [];
+      for (var m = 0; m < list.length; m++) if (arcHay(list[m]).indexOf(q) >= 0) f2.push(list[m]);
+      list = f2;
+    }
+    list.sort(function (a, b) {
+      var da = String(a.docDate || a.createdAt || '');
+      var db = String(b.docDate || b.createdAt || '');
+      return db < da ? -1 : (db > da ? 1 : 0);
+    });
+
+    if (!list.length) {
+      box.innerHTML = arcEmptyHTML();
+      return;
+    }
+    var h = '';
+    for (var n = 0; n < list.length; n++) {
+      var it = list[n];
+      var desc = it.summary || it.note || (it.files && it.files.length ? it.files.length + ' 个原件已存好' : '还没有备注');
+      var meta = arcDateLabel(it.docDate) || arcDateLabel(it.createdAt);
+      if (it.files && it.files.length > 1) meta += ' <s>·</s> ' + it.files.length + ' 个原件';
+      if (it.status === 'trash') meta = '删于 ' + arcDateLabel(it.trashedAt);
+      h += '<div class="arc-card" data-arc-id="' + escapeHTML(it.id) + '" role="button" tabindex="0">' +
+             '<div class="arc-thumb" data-arc-thumb="' + escapeHTML(it.id) + '"></div>' +
+             '<div class="arc-body">' +
+               '<div class="arc-title"><span class="arc-title-t">' + escapeHTML(it.title || '未命名档案') + '</span>' +
+                 '<span class="arc-pill">' + escapeHTML(arcCatName(it.cat)) + '</span></div>' +
+               '<div class="arc-desc">' + escapeHTML(desc) + '</div>' +
+               '<div class="arc-meta">' + meta +
+                 (it.status === 'trash' ? '' : arcDueText(it)) + '</div>' +
+             '</div>' +
+             arcCloudTag(it) +
+           '</div>';
+    }
+    box.innerHTML = h;
+    arcThumbFill();
+  }
+  function arcEmptyHTML() {
+    if (arcUi.tab === 'trash') {
+      return '<div class="arc-empty"><b>回收站是空的</b><p>删掉的档案会先放这儿，30 天内都能捡回来。</p></div>';
+    }
+    if (arcUi.q) {
+      return '<div class="arc-empty"><b>没找到「' + escapeHTML(arcUi.q) + '」</b><p>换个词试试，或者按分类翻。</p></div>';
+    }
+    if (arcUi.tab === 'due') {
+      return '<div class="arc-empty"><b>30 天内没有要到期的东西</b><p>存的时候填上「有效期」，到日子我会提前提醒你。</p></div>';
+    }
+    if (arcUi.cat !== 'all') {
+      return '<div class="arc-empty"><b>这一类还没有档案</b><p>点右上角 ＋ 存一份进来。</p></div>';
+    }
+    return '<div class="arc-empty">' +
+      '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.3" stroke-linecap="round"><path d="M4 4.5h16v15H4z"/><path d="M4 10h16M4 15.5h16"/><path d="M10 7.2h4M10 12.7h4M10 18.2h4"/></svg>' +
+      '<b>还没有档案</b><p>体检报告、证件、合同、发票……<br>拍一张或选个文件，就存在这儿。<br>本机一份，你自己的私有云端一份。</p></div>';
+  }
+  function arcThumbFill() {
+    var box = $('arcList');
+    if (!box) return;
+    var nodes = box.querySelectorAll('[data-arc-thumb]');
+    for (var i = 0; i < nodes.length; i++) {
+      (function (el) {
+        var id = el.getAttribute('data-arc-thumb');
+        var it = arcFind(id);
+        if (!it || !it.files || !it.files.length) { el.textContent = '空'; return; }
+        var f = it.files[0];
+        if (f.kind !== 'image') { el.innerHTML = '<span class="arc-thumb-cat">PDF</span>'; return; }
+        var key = 'thumb_' + f.id;
+        if (arcUrls[key]) { el.innerHTML = '<img alt="" src="' + arcUrls[key] + '">'; return; }
+        // 先放分类字，等缩略图读到再替换（云端拉下来的条目本机还没图）
+        el.innerHTML = '<span class="arc-thumb-cat">' + escapeHTML(arcCatName(it.cat)) + '</span>';
+        arcGet(key).then(function (blob) {
+          if (!blob) return;
+          var u = URL.createObjectURL(blob);
+          arcUrls[key] = u;
+          if (el.getAttribute('data-arc-thumb') === id) el.innerHTML = '<img alt="" src="' + u + '">';
+        }).catch(function () {});
+      })(nodes[i]);
+    }
+  }
+  function arcRender() {
+    var act = arcActiveItems();
+    var pending = 0;
+    for (var i = 0; i < act.length; i++) if (act[i].sync !== 'ok') pending++;
+    var sub = $('arcSub');
+    if (sub) {
+      sub.className = '';
+      if (!arcCloudReady()) {
+        sub.textContent = act.length + ' 份 · 只在本机';
+      } else if (pending) {
+        sub.className = 'warn';
+        sub.textContent = act.length + ' 份 · ' + pending + ' 份待上传';
+      } else {
+        sub.textContent = act.length + ' 份 · 已全部在云端';
+      }
+    }
+    var tabs = document.querySelectorAll('[data-arc-tab]');
+    for (var t = 0; t < tabs.length; t++) {
+      var on = tabs[t].getAttribute('data-arc-tab') === arcUi.tab;
+      tabs[t].classList.toggle('on', on);
+      tabs[t].setAttribute('aria-selected', on ? 'true' : 'false');
+    }
+    arcRenderCats();
+    arcRenderBanner();
+    arcRenderList();
+  }
+
+  /* ---------- 打开 / 关闭 ---------- */
+  function arcOpen() {
+    var lab = $('arcLab');
+    if (!lab) return;
+    lab.hidden = false;
+    lab.classList.add('open');
+    arcRender();
+    if (arcCloudReady()) {
+      arcPullIndex().then(function (changed) {
+        if (changed) toast('已从云端补上新的档案');
+      });
+    }
+  }
+  function arcClose() {
+    var lab = $('arcLab');
+    if (!lab) return;
+    lab.classList.remove('open');
+    setTimeout(function () { if (!lab.classList.contains('open')) lab.hidden = true; }, 240);
+  }
+
+  /* ---------- 入库 ---------- */
+  function arcOpenAdd() {
+    arcDraft = [];
+    arcUi.draftCat = 'other';
+    var t = $('arcTitle'); if (t) t.value = '';
+    var n = $('arcNote'); if (n) n.value = '';
+    var d = $('arcDocDate'); if (d) d.value = todayStr();
+    var e = $('arcExpire'); if (e) e.value = '';
+    arcRenderDraft();
+    arcRenderCatPick();
+    var mask = $('arcAddMask');
+    if (mask) mask.classList.add('open');
+    setTimeout(function () { if (t) t.focus(); }, 260);
+  }
+  function arcCloseAdd() {
+    var mask = $('arcAddMask');
+    if (mask) mask.classList.remove('open');
+    arcDraft = [];
+    arcRenderDraft();
+  }
+  function arcRenderCatPick() {
+    var box = $('arcCatPick');
+    if (!box) return;
+    var h = '';
+    for (var i = 0; i < ARC_CATS.length; i++) {
+      h += '<button class="arc-chip' + (arcUi.draftCat === ARC_CATS[i].k ? ' on' : '') +
+        '" type="button" data-arc-draft-cat="' + ARC_CATS[i].k + '">' + ARC_CATS[i].n + '</button>';
+    }
+    box.innerHTML = h;
+  }
+  function arcRenderDraft() {
+    var box = $('arcDraft');
+    if (!box) return;
+    if (!arcDraft.length) { box.innerHTML = ''; return; }
+    var h = '';
+    for (var i = 0; i < arcDraft.length; i++) {
+      var d = arcDraft[i];
+      h += '<div class="d">' +
+        (d.thumbUrl ? '<img alt="" src="' + d.thumbUrl + '">' : '<div class="pdf">' + (d.kind === 'pdf' ? 'PDF' : '文件') + '</div>') +
+        '<i data-arc-drop="' + i + '" role="button" aria-label="移除">✕</i></div>';
+    }
+    box.innerHTML = h;
+  }
+  function arcAcceptFiles(files) {
+    var list = Array.prototype.slice.call(files || []);
+    if (!list.length) return;
+    var room = ARC_MAX_FILES - arcDraft.length;
+    if (room <= 0) { toast('一次最多 ' + ARC_MAX_FILES + ' 个文件'); return; }
+    if (list.length > room) { toast('一次最多 ' + ARC_MAX_FILES + ' 个，多的先忽略了'); list = list.slice(0, room); }
+    var chain = Promise.resolve(), failed = 0;
+    for (var i = 0; i < list.length; i++) {
+      (function (f) {
+        chain = chain.then(function () {
+          return arcPrepare(f).then(function (d) {
+            arcDraft.push(d);
+            arcRenderDraft();
+          }).catch(function (e) {
+            failed++;
+            toast(e && e.message ? e.message : '这个文件读不了');
+          });
+        });
+      })(list[i]);
+    }
+    chain.then(function () {
+      var t = $('arcTitle');
+      if (t && !t.value.trim() && arcDraft.length === 1) {
+        var nm = String(arcDraft[0].name || '').replace(/\.[^.]+$/, '').trim();
+        if (nm && nm.length <= 30 && !/^(IMG|DSC|PXL|MVIMG|微信图片|image|Screenshot)/i.test(nm)) t.value = nm;
+        else t.value = arcDateLabel(todayStr()) + ' 档案';
+      }
+      if (failed && !arcDraft.length) toast('没读进来，换个格式试试');
+    });
+  }
+  function arcSaveDraft() {
+    if (!arcDraft.length) { toast('先拍照或选个文件'); return; }
+    var title = String(($('arcTitle') || {}).value || '').trim();
+    if (!title) { toast('给它起个名字，以后好找'); var t = $('arcTitle'); if (t) t.focus(); return; }
+    var note = String(($('arcNote') || {}).value || '').trim().slice(0, 200);
+    var docDate = String(($('arcDocDate') || {}).value || '') || todayStr();
+    var expireAt = String(($('arcExpire') || {}).value || '');
+    var now = new Date().toISOString();
+    var id = uid();
+    var item = {
+      id: id, title: title.slice(0, 60), cat: arcUi.draftCat || 'other', tags: [],
+      docDate: docDate, expireAt: expireAt, note: note, summary: '', fields: {},
+      files: [], createdAt: now, updatedAt: now, status: 'active', sync: 'local'
+    };
+    var writes = [];
+    for (var i = 0; i < arcDraft.length; i++) {
+      (function (d, idx) {
+        var fid = id + '-' + idx;
+        var ext = d.kind === 'image' ? 'jpg' : (d.kind === 'pdf' ? 'pdf' : 'bin');
+        item.files.push({ id: fid, name: d.name, kind: d.kind, mime: d.mime, size: d.size, path: fid + '.' + ext });
+        writes.push(arcPut(fid, d.blob));
+        if (d.thumb) writes.push(arcPut('thumb_' + fid, d.thumb));
+      })(arcDraft[i], i);
+    }
+    var btn = $('arcSave');
+    if (btn) { btn.disabled = true; btn.textContent = '正在存…'; }
+    Promise.all(writes).then(function () {
+      arcItems.unshift(item);
+      arcSave();
+      arcCloseAdd();
+      toast(arcCloudReady() ? '存好了，正在传到云端…' : '存好了（只在本机）');
+      arcRender();
+      arcEnqueue(item);
+    }).catch(function (e) {
+      toast('存本机失败：' + (e && e.message ? e.message : '空间可能不够'));
+    }).then(function () {
+      if (btn) { btn.disabled = false; btn.textContent = '存进档案库'; }
+    });
+  }
+
+  /* ---------- 详情 ---------- */
+  function arcOpenDetail(id) {
+    var it = arcFind(id);
+    if (!it) return;
+    arcUi.detailId = id;
+    arcRenderDetail();
+    var d = $('arcDetail');
+    if (d) { d.hidden = false; d.classList.add('open'); }
+  }
+  function arcCloseDetail() {
+    var d = $('arcDetail');
+    if (d) { d.classList.remove('open'); d.hidden = true; }
+    arcUi.detailId = null;
+    arcRender();
+  }
+  function arcRenderDetail() {
+    var it = arcFind(arcUi.detailId);
+    if (!it) return;
+    var sub = $('arcDtSub');
+    if (sub) sub.textContent = arcCatName(it.cat) + ' · ' + (arcDateLabel(it.docDate) || arcDateLabel(it.createdAt)) +
+      (it.files.length > 1 ? ' · ' + it.files.length + ' 个原件' : '');
+    var body = $('arcDtBody');
+    if (!body) return;
+    var first = it.files[0];
+    var view = '<div class="arc-dt-view" id="arcDtView">' + arcViewHTML(first) + '</div>';
+    var strip = '';
+    if (it.files.length > 1) {
+      strip = '<div class="arc-dt-files" id="arcDtFiles">';
+      for (var i = 0; i < it.files.length; i++) {
+        strip += '<button type="button" data-arc-file="' + i + '" class="' + (i === 0 ? 'on' : '') + '">' +
+          (it.files[i].kind === 'image' ? '<img data-arc-fthumb="' + escapeHTML(it.files[i].id) + '" alt="">' : 'PDF') + '</button>';
+      }
+      strip += '</div>';
+    }
+    var catChips = '';
+    for (var c = 0; c < ARC_CATS.length; c++) {
+      catChips += '<button class="arc-chip' + (it.cat === ARC_CATS[c].k ? ' on' : '') +
+        '" type="button" data-arc-dt-cat="' + ARC_CATS[c].k + '">' + ARC_CATS[c].n + '</button>';
+    }
+    var cloudLine;
+    if (it.sync === 'ok') cloudLine = '已存到云端，换手机也能打开';
+    else if (it.sync === 'doing') cloudLine = '正在传到云端…';
+    else if (it.sync === 'err') cloudLine = '没传上去，点「重传」再试一次';
+    else cloudLine = arcCloudReady() ? '还只在本机，稍后会自动上传' : '只存本机（设置里连上云端后自动上传）';
+
+    body.innerHTML =
+      (it.status === 'trash' ? '<div class="arc-hint" style="color:var(--danger)">这份在回收站里，30 天内可以恢复。</div>' : '') +
+      view + strip +
+      '<div class="arc-dt-h">标题</div>' +
+      '<input class="arc-in" id="arcDtTitle" type="text" maxlength="60" value="' + escapeHTML(it.title || '') + '">' +
+      '<div class="arc-dt-h">分类</div>' +
+      '<div class="arc-catrow" id="arcDtCats">' + catChips + '</div>' +
+      '<div class="arc-dt-h">日期</div>' +
+      '<div class="arc-date2">' +
+        '<label><span style="display:block;font-size:9.5px;color:var(--ink-faint);margin-bottom:4px">文件日期</span>' +
+          '<input class="arc-in" id="arcDtDocDate" type="date" value="' + escapeHTML(it.docDate || '') + '"></label>' +
+        '<label><span style="display:block;font-size:9.5px;color:var(--ink-faint);margin-bottom:4px">有效期</span>' +
+          '<input class="arc-in" id="arcDtExpire" type="date" value="' + escapeHTML(it.expireAt || '') + '"></label>' +
+      '</div>' +
+      '<div class="arc-dt-h">备注</div>' +
+      '<textarea class="arc-in" id="arcDtNote" maxlength="200" placeholder="记点什么…">' + escapeHTML(it.note || '') + '</textarea>' +
+      '<div class="arc-dt-h">原件（' + it.files.length + '）</div>' +
+      '<div class="arc-meta" style="font-size:10.5px;line-height:1.7">' +
+        escapeHTML(it.files.map(function (f) { return f.name + ' · ' + arcSizeLabel(f.size); }).join('  /  ')) +
+      '</div>' +
+      '<div class="arc-dt-h">云端</div>' +
+      '<div class="arc-meta" style="font-size:10.5px">' + escapeHTML(cloudLine) + '</div>';
+
+    var acts = $('arcDtActs');
+    if (acts) {
+      if (it.status === 'trash') {
+        acts.innerHTML = '<button class="a pri" type="button" data-arc-act="restore">恢复回来</button>' +
+                         '<button class="a danger" type="button" data-arc-act="purge">彻底删掉</button>';
+      } else {
+        acts.innerHTML = '<button class="a pri" type="button" data-arc-act="save">保存修改</button>' +
+                         (arcCloudReady() ? '<button class="a" type="button" data-arc-act="retry">重传</button>' : '') +
+                         '<button class="a danger" type="button" data-arc-act="trash">删除</button>';
+      }
+    }
+    // 多张时缩略图
+    var thumbs = body.querySelectorAll('[data-arc-fthumb]');
+    for (var t = 0; t < thumbs.length; t++) {
+      (function (el) {
+        var key = 'thumb_' + el.getAttribute('data-arc-fthumb');
+        if (arcUrls[key]) { el.src = arcUrls[key]; return; }
+        arcGet(key).then(function (b) {
+          if (!b) return;
+          var u = URL.createObjectURL(b);
+          arcUrls[key] = u;
+          el.src = u;
+        }).catch(function () {});
+      })(thumbs[t]);
+    }
+    // 大图异步填充
+    if (first && first.kind === 'image') arcFillView(first);
+  }
+  function arcViewHTML(f) {
+    if (!f) return '<div class="pdfbox">没有原件</div>';
+    if (f.kind === 'image') return '<img id="arcDtImg" alt="原件">';
+    return '<div class="pdfbox"><b>' + escapeHTML(f.name || 'PDF') + '</b>' +
+      arcSizeLabel(f.size) + ' · 点下面「打开原件」在系统里看</div>';
+  }
+  function arcFillView(f) {
+    var img = $('arcDtImg');
+    if (!img) return;
+    var key = 'view_' + f.id;
+    if (arcUrls[key]) { img.src = arcUrls[key]; return; }
+    arcDownloadFile(f).then(function (b) {
+      if (!b) { toast('这份原件取不到'); return; }
+      var u = URL.createObjectURL(b);
+      arcUrls[key] = u;
+      if ($('arcDtImg') === img) img.src = u;
+    }).catch(function (e) { toast(e && e.message ? e.message : '原件取不到'); });
+  }
+  function arcSaveDetail() {
+    var it = arcFind(arcUi.detailId);
+    if (!it) return;
+    var title = String(($('arcDtTitle') || {}).value || '').trim();
+    if (!title) { toast('标题不能空着'); return; }
+    it.title = title.slice(0, 60);
+    it.docDate = String(($('arcDtDocDate') || {}).value || '') || it.docDate;
+    it.expireAt = String(($('arcDtExpire') || {}).value || '');
+    it.note = String(($('arcDtNote') || {}).value || '').trim().slice(0, 200);
+    it.updatedAt = new Date().toISOString();
+    arcSave();
+    toast('改好了');
+    arcRenderDetail();
+    if (arcCloudReady() && it.status === 'active') arcEnqueue(it);
+    else arcRender();
+  }
+  function arcTrashItem(it) {
+    it.status = 'trash';
+    it.trashedAt = new Date().toISOString();
+    it.updatedAt = it.trashedAt;
+    arcSave();
+    toast('已移到回收站，30 天内能恢复');
+    arcCloseDetail();
+  }
+  function arcRestoreItem(it) {
+    it.status = 'active';
+    it.trashedAt = '';
+    it.updatedAt = new Date().toISOString();
+    arcSave();
+    toast('已恢复');
+    arcRenderDetail();
+    arcRender();
+    if (arcCloudReady()) arcEnqueue(it);
+  }
+  function arcDeleteRemote(rel) {
+    return arcGetSha(rel).then(function (sha) {
+      if (!sha) { console.warn('[档案库] 云端没有这个文件，跳过：' + rel); return; }
+      return arcApiFetch('/contents/' + rel.split('/').map(encodeURIComponent).join('/'), {
+        method: 'DELETE',
+        body: JSON.stringify({ message: '彻底删除原件', sha: sha, branch: ARC_BRANCH })
+      }).then(function (r) {
+        if (!r.ok) console.warn('[档案库] 云端删除失败 ' + r.status + '：' + rel);
+      });
+    }).catch(function (e) {
+      console.warn('[档案库] 云端删除出错：' + rel + ' ' + (e && e.message ? e.message : ''));
+    });
+  }
+  function arcPurgeItem(it) {
+    var paths = [];
+    for (var i = 0; i < it.files.length; i++) paths.push('files/' + it.files[i].path);
+    arcPurgeFiles(it);
+    for (var k = arcItems.length - 1; k >= 0; k--) if (arcItems[k].id === it.id) arcItems.splice(k, 1);
+    arcSave();
+    toast('已经彻底删掉了');
+    arcCloseDetail();
+    arcRender();
+    if (!arcCloudReady()) return;
+    // 先删原件，再更新索引：顺序反了会留下取不回来的孤儿文件
+    var jobs = [];
+    for (var j = 0; j < paths.length; j++) jobs.push(arcDeleteRemote(paths[j]));
+    Promise.all(jobs).then(function () {
+      return arcUploadIndex();
+    }).catch(function (e) {
+      console.warn('[档案库] 清理云端失败：' + (e && e.message ? e.message : ''));
+    });
+  }
+
+  /* ---------- 事件 ---------- */
+  var arcSearchTimer = null;
+  function arcInit() {
+    arcLoad();
+
+    var btn = $('arcBtn');
+    if (btn) btn.addEventListener('click', function () { arcOpen(); });
+    var back = $('arcBack');
+    if (back) back.addEventListener('click', arcClose);
+    var add = $('arcAdd');
+    if (add) add.addEventListener('click', arcOpenAdd);
+
+    var search = $('arcSearch');
+    if (search) search.addEventListener('input', function () {
+      clearTimeout(arcSearchTimer);
+      var v = search.value;
+      arcSearchTimer = setTimeout(function () { arcUi.q = v; arcRenderList(); }, 180);
+    });
+
+    var cats = $('arcCats');
+    if (cats) cats.addEventListener('click', function (e) {
+      var b = e.target.closest ? e.target.closest('[data-arc-cat]') : null;
+      if (!b) return;
+      arcUi.cat = b.getAttribute('data-arc-cat');
+      arcRender();
+    });
+
+    var list = $('arcList');
+    if (list) list.addEventListener('click', function (e) {
+      var card = e.target.closest ? e.target.closest('[data-arc-id]') : null;
+      if (!card) return;
+      arcOpenDetail(card.getAttribute('data-arc-id'));
+    });
+
+    var tabs = document.querySelectorAll('[data-arc-tab]');
+    for (var i = 0; i < tabs.length; i++) {
+      tabs[i].addEventListener('click', function () {
+        arcUi.tab = this.getAttribute('data-arc-tab');
+        arcRender();
+      });
+    }
+    var banner = $('arcBanner');
+    if (banner) banner.addEventListener('click', function () {
+      arcUi.tab = 'due';
+      arcRender();
+    });
+
+    // 入库弹窗
+    var mask = $('arcAddMask');
+    if (mask) mask.addEventListener('click', function (e) {
+      if (e.target !== mask) return;
+      if (arcDraft.length && !window.confirm('这些还没存，关掉就没了，确定？')) return;
+      arcCloseAdd();
+    });
+    var cancel = $('arcCancel');
+    if (cancel) cancel.addEventListener('click', function () {
+      if (arcDraft.length && !window.confirm('这些还没存，关掉就没了，确定？')) return;
+      arcCloseAdd();
+    });
+    var picks = document.querySelectorAll('[data-arc-pick]');
+    for (var p = 0; p < picks.length; p++) {
+      picks[p].addEventListener('click', function () {
+        var k = this.getAttribute('data-arc-pick');
+        var el = k === 'camera' ? $('arcCamera') : (k === 'photo' ? $('arcPhotos') : $('arcFiles'));
+        if (el) el.click();
+      });
+    }
+    ['arcCamera', 'arcPhotos', 'arcFiles'].forEach(function (id) {
+      var el = $(id);
+      if (!el) return;
+      el.addEventListener('change', function () {
+        var files = Array.prototype.slice.call(el.files || []);
+        el.value = '';
+        arcAcceptFiles(files);
+      });
+    });
+    var draftBox = $('arcDraft');
+    if (draftBox) draftBox.addEventListener('click', function (e) {
+      var x = e.target.closest ? e.target.closest('[data-arc-drop]') : null;
+      if (!x) return;
+      var idx = Number(x.getAttribute('data-arc-drop'));
+      var d = arcDraft[idx];
+      if (d && d.thumbUrl) URL.revokeObjectURL(d.thumbUrl);
+      arcDraft.splice(idx, 1);
+      arcRenderDraft();
+    });
+    var catPick = $('arcCatPick');
+    if (catPick) catPick.addEventListener('click', function (e) {
+      var b = e.target.closest ? e.target.closest('[data-arc-draft-cat]') : null;
+      if (!b) return;
+      arcUi.draftCat = b.getAttribute('data-arc-draft-cat');
+      arcRenderCatPick();
+    });
+    var save = $('arcSave');
+    if (save) save.addEventListener('click', arcSaveDraft);
+
+    // 详情
+    var dtBack = $('arcDtBack');
+    if (dtBack) dtBack.addEventListener('click', arcCloseDetail);
+    var dtBody = $('arcDtBody');
+    if (dtBody) dtBody.addEventListener('click', function (e) {
+      var t = e.target.closest ? e.target.closest('[data-arc-dt-cat]') : null;
+      if (t) {
+        var it = arcFind(arcUi.detailId);
+        if (it) { it.cat = t.getAttribute('data-arc-dt-cat'); arcSave(); arcRenderDetail(); }
+        return;
+      }
+      var f = e.target.closest ? e.target.closest('[data-arc-file]') : null;
+      if (f) {
+        var idx = Number(f.getAttribute('data-arc-file'));
+        var item = arcFind(arcUi.detailId);
+        if (!item || !item.files[idx]) return;
+        var view = $('arcDtView');
+        if (view) view.innerHTML = arcViewHTML(item.files[idx]);
+        if (item.files[idx].kind === 'image') arcFillView(item.files[idx]);
+        var btns = $('arcDtFiles').querySelectorAll('button');
+        for (var b = 0; b < btns.length; b++) btns[b].classList.toggle('on', btns[b] === f);
+        return;
+      }
+      if (e.target.id === 'arcDtImg') {
+        var im = e.target;
+        if (im.src) {
+          $('arcZoomImg').src = im.src;
+          $('arcZoom').classList.add('open');
+        }
+      }
+    });
+    var dtActs = $('arcDtActs');
+    if (dtActs) dtActs.addEventListener('click', function (e) {
+      var b = e.target.closest ? e.target.closest('[data-arc-act]') : null;
+      if (!b) return;
+      var it = arcFind(arcUi.detailId);
+      if (!it) return;
+      var act = b.getAttribute('data-arc-act');
+      if (act === 'save') arcSaveDetail();
+      else if (act === 'retry') { toast('重新排队上传…'); arcEnqueue(it); }
+      else if (act === 'trash') {
+        if (!window.confirm('删掉「' + it.title + '」？会先进回收站，30 天内能恢复。')) return;
+        arcTrashItem(it);
+      } else if (act === 'restore') arcRestoreItem(it);
+      else if (act === 'purge') {
+        if (!window.confirm('彻底删掉「' + it.title + '」？本机和云端的原件都会删，删了就找不回来了。')) return;
+        arcPurgeItem(it);
+      }
+    });
+    var zoomX = $('arcZoomX');
+    if (zoomX) zoomX.addEventListener('click', function () { $('arcZoom').classList.remove('open'); });
+    var zoom = $('arcZoom');
+    if (zoom) zoom.addEventListener('click', function (e) {
+      if (e.target === zoom) zoom.classList.remove('open');
+    });
+
+    document.addEventListener('keydown', function (e) {
+      if (e.key !== 'Escape') return;
+      if ($('arcZoom') && $('arcZoom').classList.contains('open')) { $('arcZoom').classList.remove('open'); return; }
+      if ($('arcAddMask') && $('arcAddMask').classList.contains('open')) {
+        if (!arcDraft.length) arcCloseAdd();
+        return;
+      }
+      if ($('arcDetail') && $('arcDetail').classList.contains('open')) { arcCloseDetail(); return; }
+      if ($('arcLab') && $('arcLab').classList.contains('open')) arcClose();
+    });
+
+    arcRender();
+  }
+  arcInit();
+  setTimeout(function () {
+    if (arcCloudReady()) arcPullIndex();
+  }, 3000);
 })();
 </script>
 <script>
@@ -9942,6 +11405,8 @@ window.onerror = function (msg, url, line) {
     window.addEventListener('resize', queueFit, { passive: true });
     window.addEventListener('orientationchange', queueFit, { passive: true });
     fitScene();
+
+
   })();
 </script>
 </body>
