@@ -2030,6 +2030,38 @@
     text-underline-offset:2px;text-decoration-thickness:.5px;}
   .jl-issue-note.on{color:var(--jl-soft);text-decoration:none;}
   .jl-issue-note.on::before{content:'✓ ';}
+  /* 本地规则判错的时候，直接在问题卡上把这张表的金额改对 */
+  .jl-issue-fix{margin-right:auto;border:1px solid var(--jl-acc);background:rgba(201,114,47,.07);
+    border-radius:8px;font-size:11px;font-weight:600;color:var(--jl-acc2);
+    padding:5px 11px;font-family:inherit;cursor:pointer;line-height:1.4;}
+  .jl-issue-fix:active{background:rgba(201,114,47,.16);}
+  .jl-issue-fix.on{background:var(--jl-acc);border-color:var(--jl-acc);color:var(--jl-panel);}
+  .jl-issue .jl-fixamt-line{margin:6px 0 0 31px;font-size:10.5px;line-height:1.6;color:var(--jl-acc2);}
+  .jl-issue .jl-fixamt-line b{font-weight:600;font-variant-numeric:tabular-nums;}
+  .jl-fixmark{display:inline-block;font-style:normal;font-size:9px;font-weight:600;
+    color:var(--jl-acc);background:rgba(201,114,47,.12);border-radius:4px;
+    padding:1px 3px;margin-left:3px;vertical-align:1px;}
+  /* 改总价抽屉：原文写多少 / 按本店价该收多少，并排摆着比 */
+  .jl-fix-cmp{display:flex;gap:10px;margin:2px 0 14px;}
+  .jl-fix-cmp>div{flex:1;padding:10px 12px;border-radius:10px;background:var(--jl-wash,#f7ecdd);
+    border:1px solid var(--jl-line,#ecdfcd);}
+  .jl-fix-cmp i{display:block;font-style:normal;font-size:10px;color:var(--jl-soft,#8a7259);
+    margin-bottom:3px;letter-spacing:.03em;}
+  .jl-fix-cmp b{font-size:17px;font-weight:600;color:var(--jl-ink,#3a2a1c);
+    font-variant-numeric:tabular-nums;letter-spacing:-.3px;}
+  .jl-fix-cmp b.due{color:var(--jl-acc);}
+  .jl-fix-use{display:block;width:100%;margin:-4px 0 12px;padding:9px;border-radius:9px;
+    border:1px dashed rgba(201,114,47,.45);background:transparent;color:var(--jl-acc2);
+    font-size:12px;font-family:inherit;cursor:pointer;font-weight:600;}
+  .jl-fix-use:active{background:rgba(201,114,47,.09);}
+  .jl-fix-tip{margin:0 0 14px;font-size:10.5px;line-height:1.65;color:var(--jl-soft,#8a7259);}
+  /* 手动改过金额的单子：问题消失了，入口还得留着 */
+  .jl-fixchips{display:flex;flex-wrap:wrap;gap:6px;margin:7px 0 6px;}
+  .jl-fixchip{border:1px solid var(--jl-acc);background:rgba(201,114,47,.08);border-radius:999px;
+    font-size:11.5px;font-weight:600;color:var(--jl-acc2);padding:4px 11px;
+    font-family:inherit;cursor:pointer;font-variant-numeric:tabular-nums;line-height:1.4;}
+  .jl-fixchip:active{background:rgba(201,114,47,.18);}
+  .jl-fixbar-amt{border-color:rgba(201,114,47,.45);}
   .jl-looked{margin:7px 0 0 31px;font-size:10.5px;line-height:1.6;color:var(--jl-faint);}
   .jl-booknote{margin:10px 2px 0;font-size:10.5px;line-height:1.6;color:var(--jl-faint);}
   .jl-booknote b{color:var(--jl-acc);font-weight:600;font-variant-numeric:tabular-nums;}
@@ -3904,7 +3936,7 @@ window.onerror = function (msg, url, line) {
   'use strict';
 
   // 版本号统一在此维护；localStorage 键沿用 v11 不变，切勿改名以免丢失用户数据
-  var APP_VERSION = '16.5.0';
+  var APP_VERSION = '16.5.1';
   // 送货单拍照识别：视觉模型默认名、兼容别名与各项安全上限
   var DEFAULT_VISION_MODEL = 'deepseek-flash';
   var VISION_MODEL_FALLBACK = 'deepseek-v4-flash-vision-exp';

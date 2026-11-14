@@ -1620,18 +1620,23 @@
         if (unit == null) it.amount = null;
       }
 
+      /* 人工改过的应收（fixAmt）优先，原文写的 total 原样留着不动。
+       * 本地规则判错的时候，老板在问题卡上点「改总价」写的就是这里：
+       * 表按改后的收，原文还是原文，以后对账能说清是谁改的、原来写的多少。 */
+      var effTotal = (o.fixAmt != null && o.fixAmt >= 0) ? round2(o.fixAmt) : o.total;
       // 原文写的是「这一单多少钱」：以总价为准，不再逼你逐样填单价
-      if (o.total != null && o.total >= 0) {
-        o.amount = round2(o.total);
+      if (effTotal != null && effTotal >= 0) {
+        o.amount = round2(effTotal);
         o.missingPrice = false;
         o.payMode = 'total';
+        o.amtFixed = (o.fixAmt != null) ? 1 : 0;
         fromTotal++;
         // 只有一种商品时，能安心反推单价（多商品均摊会算出假价，不做）
         // 半笼反推出来的是半价（3 块），不能当成「一笼多少钱」记进价格本
         if (o.items.length === 1 && o.items[0].qty > 0 && !o.items[0].half) {
-          var d = round2(o.total / o.items[0].qty);
+          var d = round2(effTotal / o.items[0].qty);
           if (o.items[0].unit == null) o.items[0].unit = d;
-          o.items[0].amount = round2(o.total);
+          o.items[0].amount = round2(effTotal);
           if (d > 0 && d < 1000) o.items[0].derivedUnit = d;
         }
       } else {
@@ -3555,6 +3560,9 @@
           raw: trim(o.raw || '').slice(0, 90),
           items: o.items.map(function (i) { return { name: i.name, qty: i.qty, unit: i.unit, fromText: !!i.fromText, half: i.half == null ? null : !!i.half, priceFrom: i.priceFrom || '' }; }),
           total: o.total == null ? null : o.total,
+          // 老板手动改过的应收：原文 total 不动，这张表按 fixAmt 收
+          fixAmt: (o.fixAmt == null ? null : o.fixAmt),
+          fixAmtAt: o.fixAmtAt || 0,
           note: o.note || '', manual: !!o.manual
         };
       }),
@@ -4214,6 +4222,21 @@
     return !!menuOf(name);
   }
 
+  /* 这一单按本店价目表「该收多少」。有一样定不出价就返回 null——
+   * 半个数比没数更害人：老板照着个错的金额改，反倒越改越远。 */
+  function expectTotalOf(o, ref) {
+    if (!o || !o.items || !o.items.length) return null;
+    var sum = 0;
+    for (var i = 0; i < o.items.length; i++) {
+      var it = o.items[i];
+      if (!(it.qty > 0)) continue;
+      var u = expectUnit(it, ref);
+      if (u == null) return null;
+      sum = round2(sum + u * it.qty);
+    }
+    return sum;
+  }
+
   /* 论笼卖的东西写成「个」：小笼包、灌汤小笼包、蒸饺。
    * 「小笼包2个」可能是 2 个（约 2 块），也可能是 2 笼（12 块）——
    * 没问清之前不许报「少给」，不然老板会拿着单子去要错钱。 */
@@ -4339,8 +4362,10 @@
 
       /* 5. 原文写了总价：按本店价重算一遍，看多给少给
        * 以前是拿「拆出来的单价」对总价，可单价本身就是从总价反推的，永远对得上——
-       * 「两个酱肉包 4 元」这种少给一直查不出来。现在改成跟价目表比。 */
-      var totalCase = (o.total != null && o.items.length > 0);
+       * 「两个酱肉包 4 元」这种少给一直查不出来。现在改成跟价目表比。
+       * 老板手动改过金额（fixAmt）就按改后的比，改对了这条自然不再报。 */
+      var effTotal = (o.fixAmt != null && o.fixAmt >= 0) ? round2(o.fixAmt) : o.total;
+      var totalCase = (effTotal != null && o.items.length > 0);
       /* 论笼卖的东西写「个」，个数对不上笼价：先问清是几个，别急着报少给 */
       var doubt = false;
       if (totalCase) {
@@ -4363,8 +4388,10 @@
           brief.push(ti.name + (ti.half ? '半笼' : '') + ' ¥' + money(eu) + '×' + ti.qty);
         }
         if (expOk) {
-          var diff = round2(expSum - o.total);
-          var why = '原文写 ¥' + money(o.total) + '，按本店价算是 ¥' + money(expSum) +
+          var diff = round2(expSum - effTotal);
+          var why = (o.fixAmt != null
+              ? '你改成 ¥' + money(effTotal) + (o.total != null ? '（原文 ¥' + money(o.total) + '）' : '')
+              : '原文写 ¥' + money(o.total)) + '，按本店价算是 ¥' + money(expSum) +
             (brief.length > 1 ? '（' + brief.join('、') + '）' : '');
           if (diff >= 0.5 && wipe) {
             put(o, 'wiped', 'info', '这单抹了 ¥' + money(diff),
@@ -4708,7 +4735,11 @@
       }
       L.push('#' + o.no + ' ' + (o.name || '无名') + ' · ' + (o.building || '没楼栋') +
         (o.room ? ' ' + o.room : '') + ' | ' + (parts.length ? parts.join('，') : '没认出商品') +
-        (o.total == null ? '' : ' | 原文总价 ¥' + money(o.total)) +
+        /* 老板手动改过金额的，报「按多少收」而不是原文那个数——
+         * 不然他一改完，AI 又照着旧原文报一遍少给，来回打架 */
+        (o.fixAmt != null
+          ? ' | 老板改成 ¥' + money(o.fixAmt) + (o.total != null ? '（原文写 ¥' + money(o.total) + '）' : '') + '，按这个收'
+          : (o.total == null ? '' : ' | 原文总价 ¥' + money(o.total))) +
         (o.cancel ? ' | 客人已取消，不算钱不算件' : '') +
         ' | 原句：' + (o.raw || '（无）'));
     }
@@ -4738,6 +4769,7 @@
     L.push('- 认抹零要有字：原文写了「抹零」「不用找了」「老价」「算 X 元」，或【老板教过的规矩】里说过这人抹零，才算；没写就不算。');
     L.push('- 程序挑出的 short / over / pricelow，你要判 drop，必须说清这笔差额为什么不算少给/多给（半笼按半价、原文写了抹零或说好价、单价看错了），并摘出对应原文。只说「这是总价」「差得少」不算理由——程序本来就是按总价跟价目表比的；说不清就 keep。');
     L.push('- 【疑点】里一条钱的事都没有，你也要自己算一遍；算出来差 0.5 元以上，就用 add 报一条：title 写「少收 ¥X」或「多收 ¥X」，detail 写该收多少、原文写了多少。');
+    L.push('- 单子上写着「老板改成 ¥X，按这个收」的，就是老板亲手定过价了：按这个数跟价目表比，对得上就别再报；不要拿原文那个旧数再报一遍，那是他故意改的。');
     L.push('');
     L.push('【再对着原文数一遍件数】');
     L.push('- 从上往下逐单看：这一单原文写了哪几样、每样前面或后面写的是几个（「一个」「两份」「2个」「×2」「两笼」）。');
@@ -4991,9 +5023,117 @@
     toast('已撤回，件数恢复成改之前');
   }
 
+  /* ==================== 改总价（人工修复） ====================
+   * 本地规则判错的时候，问题卡上给一个「改总价」：
+   * 改了这张表的应收，原文 o.total 原样留着——以后翻记录能看出原来写的多少。
+   * 改完本地重算，「少给 ¥4」这类问题自己就消失了，不用再点「不用管」。 */
+  var MONEY_ISSUES = {
+    short: 1, over: 1, pricelow: 1, overunit: 1, wiped: 1,
+    feeadd: 1, noprice: 1, oddunit: 1, unitqty: 1
+  };
+
+  // 这一单的 AI 结论作废（金额改了，之前对着旧金额下的判断不再成立）
+  function dropAuditForNo(no) {
+    var a = V.record && V.record.audit;
+    if (!a) return;
+    if (a.verdict) {
+      for (var k in a.verdict) {
+        if (!Object.prototype.hasOwnProperty.call(a.verdict, k)) continue;
+        if (parseInt(String(k).split('|')[0], 10) === no) delete a.verdict[k];
+      }
+    }
+    if (a.add) a.add = a.add.filter(function (x) { return x.no !== no; });
+  }
+
+  function setFixAmt(no, val) {
+    var rec = V.record;
+    if (!rec || !rec.orders) return;
+    var o = null;
+    for (var i = 0; i < rec.orders.length; i++) if (rec.orders[i].no === no) { o = rec.orders[i]; break; }
+    if (!o) return;
+
+    if (val == null) {
+      delete o.fixAmt;
+      delete o.fixAmtAt;
+    } else {
+      if (!(val >= 0 && val < 100000)) return;
+      o.fixAmt = round2(val);
+      o.fixAmtAt = Date.now();
+    }
+    dropAuditForNo(no);
+    rebuild();
+    persist(true);
+    if (val == null) {
+      toast('第 ' + no + ' 条改回原文的' + (o.total != null ? ' ¥' + money(o.total) : '金额'));
+    } else {
+      toast('第 ' + no + ' 条按 ¥' + money(val) + ' 收');
+    }
+  }
+
+  function fixAmtSheet(no) {
+    var rec = V.record;
+    if (!rec) return;
+    var o = null;
+    for (var i = 0; i < rec.orders.length; i++) if (rec.orders[i].no === no) { o = rec.orders[i]; break; }
+    if (!o) return;
+
+    var ref = V.refPrice || effectivePrice(listRecords);
+    var due = expectTotalOf(o, ref);
+    var cur = (o.fixAmt != null) ? o.fixAmt
+      : (o.total != null ? o.total : (o.amount != null ? o.amount : null));
+
+    var mask = document.createElement('div');
+    mask.className = 'jl-mask';
+    mask.innerHTML =
+      '<div class="jl-sheet-edit">' +
+      '<div class="jl-ehead"><b>改第 ' + no + ' 条的金额</b>' +
+      '<button type="button" data-x="close">×</button></div>' +
+      (o.raw
+        ? '<div class="jl-esrc"><span>原文</span><p>' + esc(o.raw) + '</p></div>'
+        : (o.name ? '<div class="jl-esrc"><span>这一单</span><p>' + esc(o.name) + '</p></div>' : '')) +
+      '<div class="jl-fix-cmp">' +
+      '<div><i>原文写的</i><b>' + (o.total != null ? '¥' + money(o.total) : '没写') + '</b></div>' +
+      '<div><i>按本店价该收</i><b class="due">' +
+      (due != null ? '¥' + money(due) : '算不出') + '</b></div>' +
+      '</div>' +
+      '<label class="jl-efield"><span>按这收</span>' +
+      '<input id="jlFixAmt" type="number" min="0" step="0.5" inputmode="decimal" value="' +
+      (cur == null ? '' : cur) + '" placeholder="这张表要收多少"></label>' +
+      (due != null
+        ? '<button type="button" class="jl-fix-use" data-x="use">用本店价 ¥' + money(due) + '</button>'
+        : '') +
+      '<p class="jl-fix-tip">只改这张表要收多少，原文不动。改完这一单的问题会自己消失；不对随时能改回来。</p>' +
+      '<div class="jl-eacts">' +
+      (o.fixAmt != null ? '<button type="button" class="jl-ghost" data-x="reset">改回原文</button>' : '') +
+      '<button type="button" class="jl-primary" data-x="ok">就这么收</button>' +
+      '</div></div>';
+
+    document.body.appendChild(mask);
+    var input = mask.querySelector('#jlFixAmt');
+    setTimeout(function () { try { input.focus(); input.select(); } catch (e) {} }, 80);
+
+    function close() {
+      if (mask.parentNode) mask.parentNode.removeChild(mask);
+    }
+
+    mask.addEventListener('click', function (ev) {
+      var t = ev.target;
+      if (t === mask) { close(); return; }
+      var x = t.getAttribute ? t.getAttribute('data-x') : null;
+      if (x === 'close') { close(); return; }
+      if (x === 'use') { input.value = money(due); return; }
+      if (x === 'reset') { close(); setFixAmt(no, null); return; }
+      if (x === 'ok') {
+        var v = parseFloat(input.value);
+        if (!(v >= 0) || v >= 100000) { toast('填个数，0 到 99999 之间'); return; }
+        close();
+        setFixAmt(no, v);
+      }
+    });
+  }
+
   // 只改 tab 上的角标，不整页重绘：用户可能正在金额页填单价，重绘会把输入框里的字弄丢
-  function refreshIssueBadge() {
-    if (!HOST) return;
+  function refreshIssueBadge() {    if (!HOST) return;
     var btn = HOST.querySelector('[data-act="tab"][data-v="issue"]');
     if (!btn) return;
     var n = V.record ? auditIssues(V.record, V.refPrice).issues.length : 0;
@@ -5158,6 +5298,26 @@
       h += '<p class="jl-audit-meta">' + esc(bits.join(' · ')) + '</p>';
     }
 
+    /* ---------- 手动改过金额的单子：问题没了也得找得到，还得能改回 ---------- */
+    var amtFixed = [];
+    var amtOrders = (r && r.orders) || [];
+    for (var af = 0; af < amtOrders.length; af++) {
+      if (amtOrders[af].fixAmt != null) amtFixed.push(amtOrders[af]);
+    }
+    if (amtFixed.length && !V.auditBusy) {
+      var chips = [];
+      for (var ac = 0; ac < amtFixed.length; ac++) {
+        var ao = amtFixed[ac];
+        chips.push('<button type="button" class="jl-fixchip" data-act="fixamt" data-no="' + ao.no + '">' +
+          '#' + ao.no + ' ¥' + money(ao.fixAmt) + '</button>');
+      }
+      h += '<div class="jl-fixbar jl-fixbar-amt">' +
+        '<div class="jl-fixbar-h"><b>手动改过 ' + amtFixed.length + ' 单的金额</b></div>' +
+        '<div class="jl-fixchips">' + chips.join('') + '</div>' +
+        '<span>原文没动，只是这张表按改后的收。点单号能再改，里面也能改回原文。</span>' +
+        '</div>';
+    }
+
     /* ---------- AI 照原文改了件数：改了什么、怎么撤回 ---------- */
     var fx = r.auditFix;
     if (fx && fx.list && fx.list.length) {
@@ -5235,9 +5395,27 @@
           (it.memWhy ? '<p class="jl-mem-why">你的规矩：' + esc(it.memWhy) + '</p>' : '') +
           (it.aiWhy ? '<p class="jl-ai-why">AI：' + esc(it.aiWhy) + '</p>' : '') +
           (it.aiQuote ? '<p class="jl-ai-quote">原文「' + esc(it.aiQuote) + '」</p>' : '') +
+          /* 改过金额的：把「按多少收、原文写多少」摆在卡片上，
+           * 不然过两天自己都忘了这张表被改过，对账时对不上 */
+          (function () {
+            var oo = orderOf(it.no);
+            if (!oo || oo.fixAmt == null) return '';
+            return '<p class="jl-fixamt-line">这张表按 <b>¥' + money(oo.fixAmt) + '</b> 收' +
+              (oo.total != null ? '，原文写的 ¥' + money(oo.total) : '（原文没写总价）') + '</p>';
+          })() +
           /* 这条确实解决不了，就写一句话放进凭证图里告诉买家——
            * 不写「未写楼栋」这种内部标签，买家会以为没发货 */
           '<div class="jl-issue-foot">' +
+          /* 本地规则判错的时候，这里是唯一能把表改对的地方 */
+          (function () {
+            if (!MONEY_ISSUES[it.code]) return '';
+            var oo = orderOf(it.no);
+            if (!oo || oo.cancel) return '';
+            var on = oo.fixAmt != null;
+            return '<button type="button" class="jl-issue-fix' + (on ? ' on' : '') +
+              '" data-act="fixamt" data-no="' + it.no + '">' +
+              (on ? '已改 ¥' + money(oo.fixAmt) + ' · 再改' : '改总价') + '</button>';
+          })() +
           '<button type="button" class="jl-issue-note' + (noteNos[it.no] ? ' on' : '') +
           '" data-act="issuenote" data-no="' + it.no + '">' +
           (noteNos[it.no] ? '已写进凭证 · 改一句' : '写进凭证，告诉买家') + '</button>' +
@@ -5267,7 +5445,7 @@
       if (bookN) {
         h += '<p class="jl-booknote">住户档案记着 <b>' + bookN + '</b> 个人住哪栋——谁忘写楼栋，按名字就能补</p>';
       }
-      h += '<p class="jl-hint">点哪条就改哪一单；改完这条自己会消失。它看得不对的，点「教它」说一句，往后先照你的规矩来。</p>';
+      h += '<p class="jl-hint">规则算错的，点「改总价」把这张表改对，这条自己就消失；点卡片还能改名字楼栋。觉得它想多了，点「教它」说一句，往后照你的规矩来。</p>';
     }
 
     /* ---------- AI 判成误报的：不能直接删，随时能捡回来 ---------- */
@@ -5352,7 +5530,8 @@
       h += '<div class="jl-prow"><i>#' + o.no + '</i><b>' + esc(o.name || '无名') + '</b>' +
         '<span>' + esc(o.building || '—') + (o.room ? ' ' + esc(o.room) : '') + '</span>' +
         (o.amount == null ? '<em class="jl-warn">待定价</em>'
-          : '<em>' + (o.payMode === 'total' ? '总价 ¥' : '¥') + money(o.amount) + '</em>') + '</div>';
+          : '<em>' + (o.payMode === 'total' ? '总价 ¥' : '¥') + money(o.amount) +
+            (o.fixAmt != null ? '<i class="jl-fixmark">改</i>' : '') + '</em>') + '</div>';
     }
     h += '</div>';
     return h;
@@ -5916,6 +6095,9 @@
             raw: o.raw || '',
             items: (o.items || []).map(function (i2) { return { name: i2.name, qty: i2.qty, unit: i2.unit, fromText: !!i2.fromText, half: i2.half == null ? null : !!i2.half, priceFrom: i2.priceFrom || '' }; }),
             total: o.total == null ? null : o.total,
+            // 改过的金额：重开必须带回来，否则一关就退回原文那个错数
+            fixAmt: (o.fixAmt == null ? null : o.fixAmt),
+            fixAmtAt: o.fixAmtAt || 0,
             note: o.note || '', manual: o.manual
           };
         }),
@@ -6935,6 +7117,10 @@
       '<label class="jl-efield"><span>楼栋</span><select id="jlEBld"><option value="">（不写）</option>' + opt +
       '<option value="__new">+ 新楼栋…</option></select></label>' +
       '<label class="jl-efield"><span>房号</span><input id="jlERoom" value="' + esc(o.room) + '" inputmode="numeric"></label>' +
+      (o.fixAmt != null
+        ? '<p class="jl-note-fact">这张表现在按 <b>¥' + money(o.fixAmt) + '</b> 收（你改过的，原文写 ' +
+          (o.total != null ? '¥' + money(o.total) : '没写') + '）。下面改总价会顶掉这个修正。</p>'
+        : '') +
       '<label class="jl-efield"><span>这单总价</span><input id="jlETotal" type="number" min="0" step="0.5" value="' +
       (o.total == null ? '' : o.total) + '" placeholder="原文说共多少就填这"></label>' +
       '<div class="jl-efield jl-efield-top"><span>商品</span><div class="jl-egoods" id="jlEGoods">' + goods + '</div></div>' +
@@ -7001,7 +7187,10 @@
         o.note = mask.querySelector('#jlENote').value.trim();
         var tv = mask.querySelector('#jlETotal').value;
         var tn = parseFloat(tv);
-        o.total = (trim(tv) !== '' && tn >= 0 && tn < 100000) ? tn : null;
+        var newTotal = (trim(tv) !== '' && tn >= 0 && tn < 100000) ? tn : null;
+        // 总价改过了，「改总价」那次修正就过期了——不清掉会盖住刚填的数
+        if (newTotal !== o.total) { delete o.fixAmt; delete o.fixAmtAt; }
+        o.total = newTotal;
         var oldUnits = o.items.map(function (x3) { return x3.unit; });
         var names = mask.querySelectorAll('.jl-e-name');
         var qtys = mask.querySelectorAll('.jl-e-qty');
@@ -7885,6 +8074,7 @@
       }
       return;
     }
+    if (act === 'fixamt') { fixAmtSheet(parseInt(btn.getAttribute('data-no'), 10)); return; }
     if (act === 'issuenote') { proofNoteSheet(parseInt(btn.getAttribute('data-no'), 10)); return; }
     if (act === 'teachissue') { teachIssue(btn.getAttribute('data-k') || ''); return; }
     if (act === 'skipissue') {
