@@ -3936,7 +3936,7 @@ window.onerror = function (msg, url, line) {
   'use strict';
 
   // 版本号统一在此维护；localStorage 键沿用 v11 不变，切勿改名以免丢失用户数据
-  var APP_VERSION = '16.5.1';
+  var APP_VERSION = '16.5.2';
   // 送货单拍照识别：视觉模型默认名、兼容别名与各项安全上限
   var DEFAULT_VISION_MODEL = 'deepseek-flash';
   var VISION_MODEL_FALLBACK = 'deepseek-v4-flash-vision-exp';
@@ -4716,8 +4716,8 @@ window.onerror = function (msg, url, line) {
         continue;
       }
       if (ln.indexOf('货品名称 | 规格 | 单价 | 交货数量 | 小计') !== -1) { inBody = true; continue; }
+      if (ln.indexOf('----') !== -1) { inBody = false; continue; }
       if (!inBody) continue;
-      if (ln.indexOf('----') !== -1) break;
       if (!ln) continue;
       var parts = ln.split('|');
       if (parts.length < 5) continue;
@@ -4744,6 +4744,28 @@ window.onerror = function (msg, url, line) {
     return { date: date, customer: customer, phone: phone, rows: rows, total: total };
   }
 
+  /* 行合计与「总计金额」的差额：抹零、整单优惠、手写的整单总数都会落到这里。
+   * 老版本解析在最后一条分隔线处 break，永远读不到「总计金额」，
+   * 于是每张单都被悄悄改成行合计——老板抹掉的零头、谈下来的整单优惠，
+   * 一改单一合并就没了，账上还会显示成「总支付变少了」。 */
+  function shopBillRowsSum(rows) {
+    var s = 0;
+    for (var i = 0; i < (rows || []).length; i++) {
+      var v = parseFloat(rows[i].subtotal);
+      if (!isNaN(v)) s += v;
+    }
+    return round2(s);
+  }
+
+  function shopBillGap(b) {
+    if (!b) return 0;
+    var g = round2((Number(b.total) || 0) - shopBillRowsSum(b.rows));
+    return Math.abs(g) < 0.005 ? 0 : g;
+  }
+
+  // 差额行的名字：少收叫「抹零」，多收叫「补差」，老板一眼看得懂
+  function shopBillGapName(gap) { return gap < 0 ? '抹零' : '补差'; }
+
   function rebuildShopBill(b) {
     return formatShopBill(b.date, b.customer, b.phone, b.rows, b.total);
   }
@@ -4768,6 +4790,12 @@ window.onerror = function (msg, url, line) {
       });
     };
     for (var i = 0; i < (base.rows || []).length; i++) push(base.rows[i]);
+    // 原单「总计金额」里那部分不在行上的钱（抹零 / 整单优惠）单独补一行，
+    // 否则合并时按行重算，这部分会凭空消失，账单越存越少。
+    var gap = shopBillGap(base);
+    if (gap !== 0) {
+      rows.push({ name: shopBillGapName(gap), spec: '', price: '', count: '', subtotal: fmtMoney(gap) });
+    }
     for (var j = 0; j < (add.rows || []).length; j++) push(add.rows[j]);
     var total = 0;
     for (var k = 0; k < rows.length; k++) {
@@ -4811,6 +4839,7 @@ window.onerror = function (msg, url, line) {
   }
 
   // 归集保存：同一天、同一送货商、同一联系方式 → 追加合并到已有清单；否则新建
+  // 返回 { merged, id }：调用方用它把这张单展开并滚到眼前（合并后金额变了，要让人看见）
   function saveShopBillMerged(date, customer, phone, rows, total) {
     var now = new Date().toISOString();
     var idx = findShopCell(state.notes, date, customer, phone);
@@ -4821,23 +4850,26 @@ window.onerror = function (msg, url, line) {
       addOps('edit', n.text);
       var top = state.notes.splice(idx, 1)[0];
       state.notes.unshift(top);
-      saveLocal();
+      openBills[n.id] = true;
+      var okEdit = saveLocal();
       scheduleSync();
       render();
-      return true;
+      return { merged: true, id: n.id, ok: okEdit };
     }
+    var id = uid();
     var text = formatShopBill(date, customer, phone, rows, total);
     state.notes.unshift({
-      id: uid(), text: text, createdAt: now, updatedAt: now,
+      id: id, text: text, createdAt: now, updatedAt: now,
       status: VIEW.ACTIVE, remindAt: null, repeat: 'none', reminded: false,
       remindDay: null,
       doneAt: null, deletedAt: null, tags: ['店铺']
     });
     addOps('add', text);
-    saveLocal();
+    openBills[id] = true;
+    var okNew = saveLocal();
     scheduleSync();
     render();
-    return false;
+    return { merged: false, id: id, ok: okNew };
   }
 
   function shopRowHTML(name, spec, price, count, sub) {
@@ -4908,6 +4940,10 @@ window.onerror = function (msg, url, line) {
       for (var i = 0; i < b.rows.length; i++) {
         addShopRow(b.rows[i].name, b.rows[i].spec, b.rows[i].price, b.rows[i].count, b.rows[i].subtotal);
       }
+      // 原单的「总计金额」比行合计少（或多了）的那部分，摆成一行「抹零」，
+      // 改单时看得见、能改，也不会一保存就把零头吞掉。
+      var gap = shopBillGap(b);
+      if (gap !== 0) addShopRow(shopBillGapName(gap), '', '', '', fmtMoney(gap));
     }
     if (!els.shopRows.children.length) addShopRow();
     recalcShopTotal();
@@ -4990,17 +5026,22 @@ window.onerror = function (msg, url, line) {
       n.text = formatShopBill(date, customer, phone, rows, total);
       n.updatedAt = new Date().toISOString();
       addOps('edit', n.text);
-      saveLocal();
+      openBills[n.id] = true;
+      var okEditOne = saveLocal();
       scheduleSync();
       render();
       closeShopBill(true);
-      toast('已保存修改');
+      toast(okEditOne ? '已保存修改' : '改动没写进本机存储（空间可能满了），刷新会回到改之前');
       return;
     }
 
-    var merged = saveShopBillMerged(date, customer, phone, rows, total);
+    var res = saveShopBillMerged(date, customer, phone, rows, total);
     closeShopBill(true);
-    toast(merged ? '已追加到当天该送货商的清单（新的一批）' : '送货清单已存档');
+    if (res && res.ok === false) {
+      toast('这张单没写进本机存储（空间可能满了），刷新会丢，请先到设置导出备份');
+      return;
+    }
+    toast(res.merged ? '已追加到当天该送货商的清单（新的一批）' : '送货清单已存档');
   }
 
   /* =========================================================
@@ -5830,7 +5871,11 @@ window.onerror = function (msg, url, line) {
     }
     bills.sort(function (x, y) {
       if (x.bill.date !== y.bill.date) return x.bill.date < y.bill.date ? 1 : -1;
-      return new Date(y.note.createdAt).getTime() - new Date(x.note.createdAt).getTime();
+      // 按「最后动过的时间」排：同一家同一天追加了第二批，这张单要浮到最上面，
+      // 否则金额变了、位置没变，老板会以为这单没存进去。
+      var tx = new Date(x.note.updatedAt || x.note.createdAt).getTime();
+      var ty = new Date(y.note.updatedAt || y.note.createdAt).getTime();
+      return ty - tx;
     });
     cash.sort(function (x, y) {
       // 先按收款日期，再按记账时间——补录的旧账不会顶在今天的上面
@@ -7047,7 +7092,7 @@ window.onerror = function (msg, url, line) {
       toast('未配置 AI，按原话记录；在设置配置 AI 后，店铺口述可自动整理成清单');
     }
     if (shopBill) {
-      var merged = saveShopBillMerged(shopBill.date, shopBill.customer, shopBill.phone, shopBill.rows, shopBill.total);
+      var res = saveShopBillMerged(shopBill.date, shopBill.customer, shopBill.phone, shopBill.rows, shopBill.total);
       els.input.value = '';
       autoGrow(els.input);
       setRemindMode(false);
@@ -7055,7 +7100,11 @@ window.onerror = function (msg, url, line) {
       if (state.view !== VIEW.SHOP) { state.view = VIEW.SHOP; syncTabs(); }
       state.listLimit = LIST_PAGE;
       render();
-      toast(merged ? '已追加到当天该送货商的清单' : '送货清单已存档');
+      if (res && res.ok === false) {
+        toast('这张单没写进本机存储（空间可能满了），刷新会丢，请先到设置导出备份');
+        return;
+      }
+      toast(res.merged ? '已追加到当天该送货商的清单' : '送货清单已存档');
       return;
     }
 
